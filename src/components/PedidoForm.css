@@ -1,0 +1,63 @@
+/* Contenedor general del formulario */
+.pedido-form-container {
+  margin-bottom: 2rem;
+}
+
+/* Sección de productos con scroll */
+.productos-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+}
+
+/* Cada fila de producto */
+.producto-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+/* Nombre del producto */
+.producto-nombre {
+  flex-grow: 1;
+  font-size: 0.95rem;
+  margin-right: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Input chiquito para cantidad */
+.cantidad-chica {
+  width: 70px;
+}
+
+
+
+.pac-item {
+  position: relative;
+}
+
+.pac-item::after {
+  content: attr(data-fulltext);
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #fff;
+  color: #000;
+  padding: 6px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  border-radius: 4px;
+  display: none;
+  z-index: 9999;
+}
+
+.pac-item:hover::after {
+  display: block;
+}
