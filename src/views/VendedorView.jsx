@@ -177,11 +177,11 @@ const verificarCierreDelDia = async (fecha) => {
         <div className="p-6 border shadow bg-base-100 border-base-300 rounded-xl animate-fade-in-up">
           <h4 className="mb-4 text-lg font-semibold">📋 Tus pedidos del día</h4>
           <PedidoTabla
-            pedidos={pedidos}
-            onEditar={setPedidoAEditar}
-            onEliminar={eliminarPedido}
-            bloqueado={estaCerrado}
-          />
+  pedidos={pedidos}
+  onEditar={setPedidoAEditar}
+  onEliminar={eliminarPedido}
+  bloqueado={estaCerrado}
+/>
         </div>
         {estaCerrado && pedidosNoEntregados.length > 0 && (
   <div className="p-6 mt-6 border border-warning bg-warning/20 rounded-xl animate-fade-in-up">
