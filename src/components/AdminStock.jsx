@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { collection, getDocs, updateDoc, doc, setDoc, deleteDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  updateDoc,
+  doc,
+  setDoc,
+  deleteDoc,
+} from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { nanoid } from "nanoid";
 import Swal from "sweetalert2";
@@ -8,13 +15,14 @@ import AdminNavbar from "../components/AdminNavbar";
 function AdminStock() {
   const [productos, setProductos] = useState([]);
   const [filtro, setFiltro] = useState("");
-  const [nuevoProducto, setNuevoProducto] = useState({
-    nombre: "",
-    precio: "",
-    stock: 0,
-    stockMinimo: 10,
-  });
-
+const [nuevoProducto, setNuevoProducto] = useState({
+  nombre: "",
+  precio: "",
+  stock: 0,
+  stockMinimo: 10,
+  esCombo: false, // 👈 NUEVO
+  componentes: [],
+});
   const cargarProductos = async () => {
     const snapshot = await getDocs(collection(db, "productos"));
     const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -52,8 +60,15 @@ function AdminStock() {
       precio: parseInt(nuevoProducto.precio),
       stock: parseInt(nuevoProducto.stock),
       stockMinimo: parseInt(nuevoProducto.stockMinimo),
+      componentes: nuevoProducto.componentes || [],
     });
-    setNuevoProducto({ nombre: "", precio: "", stock: 0, stockMinimo: 10 });
+    setNuevoProducto({
+      nombre: "",
+      precio: "",
+      stock: 0,
+      stockMinimo: 1,
+      componentes: [],
+    });
     cargarProductos();
   };
 
@@ -69,6 +84,8 @@ function AdminStock() {
   const productosFiltrados = productos
     .filter((p) => p.nombre.toLowerCase().includes(filtro.toLowerCase()))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  
 
   return (
     <div className="min-h-screen p-6 bg-base-100 text-base-content">
@@ -90,7 +107,11 @@ function AdminStock() {
                 className="w-full input input-bordered"
                 value={nuevoProducto.nombre}
                 onChange={(e) =>
-                  setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })
+                  setNuevoProducto({
+                    ...nuevoProducto,
+                    nombre: e.target.value,
+                    componentes: [], // reset componentes si cambia el nombre
+                  })
                 }
               />
             </div>
@@ -103,7 +124,10 @@ function AdminStock() {
                 type="number"
                 value={nuevoProducto.precio}
                 onChange={(e) =>
-                  setNuevoProducto({ ...nuevoProducto, precio: e.target.value })
+                  setNuevoProducto({
+                    ...nuevoProducto,
+                    precio: e.target.value,
+                  })
                 }
               />
             </div>
@@ -116,7 +140,10 @@ function AdminStock() {
                 type="number"
                 value={nuevoProducto.stock}
                 onChange={(e) =>
-                  setNuevoProducto({ ...nuevoProducto, stock: e.target.value })
+                  setNuevoProducto({
+                    ...nuevoProducto,
+                    stock: e.target.value,
+                  })
                 }
               />
             </div>
@@ -136,8 +163,68 @@ function AdminStock() {
                 }
               />
             </div>
+            <div>
+  <label className="label">
+    <span className="label-text">¿Es un combo?</span>
+  </label>
+  <input
+    type="checkbox"
+    className="toggle toggle-primary"
+    checked={nuevoProducto.esCombo}
+    onChange={(e) =>
+      setNuevoProducto({
+        ...nuevoProducto,
+        esCombo: e.target.checked,
+        componentes: [],
+      })
+    }
+  />
+</div>
           </div>
-          <button onClick={agregarProducto} className="w-full mt-4 btn btn-success">
+
+          {/* Componentes del combo */}
+          {nuevoProducto.esCombo && (
+
+            <div className="mt-6">
+              <h4 className="mb-2 font-semibold">🧩 Componentes del combo</h4>
+              {productos
+                .filter((p) => !p.nombre.toLowerCase().includes("combo"))
+                .map((prodBase) => (
+                  <div
+                    key={prodBase.id}
+                    className="flex items-center gap-3 mb-2"
+                  >
+                    <span className="w-full">{prodBase.nombre}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      className="w-20 input input-sm input-bordered"
+                      onChange={(e) => {
+                        const cantidad = parseInt(e.target.value) || 0;
+                        setNuevoProducto((prev) => {
+                          const otros = prev.componentes.filter(
+                            (c) => c.id !== prodBase.id
+                          );
+                          return {
+                            ...prev,
+                            componentes:
+                              cantidad > 0
+                                ? [...otros, { id: prodBase.id, cantidad }]
+                                : otros,
+                          };
+                        });
+                      }}
+                    />
+                  </div>
+                ))}
+            </div>
+          )}
+
+          <button
+            onClick={agregarProducto}
+            className="w-full mt-6 btn btn-success"
+          >
             Agregar producto
           </button>
         </div>
@@ -151,7 +238,7 @@ function AdminStock() {
           onChange={(e) => setFiltro(e.target.value)}
         />
 
-        {/* Lista de productos con nuevo diseño */}
+        {/* Lista de productos */}
         <div className="grid gap-6">
           {productosFiltrados.map((prod) => {
             const esCombo = prod.nombre.toLowerCase().includes("combo");
@@ -165,28 +252,31 @@ function AdminStock() {
                 className={`p-5 shadow-lg rounded-lg ${colorClase} transition-transform hover:scale-[1.01]`}
               >
                 <div className="flex items-center justify-between mb-2">
-                 <div className="mb-2">
-  <div className="flex items-center justify-between">
-    <h4 className="text-lg font-bold leading-snug">
-      {esCombo ? "🧃 Combo" : "📦 Producto"}:{" "}
-      <span className="text-primary">{prod.nombre}</span>
-    </h4>
-   
-  </div>
-</div>
-                  <span className="text-sm opacity-60">ID: {prod.id.slice(0, 5)}...</span>
+                  <div className="mb-2">
+                    <h4 className="text-lg font-bold leading-snug">
+                      {esCombo ? "🧃 Combo" : "📦 Producto"}:{" "}
+                      <span className="text-primary">{prod.nombre}</span>
+                    </h4>
+                  </div>
+                  <span className="text-sm opacity-60">
+                    ID: {prod.id.slice(0, 5)}...
+                  </span>
                 </div>
+
                 <div className="grid gap-3 md:grid-cols-4">
-                <input
-  className="w-full truncate input input-bordered"
-  style={{ maxWidth: "100%" }}
-  value={prod.nombre}
-  onChange={(e) => {
-    setProductos((p) =>
-      p.map((pr) => (pr.id === prod.id ? { ...pr, nombre: e.target.value } : pr))
-    );
-  }}
-/>
+                  <input
+                    className="w-full input input-bordered"
+                    value={prod.nombre}
+                    onChange={(e) =>
+                      setProductos((p) =>
+                        p.map((pr) =>
+                          pr.id === prod.id
+                            ? { ...pr, nombre: e.target.value }
+                            : pr
+                        )
+                      )
+                    }
+                  />
                   <input
                     className="w-full input input-bordered"
                     type="number"
@@ -194,7 +284,12 @@ function AdminStock() {
                     onChange={(e) =>
                       setProductos((p) =>
                         p.map((pr) =>
-                          pr.id === prod.id ? { ...pr, precio: parseInt(e.target.value) || 0 } : pr
+                          pr.id === prod.id
+                            ? {
+                                ...pr,
+                                precio: parseInt(e.target.value) || 0,
+                              }
+                            : pr
                         )
                       )
                     }
@@ -206,7 +301,12 @@ function AdminStock() {
                     onChange={(e) =>
                       setProductos((p) =>
                         p.map((pr) =>
-                          pr.id === prod.id ? { ...pr, stock: parseInt(e.target.value) || 0 } : pr
+                          pr.id === prod.id
+                            ? {
+                                ...pr,
+                                stock: parseInt(e.target.value) || 0,
+                              }
+                            : pr
                         )
                       )
                     }
@@ -219,18 +319,28 @@ function AdminStock() {
                       setProductos((p) =>
                         p.map((pr) =>
                           pr.id === prod.id
-                            ? { ...pr, stockMinimo: parseInt(e.target.value) || 0 }
+                            ? {
+                                ...pr,
+                                stockMinimo: parseInt(e.target.value) || 0,
+                              }
                             : pr
                         )
                       )
                     }
                   />
                 </div>
+
                 <div className="flex justify-end gap-2 mt-4">
-                  <button className="btn btn-warning btn-sm" onClick={() => actualizarProducto(prod)}>
+                  <button
+                    className="btn btn-warning btn-sm"
+                    onClick={() => actualizarProducto(prod)}
+                  >
                     💾 Guardar
                   </button>
-                  <button className="btn btn-error btn-sm" onClick={() => eliminarProducto(prod.id)}>
+                  <button
+                    className="btn btn-error btn-sm"
+                    onClick={() => eliminarProducto(prod.id)}
+                  >
                     🗑️ Eliminar
                   </button>
                 </div>

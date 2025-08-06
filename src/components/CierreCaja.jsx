@@ -25,11 +25,30 @@ function CierreCaja() {
   const [cierres, setCierres] = useState({});
   const [repartidores, setRepartidores] = useState([]);
   const [gastos, setGastos] = useState({});
+  const [resumenGlobal, setResumenGlobal] = useState(null);
 
   useEffect(() => {
     cargarPedidosYRepartidores();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechaSeleccionada]);
+
+
+useEffect(() => {
+  const cargarResumen = async () => {
+    const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
+    const resumenRef = doc(db, "resumenVentas", fechaStr);
+    const resumenSnap = await getDoc(resumenRef);
+    if (resumenSnap.exists()) {
+      setResumenGlobal(resumenSnap.data());
+    } else {
+      setResumenGlobal(null);
+    }
+  };
+
+  cargarResumen();
+}, [fechaSeleccionada, cierres]);
+
+
 
  const cargarPedidosYRepartidores = async () => {
   const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
@@ -94,10 +113,10 @@ function CierreCaja() {
 
     if (metodo === "efectivo") {
       efectivo += monto;
-    } else if (metodo === "transferencia0") {
+    } else if (metodo === "transferencia") {
       transferencia += monto;
-    } else if (metodo === "transferencia+10") {
-      transferencia10 += Math.round(monto * 1.1 * 100) / 100;
+    } else if (metodo === "transferencia10") {
+      transferencia10 += monto;
     }
   });
 
@@ -161,18 +180,60 @@ const calcularCajaNeta = (totales, gastosRepartidor) => {
   };
 
   const cerrarGlobal = async () => {
-    const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
+  const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
 
-    const docRef = doc(db, "cierres", `global_${fechaStr}`);
-    await setDoc(docRef, {
-      fechaStr,
-      tipo: "global",
-      repartidores: Object.keys(cierres),
-      timestamp: new Date(),
-    });
+  const resumenProductos = {};
+  let totalEfectivo = 0;
+  let totalTransferencia = 0;
+  let totalTransferencia10 = 0;
 
-    Swal.fire("Cierre Global realizado", "El cierre del día ha sido completado.", "success");
-  };
+  for (const email of Object.keys(cierres)) {
+    const cierre = cierres[email];
+    const pedidos = cierre.pedidosEntregados || [];
+
+    for (const pedido of pedidos) {
+      const productos = pedido.productos || [];
+
+      productos.forEach((prod) => {
+        const nombre = prod.nombre;
+        const cantidad = prod.cantidad;
+
+        if (!resumenProductos[nombre]) {
+          resumenProductos[nombre] = 0;
+        }
+        resumenProductos[nombre] += cantidad;
+      });
+
+      // Sumamos montos por método de pago
+      const metodo = pedido.metodoPago || "efectivo";
+      const monto = Number(pedido.monto || 0);
+      if (metodo === "efectivo") totalEfectivo += monto;
+      else if (metodo === "transferencia") totalTransferencia += monto;
+      else if (metodo === "transferencia10") totalTransferencia10 += monto;
+    }
+  }
+
+  // Guardamos en resumenVentas
+  await setDoc(doc(db, "resumenVentas", fechaStr), {
+    fechaStr,
+    totalPorProducto: resumenProductos,
+    totalEfectivo,
+    totalTransferencia,
+    totalTransferencia10,
+    timestamp: new Date(),
+  });
+
+  // Guardamos el cierre global como hasta ahora
+  const docRef = doc(db, "cierres", `global_${fechaStr}`);
+  await setDoc(docRef, {
+    fechaStr,
+    tipo: "global",
+    repartidores: Object.keys(cierres),
+    timestamp: new Date(),
+  });
+
+  Swal.fire("Cierre Global realizado", "El cierre del día ha sido completado y se guardó el resumen.", "success");
+};
 
   const exportarExcel = () => {
     const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
@@ -241,6 +302,59 @@ const calcularCajaNeta = (totales, gastosRepartidor) => {
   } catch (error) {
     console.error("Error al anular cierre:", error);
     Swal.fire("Error", "No se pudo anular el cierre. Ver consola.", "error");
+  }
+};
+
+
+
+
+
+const anularCierreGlobal = async () => {
+  const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
+  const docId = `global_${fechaStr}`;
+  const docRef = doc(db, "cierres", docId);
+  const resumenRef = doc(db, "resumenVentas", fechaStr);
+
+  const confirmacion = await Swal.fire({
+    title: "¿Anular cierre global?",
+    text: `¿Estás seguro que querés anular el cierre global del ${fechaStr}?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Sí, anular",
+    cancelButtonText: "Cancelar",
+  });
+
+  if (!confirmacion.isConfirmed) return;
+
+  try {
+    const cierreSnap = await getDoc(docRef);
+    const resumenSnap = await getDoc(resumenRef);
+
+    const datosCierre = cierreSnap.exists() ? cierreSnap.data() : null;
+    const datosResumen = resumenSnap.exists() ? resumenSnap.data() : null;
+
+    const logRef = doc(db, "anulacionesCierre", `log_${docId}`);
+    await setDoc(logRef, {
+      fechaStr,
+      tipo: "global",
+      timestamp: new Date(),
+      motivo: "Anulación manual desde panel",
+      datosAnulados: {
+        cierreGlobal: datosCierre,
+        resumenVentas: datosResumen,
+      },
+    });
+
+    await setDoc(docRef, {}, { merge: false });
+    await setDoc(resumenRef, {}, { merge: false });
+
+    Swal.fire("Cierre global anulado", "El cierre global fue eliminado correctamente.", "success");
+
+    setResumenGlobal(null);
+    cargarPedidosYRepartidores();
+  } catch (error) {
+    console.error("Error al anular cierre global:", error);
+    Swal.fire("Error", "No se pudo anular el cierre global. Ver consola.", "error");
   }
 };
 
@@ -348,33 +462,92 @@ const calcularCajaNeta = (totales, gastosRepartidor) => {
           </div>
         );
       })}
+<div className="mt-8">
+  <h3 className="mb-2 text-xl font-bold">Cierre Global</h3>
+  <p>Total de repartidores: {repartidores.length}</p>
+  <p>Cajas cerradas: {Object.keys(cierres).length}</p>
 
-      <div className="mt-8">
-        <h3 className="mb-2 text-xl font-bold">Cierre Global</h3>
-        <p>Total de repartidores: {repartidores.length}</p>
-        <p>Cajas cerradas: {Object.keys(cierres).length}</p>
+  <div className="flex flex-wrap gap-4 mt-4">
+    <button
+      className="btn btn-primary"
+      onClick={exportarExcel}
+      disabled={repartidores.length === 0}
+    >
+      📤 Exportar resumen a Excel
+    </button>
 
-        <button
-          className="mt-4 btn btn-primary"
-          onClick={exportarExcel}
-          disabled={repartidores.length === 0}
-        >
-          📤 Exportar resumen a Excel
-        </button>
+    {!resumenGlobal && (
+      <button
+        className="btn btn-accent"
+        onClick={cerrarGlobal}
+        disabled={repartidores.length !== Object.keys(cierres).length}
+      >
+        🔐 Cerrar caja global del día
+      </button>
+    )}
 
+    {resumenGlobal && (
+      <button
+        className="btn btn-warning"
+        onClick={anularCierreGlobal}
+      >
+        🧨 Anular cierre global
+      </button>
+    )}
+  </div>
+</div>
 
+      {resumenGlobal && (
+  <div className="p-4 mt-8 shadow-lg rounded-xl bg-base-200 animate-fade-in-up">
+    <h3 className="mb-4 text-2xl font-bold">📊 Resumen global de productos vendidos</h3>
 
+    <div className="overflow-x-auto">
+      <table className="table w-full table-zebra">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th className="text-right">Cantidad</th>
+          </tr>
+        </thead>
+        <tbody>
+          {resumenGlobal?.totalPorProducto
+  ? Object.entries(resumenGlobal.totalPorProducto).map(([nombre, cantidad]) => (
+      <tr key={nombre}>
+        <td>{nombre}</td>
+        <td className="text-right">{cantidad}</td>
+      </tr>
+    ))
+  : (
+    <tr>
+      <td colSpan="2" className="italic text-center text-base-content/50">
+        No hay productos cargados.
+      </td>
+    </tr>
+  )
+}
+        </tbody>
+      </table>
+    </div>
 
-        <button
-          className="mt-4 ml-4 btn btn-accent"
-          onClick={cerrarGlobal}
-          disabled={repartidores.length !== Object.keys(cierres).length}
-        >
-          🔐 Cerrar caja global del día
-        </button>
-
-       
+    <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-2">
+      <div className="p-4 shadow-inner bg-base-100 rounded-xl">
+        <h4 className="mb-2 text-lg font-bold">💰 Totales por método de pago</h4>
+        <p>💵 Efectivo: ${resumenGlobal.totalEfectivo}</p>
+        <p>💳 Transferencia: ${resumenGlobal.totalTransferencia}</p>
+        <p>💳 Transferencia (10%): ${resumenGlobal.totalTransferencia10}</p>
       </div>
+
+      <div className="p-4 shadow-inner bg-base-100 rounded-xl">
+        <h4 className="mb-2 text-lg font-bold">🕒 Timestamp</h4>
+       <p>
+  {resumenGlobal?.timestamp?.seconds
+    ? new Date(resumenGlobal.timestamp.seconds * 1000).toLocaleString()
+    : "Sin fecha de cierre"}
+</p>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

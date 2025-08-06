@@ -19,6 +19,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
 const [productosFirestore, setProductosFirestore] = useState([]);
   const [errorNombre, setErrorNombre] = useState("");
   const [errorTelefono, setErrorTelefono] = useState("");
+  const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
 
 
 const mapOptions = {
@@ -83,25 +84,27 @@ setProductosFirestore(lista);
 
   // Si edita pedido, reconstruir productos seleccionados
   useEffect(() => {
-    if (pedidoAEditar && productosFirestore.length > 0) {
-      setNombre(pedidoAEditar.nombre || "");
-      setTelefono(pedidoAEditar.telefono || "");
-      setDireccion(pedidoAEditar.direccion || "");
-      setEntreCalles(pedidoAEditar.entreCalles || "");
-      setPartido(pedidoAEditar.partido || "");
+  if (pedidoAEditar && productosFirestore.length > 0) {
+    setNombre(pedidoAEditar.nombre || "");
+    setTelefono(pedidoAEditar.telefono || "");
+    setDireccion(pedidoAEditar.direccion || "");
+    setEntreCalles(pedidoAEditar.entreCalles || "");
+    setPartido(pedidoAEditar.partido || "");
 
-      const nuevosProductos = [];
-      productosFirestore.forEach((p) => {
-        const regex = new RegExp(`${p.nombre} x(\\d+)`);
-        const match = pedidoAEditar.pedido?.match(regex);
-        if (match) {
-          nuevosProductos.push({ ...p, cantidad: parseInt(match[1]) });
-        }
-      });
-      setProductosSeleccionados(nuevosProductos);
+    const nuevosProductos = pedidoAEditar.productos.map((pedidoProd) => {
+      const productoOriginal = productosFirestore.find(p => p.nombre === pedidoProd.nombre);
+      return productoOriginal
+        ? { ...productoOriginal, cantidad: pedidoProd.cantidad }
+        : null;
+    }).filter(Boolean); // Elimina nulos si algún producto fue eliminado de Firestore
+
+    if (nuevosProductos.length !== pedidoAEditar.productos.length) {
+      Swal.fire("⚠️ Atención", "Algunos productos del pedido ya no están en el catálogo.", "warning");
     }
-  }, [pedidoAEditar, productosFirestore]);
 
+    setProductosSeleccionados(nuevosProductos);
+  }
+}, [pedidoAEditar, productosFirestore]);
   const handlePlaceChanged = () => {
     const place = autoCompleteRef.current.getPlace();
     const direccionCompleta = place.formatted_address || "";
@@ -290,83 +293,163 @@ setProductosFirestore(lista);
           </div>
 
           {/* PRODUCTOS */}
-          <div className="shadow-lg card bg-base-200">
-            <div className="card-body">
-              <h2 className="text-xl font-bold">🛒 Productos</h2>
+          {/* LISTA DE PRODUCTOS */}
+<div className="mb-6 border shadow-md card bg-base-100 border-base-300">
+  <div className="card-body">
+    <h2 className="text-lg font-bold">🛒 Productos disponibles</h2>
 
-              <div className="p-2 overflow-y-auto border rounded-lg bg-base-100 border-base-300 h-72">
-              {productosFirestore.map((prod, idx) => {
-  const seleccionado = productosSeleccionados.find(p => p.nombre === prod.nombre);
-  const cantidad = seleccionado?.cantidad || 0;
-  const estaSeleccionado = !!seleccionado;
+    <div className="overflow-y-auto max-h-72">
+      {productosFirestore.map((prod, idx) => {
+        const seleccionado = productosSeleccionados.find(p => p.nombre === prod.nombre);
+        const cantidad = seleccionado?.cantidad || 0;
 
-  return (
-    <div key={idx} className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <input
-          type="checkbox"
-          checked={estaSeleccionado}
-          onChange={(e) => {
-            if (e.target.checked) {
-              setProductosSeleccionados((prev) => [...prev, { ...prod, cantidad: 1 }]);
-            } else {
-              setProductosSeleccionados((prev) => prev.filter(p => p.nombre !== prod.nombre));
-            }
-          }}
-          disabled={bloqueado}
-          className="checkbox"
-        />
-        <div className="text-sm sm:text-base">
-          <span className="block font-medium">{prod.nombre}</span>
-          <span className="block text-gray-500">${prod.precio.toLocaleString()}</span>
-        </div>
-      </div>
+        return (
+          <div key={idx} className="flex items-center justify-between py-2 border-b border-base-200">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!!seleccionado}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setProductosSeleccionados(prev => [...prev, { ...prod, cantidad: 1 }]);
+                  } else {
+                    setProductosSeleccionados(prev => prev.filter(p => p.nombre !== prod.nombre));
+                  }
+                }}
+                disabled={bloqueado}
+                className="checkbox"
+              />
+              <div>
+                <p className="font-semibold">{prod.nombre}</p>
+                <p className="text-sm text-gray-500">${prod.precio.toLocaleString()}</p>
+              </div>
+            </div>
 
-      {estaSeleccionado && (
-        <input
-          type="number"
-          min="1"
-          value={cantidad}
-          onChange={(e) => {
-            const cant = parseInt(e.target.value, 10);
-            setProductosSeleccionados((prev) => {
-              return prev.map(p =>
-                p.nombre === prod.nombre ? { ...p, cantidad: cant } : p
-              );
-            });
-          }}
-          className="w-full mt-2 input input-bordered input-sm sm:mt-0 sm:w-20"
-          disabled={bloqueado}
-        />
-      )}
+            {!!seleccionado && (
+              <input
+                type="number"
+                min="1"
+                value={cantidad}
+                onChange={(e) => {
+                  const cant = parseInt(e.target.value, 10);
+                  setProductosSeleccionados(prev =>
+                    prev.map(p =>
+                      p.nombre === prod.nombre ? { ...p, cantidad: cant } : p
+                    )
+                  );
+                }}
+                className="w-20 input input-sm input-bordered"
+                disabled={bloqueado}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
-  );
-})}
+  </div>
+</div>
 
+{/* BOTÓN PARA AGREGAR DEVOLUCIÓN */}
+<button
+  type="button"
+  className="w-full mb-4 btn btn-outline btn-error btn-sm"
+  onClick={() => setMostrarDevolucion(prev => !prev)}
+  disabled={bloqueado}
+>
+  {mostrarDevolucion ? "❌ Ocultar devoluciones" : "🔁 Agregar devolución"}
+</button>
+
+{/* PANEL DE DEVOLUCIONES */}
+{mostrarDevolucion && (
+  <div className="border shadow-md card bg-error-content/10 border-error">
+    <div className="card-body">
+      <h2 className="text-lg font-bold text-error">🔁 Devoluciones</h2>
+
+      <div className="overflow-y-auto max-h-64">
+        {productosFirestore.map((prod, idx) => {
+          const nombreDevolucion = `Devolución de ${prod.nombre}`;
+          const seleccionado = productosSeleccionados.find(p => p.nombre === nombreDevolucion);
+          const cantidad = seleccionado?.cantidad || 1;
+          const estaSeleccionado = !!seleccionado;
+
+          return (
+            <div key={idx} className="flex items-center justify-between py-2 border-b border-error/30">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={estaSeleccionado}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setProductosSeleccionados(prev => [
+                        ...prev,
+                        {
+                          nombre: nombreDevolucion,
+                          precio: -Math.abs(prod.precio),
+                          cantidad: 1,
+                        }
+                      ]);
+                    } else {
+                      setProductosSeleccionados(prev => prev.filter(p => p.nombre !== nombreDevolucion));
+                    }
+                  }}
+                  className="checkbox checkbox-error"
+                  disabled={bloqueado}
+                />
+                <div>
+                  <p className="font-semibold text-error">{nombreDevolucion}</p>
+                  <p className="text-sm text-error">${prod.precio.toLocaleString()}</p>
+                </div>
               </div>
 
-              <label className="mt-4 label">
-                <span className="label-text">📝 Pedido generado</span>
-              </label>
-              <textarea
-                readOnly
-                rows={4}
-                className="w-full textarea textarea-bordered"
-                value={
-                  calcularResumenPedido().resumen +
-                  (productosSeleccionados.length ? ` | TOTAL: $${calcularResumenPedido().total}` : "")
-                }
-              />
-
-              <button
-                type="submit"
-                className={`btn mt-6  w-full ${pedidoAEditar ? "btn-warning" : "btn-success"}`}
-                disabled={bloqueado}
-              >
-                {pedidoAEditar ? "✏️ Actualizar Pedido" : "✅ Agregar Pedido"}
-              </button>
+              {estaSeleccionado && (
+                <input
+                  type="number"
+                  min="1"
+                  value={cantidad}
+                  onChange={(e) => {
+                    const cant = parseInt(e.target.value, 10);
+                    setProductosSeleccionados(prev =>
+                      prev.map(p =>
+                        p.nombre === nombreDevolucion ? { ...p, cantidad: cant } : p
+                      )
+                    );
+                  }}
+                  className="w-20 input input-sm input-bordered"
+                  disabled={bloqueado}
+                />
+              )}
             </div>
-          </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* RESUMEN DEL PEDIDO */}
+<div className="mt-6">
+  <label className="label">
+    <span className="label-text">📝 Pedido generado</span>
+  </label>
+  <textarea
+    readOnly
+    rows={4}
+    className="w-full textarea textarea-bordered"
+    value={
+      productosSeleccionados.length
+        ? productosSeleccionados
+            .map((p) => `${p.nombre} x${p.cantidad} ($${(p.precio * p.cantidad).toLocaleString()})`)
+            .join(" - ") +
+          ` | TOTAL: $${productosSeleccionados.reduce(
+            (sum, p) => sum + p.precio * p.cantidad,
+            0
+          ).toLocaleString()}`
+        : ""
+    }
+  />
+</div>
+
+
         </div>
       </form>
     </div>

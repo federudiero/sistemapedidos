@@ -28,7 +28,8 @@ const AdminNavbar = () => {
             className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52"
           >
             <li><Link to="/admin/pedidos">Pedidos</Link></li>
-            <li><Link to="/admin/stock">Stock</Link></li>
+            <li><Link to="/admin/stock">Agregar Stock</Link></li>
+            <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
             <li><Link to="/admin/dividir-pedidos">División de Pedidos</Link></li>
             <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li> {/* NUEVO */}
             <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
@@ -44,7 +45,8 @@ const AdminNavbar = () => {
       <div className="hidden navbar-center lg:flex">
         <ul className="px-1 menu menu-horizontal">
           <li><Link to="/admin/pedidos">Pedidos</Link></li>
-          <li><Link to="/admin/stock">Stock</Link></li>
+           <li><Link to="/admin/stock">Agregar Stock</Link></li>
+            <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
           <li><Link to="/admin/dividir-pedidos">División</Link></li>
           <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li> {/* NUEVO */}
           <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
