@@ -149,22 +149,24 @@ const GeneradorPedidosTest = () => {
     const fechaStr = format(ahora, "yyyy-MM-dd");
 
     const pedidoConProductos = {
-      nombre,
-      telefono,
-      partido: "CABA",
-      direccion: zona.direccion,
-      entreCalles: "Av. 1 y Calle 2",
-      pedido: pedidoFinal,
-      coordenadas: { lat: zona.lat, lng: zona.lng },
-      productos: productosSeleccionados.map((p) => ({
-        nombre: p.nombre,
-        cantidad: p.cantidad,
-      })),
-      fecha: Timestamp.fromDate(ahora),
-      fechaStr,
-      entregado: true,
-      monto: total,
-    };
+  nombre,
+  telefono,
+  partido: "CABA",
+  direccion: zona.direccion,
+  entreCalles: "Av. 1 y Calle 2",
+  pedido: pedidoFinal,
+  coordenadas: { lat: zona.lat, lng: zona.lng },
+  productos: productosSeleccionados.map((p) => ({
+    nombre: p.nombre,
+    cantidad: p.cantidad,
+  })),
+  fecha: Timestamp.fromDate(ahora),
+  fechaStr,
+  entregado: false,
+  monto: total,
+ vendedorEmail: "federudiero@gmail.com", 
+ // ← vendedor asignado
+};
 
     return pedidoConProductos;
   };

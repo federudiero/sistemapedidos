@@ -55,8 +55,7 @@ useEffect(() => {
   const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
   const fin = Timestamp.fromDate(endOfDay(fechaSeleccionada));
 
-  console.log("🕒 Cargando pedidos desde:", inicio.toDate());
-  console.log("🕒 Hasta:", fin.toDate());
+
 
   const pedidosRef = collection(db, "pedidos");
   const q = query(
@@ -66,14 +65,14 @@ useEffect(() => {
   );
 
   const querySnapshot = await getDocs(q);
-  console.log("📦 Pedidos encontrados:", querySnapshot.size);
+  
 
   const pedidosDelDia = [];
   const repartidorSet = new Set();
 
   querySnapshot.forEach((doc) => {
   const data = doc.data();
-  console.log("✅ Pedido encontrado:", data);
+ 
 
   // Tomamos el repartidor desde asignadoA[0] o data.repartidor como fallback
   const repartidor = Array.isArray(data.asignadoA) ? data.asignadoA[0] : data.repartidor;
@@ -84,7 +83,7 @@ useEffect(() => {
   }
 });
 
-  console.log("👤 Repartidores encontrados:", [...repartidorSet]);
+ 
 
   setPedidos(pedidosDelDia);
   setRepartidores([...repartidorSet]);

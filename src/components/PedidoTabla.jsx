@@ -10,6 +10,7 @@ const PedidoTabla = ({ pedidos, onEditar, onEliminar, bloqueado }) => {
 📍 Partido: ${pedido.partido}
 📱 Teléfono: ${pedido.telefono}
 📝 Pedido: ${pedido.pedido}
+📝 
 `.trim();
 
     navigator.clipboard.writeText(textoCompleto).then(() => {

@@ -426,6 +426,17 @@ setProductosFirestore(lista);
   </div>
 )}
 
+<div className="mt-6 text-right">
+  <button
+    type="submit"
+    className="btn btn-primary"
+    disabled={bloqueado}
+  >
+    ➕ Agregar pedido
+  </button>
+</div>
+
+
 {/* RESUMEN DEL PEDIDO */}
 <div className="mt-6">
   <label className="label">
@@ -448,6 +459,9 @@ setProductosFirestore(lista);
     }
   />
 </div>
+
+
+
 
 
         </div>
