@@ -8,7 +8,8 @@ const correosAdmins = [
   "admin2@mail.com",
   "admin3@mail.com",
   "franco.coronel.134@gmail.com",
-  "agus.belen64@gmail.com"
+  "agus.belen64@gmail.com",
+  "eliascalderon731@gmail.com"
 ];
 
 function AdminLogin() {
