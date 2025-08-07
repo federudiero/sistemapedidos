@@ -7,6 +7,8 @@ import Swal from "sweetalert2";
 // Lista de emails permitidos
 const repartidoresPermitidos = [
   "federudiero@gmail.com",
+    "eliascalderon731@gmail.com",
+    "franco.coronel.134@gmail.com",
   ...Array.from({ length: 8 }, (_, i) => `repartidor${i + 1}@gmail.com`)
 ];
 
