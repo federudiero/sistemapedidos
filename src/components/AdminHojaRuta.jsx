@@ -4,9 +4,12 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors
 } from "@dnd-kit/core";
+
+
 import {
   arrayMove,
   SortableContext,
@@ -74,7 +77,15 @@ function AdminHojaRuta() {
   const [cierreYaProcesado, setCierreYaProcesado] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const sensors = useSensors(useSensor(PointerSensor));
+  const sensors = useSensors(
+  useSensor(PointerSensor),
+  useSensor(TouchSensor, {
+    activationConstraint: {
+      delay: 250, // para evitar movimientos accidentales
+      tolerance: 5,
+    },
+  })
+);
 
   useEffect(() => {
     const cargarPedidos = async () => {
@@ -146,41 +157,52 @@ function AdminHojaRuta() {
     }
   };
 
-  const optimizarRuta = (email) => {
-    const pedidos = pedidosPorRepartidor[email];
-    if (!pedidos || pedidos.length <= 2) return;
+const optimizarRuta = async (email) => {
+  const pedidos = pedidosPorRepartidor[email];
+  if (!pedidos || pedidos.length <= 2) return;
 
-    const waypoints = pedidos.map((p) => ({
-      location: p.direccion,
-      stopover: true,
-    }));
+  const waypoints = pedidos.map((p) => ({
+    location: p.direccion,
+    stopover: true,
+  }));
 
-    const service = new window.google.maps.DirectionsService();
-    service.route({
-      origin: BASE_DIRECCION,
-      destination: BASE_DIRECCION,
-      waypoints,
-      optimizeWaypoints: true,
-      travelMode: window.google.maps.TravelMode.DRIVING,
-    }, (result, status) => {
-      if (status === "OK") {
-        const ordenOptimizado = result.routes[0].waypoint_order;
-        const nuevosPedidos = ordenOptimizado.map(idx => pedidos[idx]);
+  const service = new window.google.maps.DirectionsService();
+  service.route({
+    origin: BASE_DIRECCION,
+    destination: BASE_DIRECCION,
+    waypoints,
+    optimizeWaypoints: true,
+    travelMode: window.google.maps.TravelMode.DRIVING,
+  }, async (result, status) => {
+    if (status === "OK") {
+      const ordenOptimizado = result.routes[0].waypoint_order;
+      const nuevosPedidos = ordenOptimizado.map(idx => pedidos[idx]);
 
-        setPedidosPorRepartidor(prev => ({
-          ...prev,
-          [email]: nuevosPedidos,
-        }));
+      // ✅ Actualizar estado local
+      setPedidosPorRepartidor(prev => ({
+        ...prev,
+        [email]: nuevosPedidos,
+      }));
 
-       
-
-        Swal.fire("✅ Ruta optimizada", `Se optimizó la ruta para ${email}`, "success");
-      } else {
-        console.error(result);
-        Swal.fire("❌ Error", "No se pudo optimizar la ruta", "error");
+      // ✅ Guardar nuevo orden en Firestore
+      try {
+        await Promise.all(
+          nuevosPedidos.map((p, index) =>
+            updateDoc(doc(db, "pedidos", p.id), { ordenRuta: index })
+          )
+        );
+        Swal.fire("✅ Ruta optimizada", `Se optimizó y guardó la ruta para ${email}`, "success");
+      } catch (err) {
+        console.error(err);
+        Swal.fire("❌ Error", "No se pudo guardar el orden optimizado", "error");
       }
-    });
-  };
+
+    } else {
+      console.error(result);
+      Swal.fire("❌ Error", "No se pudo optimizar la ruta", "error");
+    }
+  });
+};
 
   return (
     <div className="px-4 py-6 mx-auto max-w-7xl text-base-content">

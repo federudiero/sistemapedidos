@@ -36,10 +36,21 @@ function CierreCaja() {
 useEffect(() => {
   const cargarResumen = async () => {
     const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
+
     const resumenRef = doc(db, "resumenVentas", fechaStr);
     const resumenSnap = await getDoc(resumenRef);
-    if (resumenSnap.exists()) {
-      setResumenGlobal(resumenSnap.data());
+
+    const cierreGlobalRef = doc(db, "cierres", `global_${fechaStr}`);
+    const cierreSnap = await getDoc(cierreGlobalRef);
+
+    const resumenData = resumenSnap.exists() ? resumenSnap.data() : null;
+    const cierreData = cierreSnap.exists() ? cierreSnap.data() : null;
+
+    if (resumenData) {
+      setResumenGlobal({
+        ...resumenData,
+        stockDescontado: cierreData?.stockDescontado || false,
+      });
     } else {
       setResumenGlobal(null);
     }
@@ -47,7 +58,6 @@ useEffect(() => {
 
   cargarResumen();
 }, [fechaSeleccionada, cierres]);
-
 
 
  const cargarPedidosYRepartidores = async () => {
@@ -111,12 +121,12 @@ useEffect(() => {
     const metodo = pedido.metodoPago || "efectivo";
 
     if (metodo === "efectivo") {
-      efectivo += monto;
-    } else if (metodo === "transferencia") {
-      transferencia += monto;
-    } else if (metodo === "transferencia10") {
-      transferencia10 += monto;
-    }
+  efectivo += monto;
+} else if (metodo === "transferencia") {
+  transferencia += monto;
+} else if (metodo === "transferencia10") {
+  transferencia10 += monto * 1.1; // ✅ Aplicamos el 10% extra
+}
   });
 
   return { efectivo, transferencia, transferencia10 };
@@ -203,16 +213,15 @@ const calcularCajaNeta = (totales, gastosRepartidor) => {
         resumenProductos[nombre] += cantidad;
       });
 
-      // Sumamos montos por método de pago
       const metodo = pedido.metodoPago || "efectivo";
       const monto = Number(pedido.monto || 0);
       if (metodo === "efectivo") totalEfectivo += monto;
       else if (metodo === "transferencia") totalTransferencia += monto;
-      else if (metodo === "transferencia10") totalTransferencia10 += monto;
+      else if (metodo === "transferencia10") totalTransferencia10 += monto * 1.1;
     }
   }
 
-  // Guardamos en resumenVentas
+  // Guardar resumen de ventas
   await setDoc(doc(db, "resumenVentas", fechaStr), {
     fechaStr,
     totalPorProducto: resumenProductos,
@@ -222,17 +231,42 @@ const calcularCajaNeta = (totales, gastosRepartidor) => {
     timestamp: new Date(),
   });
 
-  // Guardamos el cierre global como hasta ahora
+  // Descontar stock solo si aún no fue hecho
   const docRef = doc(db, "cierres", `global_${fechaStr}`);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists() && docSnap.data()?.stockDescontado) {
+    Swal.fire("Error", "El stock ya fue descontado en este cierre global.", "error");
+    return;
+  }
+
+  const productosRef = collection(db, "productos");
+
+  for (const [nombreProducto, cantidadVendida] of Object.entries(resumenProductos)) {
+    const q = query(productosRef, where("nombre", "==", nombreProducto));
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+      const prodDoc = snapshot.docs[0];
+      const prodData = prodDoc.data();
+      const stockActual = prodData.stock || 0;
+      const nuevoStock = Math.max(stockActual - cantidadVendida, 0);
+
+      await setDoc(prodDoc.ref, { stock: nuevoStock }, { merge: true });
+    }
+  }
+
+  // Guardar el cierre global con flag stockDescontado
   await setDoc(docRef, {
     fechaStr,
     tipo: "global",
     repartidores: Object.keys(cierres),
+    stockDescontado: true,
     timestamp: new Date(),
   });
 
   Swal.fire("Cierre Global realizado", "El cierre del día ha sido completado y se guardó el resumen.", "success");
 };
+
 
   const exportarExcel = () => {
     const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
@@ -450,12 +484,21 @@ const anularCierreGlobal = async () => {
   </button>
 )}
 
-{yaCerrado && (
+{yaCerrado && !resumenGlobal && (
   <button
     onClick={() => anularCierreIndividual(email)}
     className="mt-2 btn btn-warning"
   >
     🧨 Anular cierre de {email}
+  </button>
+)}
+
+{yaCerrado && resumenGlobal && (
+  <button
+    disabled
+    className="mt-2 btn btn-disabled"
+  >
+    🔒 Cierre global realizado
   </button>
 )}
           </div>
@@ -542,6 +585,14 @@ const anularCierreGlobal = async () => {
   {resumenGlobal?.timestamp?.seconds
     ? new Date(resumenGlobal.timestamp.seconds * 1000).toLocaleString()
     : "Sin fecha de cierre"}
+</p>
+
+<p className="mt-1">
+  {resumenGlobal?.stockDescontado ? (
+    <span className="font-semibold text-success">✔️ Stock descontado</span>
+  ) : (
+    <span className="font-semibold text-error">⚠️ Stock NO descontado</span>
+  )}
 </p>
       </div>
     </div>

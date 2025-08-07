@@ -13,7 +13,7 @@ import { startOfDay, endOfDay } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import MapaRutaRepartidor from "../components/MapaRutaRepartidor";
 import Swal from "sweetalert2";
-
+import BotonIniciarViaje from "../components/BotonIniciarViaje";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
@@ -240,7 +240,10 @@ const calcularTotales = () => {
 
 
 
-      <div className="p-4 mt-8 text-white bg-base-300 rounded-xl">
+     {/* Botón Iniciar Viaje */}
+      <div className="flex justify-center">
+        <BotonIniciarViaje pedidos={pedidos} />
+      </div>  <div className="p-4 mt-8 text-white bg-base-300 rounded-xl">
   <h3 className="mb-2 text-lg font-semibold">💰 Resumen Recaudado</h3>
   <p><strong>Total efectivo:</strong> ${Math.round(efectivo)}</p>
   <p><strong>Total transferencia (+10%):</strong> ${Math.round(transferencia10)}</p>

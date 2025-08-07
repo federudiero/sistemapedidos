@@ -96,6 +96,7 @@ const nombresEjemplo = [
 const GeneradorPedidosTest = () => {
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
 
   useEffect(() => {
     const cargarProductos = async () => {
@@ -121,7 +122,7 @@ const GeneradorPedidosTest = () => {
   const generarPedido = () => {
     const nombre = nombresEjemplo[Math.floor(Math.random() * nombresEjemplo.length)];
     const telefono = "11" + Math.floor(Math.random() * 100000000).toString().padStart(8, "0");
-   const zona = zonasCABA[Math.floor(Math.random() * zonasCABA.length)];
+    const zona = zonasCABA[Math.floor(Math.random() * zonasCABA.length)];
 
     const cantidadProductos = Math.floor(Math.random() * 3) + 1;
     const productosSeleccionados = [];
@@ -145,28 +146,26 @@ const GeneradorPedidosTest = () => {
     const total = productosSeleccionados.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
     const pedidoFinal = `${resumen} | TOTAL: $${total}`;
 
-    const ahora = new Date();
-    const fechaStr = format(ahora, "yyyy-MM-dd");
+    const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
 
     const pedidoConProductos = {
-  nombre,
-  telefono,
-  partido: "CABA",
-  direccion: zona.direccion,
-  entreCalles: "Av. 1 y Calle 2",
-  pedido: pedidoFinal,
-  coordenadas: { lat: zona.lat, lng: zona.lng },
-  productos: productosSeleccionados.map((p) => ({
-    nombre: p.nombre,
-    cantidad: p.cantidad,
-  })),
-  fecha: Timestamp.fromDate(ahora),
-  fechaStr,
-  entregado: false,
-  monto: total,
- vendedorEmail: "federudiero@gmail.com", 
- // ← vendedor asignado
-};
+      nombre,
+      telefono,
+      partido: "CABA",
+      direccion: zona.direccion,
+      entreCalles: "Av. 1 y Calle 2",
+      pedido: pedidoFinal,
+      coordenadas: { lat: zona.lat, lng: zona.lng },
+      productos: productosSeleccionados.map((p) => ({
+        nombre: p.nombre,
+        cantidad: p.cantidad,
+      })),
+      fecha: Timestamp.fromDate(fechaSeleccionada),
+      fechaStr,
+      entregado: false,
+      monto: total,
+      vendedorEmail: "federudiero@gmail.com",
+    };
 
     return pedidoConProductos;
   };
@@ -198,6 +197,17 @@ const GeneradorPedidosTest = () => {
   return (
     <div className="p-6">
       <h2 className="mb-4 text-xl font-bold">🧪 Generador de Pedidos de Prueba</h2>
+
+      <div className="mb-4">
+        <label className="block mb-1 font-medium">📅 Seleccionar fecha:</label>
+        <DatePicker
+          selected={fechaSeleccionada}
+          onChange={(date) => setFechaSeleccionada(date)}
+          dateFormat="yyyy-MM-dd"
+          className="w-full max-w-xs input input-bordered"
+        />
+      </div>
+
       {loading ? (
         <div className="p-4 text-center bg-base-200 text-base-content rounded-xl">
           ⚠️ Autenticando usuario y esperando productos...
