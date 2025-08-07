@@ -206,7 +206,10 @@ const optimizarRuta = async (email) => {
 
   return (
     <div className="px-4 py-6 mx-auto max-w-7xl text-base-content">
-      <AdminNavbar />
+     <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
+  <AdminNavbar />
+</div>
+<div className="h-16" /> 
       <h2 className="mb-4 text-2xl font-bold text-white">🗺️ Hoja de Ruta por Repartidor</h2>
 
       {cierreYaProcesado && (

@@ -24,7 +24,10 @@ function PanelStock() {
 
   return (
     <div className="min-h-screen px-4 py-6 bg-base-100 text-base-content">
-      <AdminNavbar />
+     <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
+  <AdminNavbar />
+</div>
+<div className="h-16" /> 
       <h2 className="mb-6 text-3xl font-bold text-primary">📦 Panel de Stock</h2>
 
       <input

@@ -189,7 +189,10 @@ if (fechaGuardada && !isNaN(new Date(fechaGuardada))) {
 
   return (
     <div className="min-h-screen bg-base-100 text-base-content">
-      <AdminNavbar />
+     <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
+  <AdminNavbar />
+</div>
+<div className="h-16" /> 
       <div className="max-w-6xl px-4 py-6 mx-auto">
         <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
           <h2 className="text-2xl font-bold">Administrador</h2>
@@ -254,7 +257,7 @@ if (fechaGuardada && !isNaN(new Date(fechaGuardada))) {
                         </div>
                       </td>
                       <td>{pedido.telefono}</td>
-                      <td>{pedido.vendedorEmail || "-"}</td>
+                    <td>{pedido.vendedorEmail ? pedido.vendedorEmail.split("@")[0] : "-"}</td>
                       <td className="whitespace-pre-wrap">
                         {pedido.pedido || (
                           <span className="italic text-base-300">Sin detalles</span>

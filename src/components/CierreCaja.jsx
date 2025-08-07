@@ -578,6 +578,42 @@ const anularCierreGlobal = async () => {
         <p>💳 Transferencia: ${resumenGlobal.totalTransferencia}</p>
         <p>💳 Transferencia (10%): ${resumenGlobal.totalTransferencia10}</p>
       </div>
+      <div className="p-4 shadow-inner bg-base-100 rounded-xl">
+  <h4 className="mb-2 text-lg font-bold">🧾 Total Recaudado Neto</h4>
+  <p className="text-xl font-bold text-primary">
+    $
+    {[
+      resumenGlobal.totalEfectivo || 0,
+      resumenGlobal.totalTransferencia || 0,
+      resumenGlobal.totalTransferencia10 || 0,
+    ].reduce((a, b) => a + b, 0).toLocaleString("es-AR")}
+  </p>
+</div>
+<div className="p-4 shadow-inner bg-base-100 rounded-xl">
+  <h4 className="mb-2 text-lg font-bold">💼 Neto después de gastos</h4>
+  <p className="text-xl font-bold text-secondary">
+    $
+    {(() => {
+      const totalRecaudado =
+        (resumenGlobal.totalEfectivo || 0) +
+        (resumenGlobal.totalTransferencia || 0) +
+        (resumenGlobal.totalTransferencia10 || 0);
+
+      const totalGastos = Object.values(cierres).reduce((acc, cierre) => {
+        const g = cierre.gastos || {};
+        return (
+          acc +
+          (g.repartidor || 0) +
+          (g.acompanante || 0) +
+          (g.combustible || 0) +
+          (g.extra || 0)
+        );
+      }, 0);
+
+      return (totalRecaudado - totalGastos).toLocaleString("es-AR");
+    })()}
+  </p>
+</div>
 
       <div className="p-4 shadow-inner bg-base-100 rounded-xl">
         <h4 className="mb-2 text-lg font-bold">🕒 Timestamp</h4>

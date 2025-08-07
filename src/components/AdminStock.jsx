@@ -89,7 +89,10 @@ const [nuevoProducto, setNuevoProducto] = useState({
 
   return (
     <div className="min-h-screen p-6 bg-base-100 text-base-content">
-      <AdminNavbar />
+      <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
+  <AdminNavbar />
+</div>
+<div className="h-16" /> 
       <div className="max-w-4xl mx-auto">
         <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
           <h2 className="text-2xl font-bold">📦 Gestión de Stock</h2>

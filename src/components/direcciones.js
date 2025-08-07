@@ -1,19 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase/firebase";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  Timestamp,
-} from "firebase/firestore";
-import Swal from "sweetalert2";
-import { format } from "date-fns";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-
-
-
-const zonasCABA =[
+const zonasCABA =  [
 { lat: -34.6126509, lng: -58.4384388, direccion: "Avenida Acoyte 7417, CABA" },
   { lat: -34.6111186, lng: -58.3663323, direccion: "Avenida Alicia Moreau de Justo 9427, CABA" },
   { lat: -34.6431599, lng: -58.413332, direccion: "Avenida Almafuerte 6646, CABA" },
@@ -97,137 +82,33 @@ const zonasCABA =[
 ];
 
 
-const nombresEjemplo = [
-  "Juan Pérez", "Ana López", "Carlos Gómez", "María Fernández",
-  "Pedro Álvarez", "Lucía Torres", "Sofía Ramírez", "Gonzalo Díaz",
-];
+const API_KEY = 'AIzaSyC3BaTMuVmU1J9mhv2PTxeXS4fnzlN1qj4'; // ⬅️ Reemplazá esto con tu clave de API de Google Maps
 
-const GeneradorPedidosTest = () => {
-  const [productos, setProductos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
-
-  useEffect(() => {
-    const cargarProductos = async () => {
-      try {
-        if (!auth.currentUser) {
-          throw new Error("No hay usuario autenticado.");
-        }
-        console.log("✅ Usuario autenticado:", auth.currentUser.email);
-        const snapshot = await getDocs(collection(db, "productos"));
-        const lista = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setProductos(lista);
-      } catch (error) {
-        console.error("Error:", error);
-        Swal.fire("❌ Error en login o carga de productos.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    cargarProductos();
-  }, []);
-
-  const generarPedido = () => {
-    const nombre = nombresEjemplo[Math.floor(Math.random() * nombresEjemplo.length)];
-    const telefono = "11" + Math.floor(Math.random() * 100000000).toString().padStart(8, "0");
-    const zona = zonasCABA[Math.floor(Math.random() * zonasCABA.length)];
-
-    const cantidadProductos = Math.floor(Math.random() * 3) + 1;
-    const productosSeleccionados = [];
-    const indicesUsados = new Set();
-
-    while (productosSeleccionados.length < cantidadProductos && productos.length > 0) {
-      const indice = Math.floor(Math.random() * productos.length);
-      if (!indicesUsados.has(indice)) {
-        indicesUsados.add(indice);
-        productosSeleccionados.push({
-          nombre: productos[indice].nombre,
-          cantidad: Math.floor(Math.random() * 3) + 1,
-          precio: productos[indice].precio,
-        });
-      }
-    }
-
-    const resumen = productosSeleccionados
-      .map((p) => `${p.nombre} x${p.cantidad} ($${p.precio * p.cantidad})`)
-      .join(" - ");
-    const total = productosSeleccionados.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
-    const pedidoFinal = `${resumen} | TOTAL: $${total}`;
-
-    const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
-
-    const pedidoConProductos = {
-      nombre,
-      telefono,
-      partido: "CABA",
-      direccion: zona.direccion,
-      entreCalles: "Av. 1 y Calle 2",
-      pedido: pedidoFinal,
-      coordenadas: { lat: zona.lat, lng: zona.lng },
-      productos: productosSeleccionados.map((p) => ({
-        nombre: p.nombre,
-        cantidad: p.cantidad,
-      })),
-      fecha: Timestamp.fromDate(fechaSeleccionada),
-      fechaStr,
-      entregado: false,
-      monto: total,
-      vendedorEmail: "federudiero@gmail.com",
-    };
-
-    return pedidoConProductos;
-  };
-
-  const generarPedidos = async () => {
-    const confirmacion = await Swal.fire({
-      title: "¿Generar 80 pedidos de prueba ENTREGADOS?",
-      text: "Se crearán pedidos ficticios con todos los campos y entregados.",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "Sí, crear",
-    });
-
-    if (!confirmacion.isConfirmed) return;
-
-    try {
-      for (let i = 0; i < 80; i++) {
-        const pedido = generarPedido();
-        await addDoc(collection(db, "pedidos"), pedido);
-      }
-
-      Swal.fire("✅ 80 pedidos entregados generados exitosamente.");
-    } catch (error) {
-      console.error("Error al generar pedidos:", error);
-      Swal.fire("❌ Error al generar pedidos.");
-    }
-  };
-
-  return (
-    <div className="p-6">
-      <h2 className="mb-4 text-xl font-bold">🧪 Generador de Pedidos de Prueba</h2>
-
-      <div className="mb-4">
-        <label className="block mb-1 font-medium">📅 Seleccionar fecha:</label>
-        <DatePicker
-          selected={fechaSeleccionada}
-          onChange={(date) => setFechaSeleccionada(date)}
-          dateFormat="yyyy-MM-dd"
-          className="w-full max-w-xs input input-bordered"
-        />
-      </div>
-
-      {loading ? (
-        <div className="p-4 text-center bg-base-200 text-base-content rounded-xl">
-          ⚠️ Autenticando usuario y esperando productos...
-        </div>
-      ) : (
-        <button className="btn btn-accent" onClick={generarPedidos}>
-          🧾 Generar 80 pedidos entregados con productos y monto
-        </button>
-      )}
-    </div>
+async function geocodeAddress(address) {
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&region=ar&key=${API_KEY}`
   );
-};
+  const data = await response.json();
+  if (data.status === "OK") {
+    const location = data.results[0].geometry.location;
+    return { lat: location.lat, lng: location.lng };
+  } else {
+    console.error(`❌ Error geocoding "${address}": ${data.status}`);
+    return { lat: null, lng: null };
+  }
+}
 
-export default GeneradorPedidosTest;
+async function completarCoordenadas() {
+  for (let i = 0; i < zonasCABA.length; i++) {
+    const zona = zonasCABA[i];
+    const coords = await geocodeAddress(zona.direccion);
+    zona.lat = coords.lat;
+    zona.lng = coords.lng;
+    console.log(`✅ ${zona.direccion} => lat: ${zona.lat}, lng: ${zona.lng}`);
+  }
+
+  console.log("📦 Array completo con coordenadas:");
+  console.log(JSON.stringify(zonasCABA, null, 2));
+}
+
+completarCoordenadas();

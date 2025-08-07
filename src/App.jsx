@@ -11,7 +11,7 @@ import AdminHojaRuta from "./components/AdminHojaRuta"; // NUEVO
 import AdminStock from "./components/AdminStock";
 import CierreCaja from "./components/CierreCaja";
 import PanelStock from "./components/PanelStock";
-import EstadisticasPanel from "./components/EstadisticasPanel";
+import ResumenFinancieroMensual from "./components/ResumenFinancieroMensual";
 import GeneradorPedidosTest from "./views/GeneradorPedidosTest";
 import EliminarPedidosPorFecha from "./views/EliminarPedidosPorFecha.jsx";
 import RepartidorView from "./views/RepartidorView";
@@ -33,7 +33,7 @@ function App() {
           <Route path="/admin/stock" element={<AdminStock />} />
           <Route path="/admin/cierre-caja" element={<CierreCaja />} />
           <Route path="/admin/panel-stock" element={<PanelStock />} />
-          <Route path="/admin/estadisticas" element={<EstadisticasPanel />} />
+          <Route path="/admin/estadisticas" element={<ResumenFinancieroMensual />} />
           <Route path="/generar-pedidos-test" element={<GeneradorPedidosTest />} />
           <Route path="/eliminar-test" element={<EliminarPedidosPorFecha />} />
           <Route path="/repartidor" element={<RepartidorView />} />
