@@ -1,13 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  doc,
-  setDoc,
-  getDoc,
-} from "firebase/firestore";
+import {  collection, getDocs, query, where, doc, setDoc, getDoc, deleteDoc} from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -305,33 +297,41 @@ const calcularCajaNeta = (totales, gastosRepartidor) => {
     confirmButtonText: "Sí, anular",
     cancelButtonText: "Cancelar",
   });
-
   if (!confirmacion.isConfirmed) return;
 
   const docId = `${fechaStr}_${email}`;
   const docRef = doc(db, "cierres", docId);
 
   try {
-    // Obtener datos antes de borrar
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-
-      // Guardar log en 'anulacionesCierre'
+    // 1) Leer datos antes de borrar para guardar el log
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
       const logRef = doc(db, "anulacionesCierre", `log_${docId}`);
       await setDoc(logRef, {
         fechaStr,
         emailRepartidor: email,
-        timestamp: new Date(),
-        motivo: "Anulación manual desde panel", // Podés cambiar esto o agregar input
+        timestamp: Timestamp ? Timestamp.now() : new Date(), // cualquiera de los dos
+        motivo: "Anulación manual desde panel",
         datosAnulados: data,
       });
     }
 
-    // Eliminar el cierre
-    await setDoc(docRef, {}, { merge: false }); // Borra completamente el doc
+    // 2) Borrar el documento del cierre (esto sí lo elimina)
+    await deleteDoc(docRef);
+
+    // 3) Feedback
     await Swal.fire("Anulado", `Cierre de ${email} anulado correctamente.`, "success");
-    cargarPedidosYRepartidores(); // Recargar datos en pantalla
+
+    // 4) Actualizar UI al toque (sin esperar recarga)
+    setCierres((prev) => {
+      const copia = { ...prev };
+      delete copia[email];
+      return copia;
+    });
+
+    // 5) (opcional) refrescar desde Firestore si querés reconfirmar todo
+    // await cargarPedidosYRepartidores();
   } catch (error) {
     console.error("Error al anular cierre:", error);
     Swal.fire("Error", "No se pudo anular el cierre. Ver consola.", "error");
@@ -366,6 +366,7 @@ const anularCierreGlobal = async () => {
     const datosCierre = cierreSnap.exists() ? cierreSnap.data() : null;
     const datosResumen = resumenSnap.exists() ? resumenSnap.data() : null;
 
+    // Guardar log de anulación
     const logRef = doc(db, "anulacionesCierre", `log_${docId}`);
     await setDoc(logRef, {
       fechaStr,
@@ -378,19 +379,27 @@ const anularCierreGlobal = async () => {
       },
     });
 
-    await setDoc(docRef, {}, { merge: false });
-    await setDoc(resumenRef, {}, { merge: false });
+    // Borrar documentos realmente
+    await deleteDoc(docRef);
+    await deleteDoc(resumenRef);
 
-    Swal.fire("Cierre global anulado", "El cierre global fue eliminado correctamente.", "success");
+    Swal.fire(
+      "Cierre global anulado",
+      "El cierre global fue eliminado correctamente.",
+      "success"
+    );
 
     setResumenGlobal(null);
     cargarPedidosYRepartidores();
   } catch (error) {
     console.error("Error al anular cierre global:", error);
-    Swal.fire("Error", "No se pudo anular el cierre global. Ver consola.", "error");
+    Swal.fire(
+      "Error",
+      "No se pudo anular el cierre global. Ver consola.",
+      "error"
+    );
   }
 };
-
 
   return (
     <div className="p-4">

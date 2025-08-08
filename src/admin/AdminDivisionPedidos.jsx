@@ -29,7 +29,10 @@ function AdminDivisionPedidos() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [cierreYaProcesado, setCierreYaProcesado] = useState(false);
+
+  // Nuevo: mapa de cierres por repartidor y flag de cierre global
+  const [cierresIndividuales, setCierresIndividuales] = useState({});
+  const [cierreGlobal, setCierreGlobal] = useState(false);
 
   const cargarPedidosPorFecha = async (fecha) => {
     setLoading(true);
@@ -43,16 +46,32 @@ function AdminDivisionPedidos() {
     setLoading(false);
   };
 
+  // Trae cierres y arma: { emailRepartidor: true } + detecta cierre global
   useEffect(() => {
-    const verificarCierre = async () => {
+    const verificarCierres = async () => {
       const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
       const snap = await getDocs(
         query(collection(db, "cierres"), where("fechaStr", "==", fechaStr))
       );
-      setCierreYaProcesado(!snap.empty);
+
+      const map = {};
+      let hayGlobal = false;
+
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data?.tipo === "global" || d.id === `global_${fechaStr}`) {
+          hayGlobal = true;
+        }
+        if (data?.emailRepartidor) {
+          map[data.emailRepartidor] = true;
+        }
+      });
+
+      setCierresIndividuales(map);
+      setCierreGlobal(hayGlobal);
     };
 
-    verificarCierre();
+    verificarCierres();
   }, [fechaSeleccionada]);
 
   useEffect(() => {
@@ -100,16 +119,16 @@ function AdminDivisionPedidos() {
   return (
     <div className="max-w-6xl px-4 py-6 mx-auto text-base-content">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
-  <AdminNavbar />
-</div>
-<div className="h-16" /> 
+        <AdminNavbar />
+      </div>
+      <div className="h-16" />
       <br/>
       <h2 className="mb-4 text-2xl font-bold text-white">División de Pedidos por Repartidor</h2>
 
-      {/* ⚠️ Cartel si el día está cerrado */}
-      {cierreYaProcesado && (
+      {/* ⚠️ Cartel si el día está cerrado globalmente */}
+      {cierreGlobal && (
         <div className="p-4 mb-4 text-center text-warning-content bg-warning rounded-xl">
-          ⚠️ El día está cerrado. No se pueden asignar ni modificar pedidos.
+          ⚠️ El día está cerrado globalmente. No se pueden asignar ni modificar pedidos.
         </div>
       )}
 
@@ -151,24 +170,38 @@ function AdminDivisionPedidos() {
               </tr>
             </thead>
             <tbody className="bg-base-100">
-              {pedidosFiltrados.map((p) => (
-                <tr key={p.id} className="border-t border-base-300">
-                  <td>{p.nombre}</td>
-                  <td>{p.direccion}</td>
-                  <td className="whitespace-pre-wrap">{p.pedido}</td>
-                  {repartidores.map((r) => (
-                    <td key={r.email} className="text-center">
-                      <input
-                        type="checkbox"
-                        className={`checkbox checkbox-sm ${p.asignadoA?.includes(r.email) ? "bg-green-500" : ""}`}
-                        checked={p.asignadoA?.includes(r.email) || false}
-                        onChange={(e) => handleAsignar(p.id, r.email, e.target.checked)}
-                        disabled={cierreYaProcesado}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {pedidosFiltrados.map((p) => {
+                const asignadoActual = Array.isArray(p.asignadoA) ? p.asignadoA[0] : undefined;
+                const bloqueadoPorCierre = !!(asignadoActual && cierresIndividuales[asignadoActual]);
+
+                return (
+                  <tr key={p.id} className="border-t border-base-300">
+                    <td>{p.nombre}</td>
+                    <td>{p.direccion}</td>
+                    <td className="whitespace-pre-wrap">{p.pedido}</td>
+                    {repartidores.map((r) => {
+                      const asignado = p.asignadoA?.includes(r.email) || false;
+                      const repartidorCerrado = !!cierresIndividuales[r.email];
+
+                      // Deshabilita si: cierre global, el repartidor del checkbox ya cerró,
+                      // o el pedido está asignado a un repartidor que ya cerró.
+                      const disabled = cierreGlobal || repartidorCerrado || bloqueadoPorCierre;
+
+                      return (
+                        <td key={r.email} className="text-center">
+                          <input
+                            type="checkbox"
+                            className={`checkbox checkbox-sm ${asignado ? "bg-green-500" : ""}`}
+                            checked={asignado}
+                            onChange={(e) => handleAsignar(p.id, r.email, e.target.checked)}
+                            disabled={disabled}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

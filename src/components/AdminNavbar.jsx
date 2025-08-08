@@ -35,10 +35,10 @@ const AdminNavbar = () => {
             <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
             <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
             <li><Link to="/admin/panel-stock">Panel Stock</Link></li>
-           {/*
+          
   <li><Link to="/generar-pedidos-test">generar-pedidos-test</Link></li>
   <li><Link to="/eliminar-test">eliminar-test</Link></li>
-*/}
+
             <li><button onClick={handleLogout}>Cerrar Sesión</button></li>
           </ul>
         </div>
@@ -53,10 +53,10 @@ const AdminNavbar = () => {
           <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li> {/* NUEVO */}
           <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
            <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
-          {/*
+          
   <li><Link to="/generar-pedidos-test">generar-pedidos-test</Link></li>
   <li><Link to="/eliminar-test">eliminar-test</Link></li>
-*/}
+
           <li><Link to="/eliminar-test">eliminar-test</Link></li>
         </ul>
       </div>
