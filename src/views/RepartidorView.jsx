@@ -436,7 +436,7 @@ const actualizarPago = async (pedidoId, metodoPagoNuevo) => {
         <BotonIniciarViaje pedidos={pedidos} />
       </div>
 
-      <div className="p-4 mt-8 text-white bg-base-300 rounded-xl">
+      <div className="p-4 mt-8 text-black bg-base-300 rounded-xl">
         <h3 className="mb-2 text-lg font-semibold">💰 Resumen Recaudado</h3>
         <p><strong>Total efectivo:</strong> ${Math.round(efectivo)}</p>
         <p><strong>Total transferencia (+10%):</strong> ${Math.round(transferencia10)}</p>
