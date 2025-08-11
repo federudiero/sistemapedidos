@@ -33,9 +33,9 @@ function App() {
       mutations.forEach((m) => {
         if (m.type === "attributes" && m.attributeName === "data-theme") {
           const current = document.documentElement.getAttribute("data-theme");
-          console.log("[theme] data-theme cambió a:", current);
+        
           if (current !== "nord") {
-            console.log("[theme] ¡No es nord! Reforzando…");
+            
             forceNord();
           }
         }
@@ -49,14 +49,14 @@ function App() {
 
     // 3) TEST: simulá que algo lo cambia a "light" a los 2s
     const t = setTimeout(() => {
-      console.log("[theme][test] seteando data-theme = light para probar");
+     
       document.documentElement.setAttribute("data-theme", "light");
     }, 2000);
 
     return () => {
       clearTimeout(t);
       obs.disconnect();
-      console.log("[theme] useEffect desmontó");
+    
     };
   }, []);
 

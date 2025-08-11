@@ -18,8 +18,7 @@ export default {
     },
   },
   plugins: [daisyui],
-  darkMode: false, // no usamos modo automático
   daisyui: {
-    themes: ["nord"], // ⚠️ Usamos solo "nord"
+    themes: ["nord"], // siempre nord
   },
 };
