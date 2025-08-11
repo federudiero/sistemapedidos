@@ -427,13 +427,15 @@ setProductosFirestore(lista);
 )}
 
 <div className="mt-6 text-right">
+<div className="mt-6 text-right">
   <button
     type="submit"
-    className="btn btn-primary"
+    className={`btn ${pedidoAEditar ? "btn-warning" : "btn-primary"}`}
     disabled={bloqueado}
   >
-    ➕ Agregar pedido
+    {pedidoAEditar ? "✏️ Actualizar pedido" : "➕ Agregar pedido"}
   </button>
+</div>
 </div>
 
 
