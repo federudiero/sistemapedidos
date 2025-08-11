@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import React, { useEffect } from "react";
+
 import VendedorView from "./views/VendedorView";
 import AdminLogin from "./views/AdminLogin";
 import AdminPedidos from "./views/AdminPedidos";
@@ -17,48 +17,7 @@ import EliminarPedidosPorFecha from "./views/EliminarPedidosPorFecha.jsx";
 import RepartidorView from "./views/RepartidorView";
 
 function App() {
-  useEffect(() => {
-    console.log("[theme] useEffect montó");
-
-    const forceNord = () => {
-      document.documentElement.setAttribute("data-theme", "nord");
-      console.log("[theme] set data-theme = nord");
-    };
-
-    // 1) Set inicial
-    forceNord();
-
-    // 2) Observer con logs
-    const obs = new MutationObserver((mutations) => {
-      mutations.forEach((m) => {
-        if (m.type === "attributes" && m.attributeName === "data-theme") {
-          const current = document.documentElement.getAttribute("data-theme");
-        
-          if (current !== "nord") {
-            
-            forceNord();
-          }
-        }
-      });
-    });
-
-    obs.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-
-    // 3) TEST: simulá que algo lo cambia a "light" a los 2s
-    const t = setTimeout(() => {
-     
-      document.documentElement.setAttribute("data-theme", "light");
-    }, 2000);
-
-    return () => {
-      clearTimeout(t);
-      obs.disconnect();
-    
-    };
-  }, []);
+ 
 
   return (
     <div className="min-h-screen">

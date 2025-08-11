@@ -1,39 +1,16 @@
 <!doctype html>
-<html lang="es" data-theme="nord">
+<html lang="es" data-theme="dim">
   <head>
- <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="color-scheme" content="light only" />
-<meta name="theme-color" content="#1f2937" />
-
-    <script>
-      try { localStorage.removeItem("theme"); } catch(e){}
-      // Fuerza nord antes del primer paint
-      document.documentElement.setAttribute("data-theme", "nord");
-      // Limpia cualquier data-theme en hijos
-      document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('[data-theme]').forEach(el => {
-          if (el !== document.documentElement) el.removeAttribute('data-theme');
-        });
-      });
+    <!-- ... metas ... -->
+      <script>
+      const THEME = "dim";
+      try { localStorage.setItem("theme", THEME); } catch {}
+      document.documentElement.setAttribute("data-theme", THEME);
     </script>
-
-    <!-- Íconos -->
-    <link rel="icon" href="/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- Apple / PWA -->
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.json" />
-
-    <title>Sistema de Pedidos</title>
+    <!-- ... íconos/PWA ... -->
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
-</div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

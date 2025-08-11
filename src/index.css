@@ -1,5 +1,6 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* ⚠️ ¡Sin estilos que sobrescriban colores o fondos! */
+@plugin "daisyui" {
+  themes: dim --default;
+  logs: true;
+}

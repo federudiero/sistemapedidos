@@ -133,7 +133,8 @@ const verificarCierreDelDia = async (fecha) => {
 };
 
   return (
-    <div className="min-h-screen bg-base-200 text-base-content" data-theme="night">
+   <div className="min-h-screen bg-base-200 text-base-content">
+
       <div className="max-w-screen-xl px-4 py-6 mx-auto">
         <div className="flex flex-col items-center justify-between gap-4 mb-8 md:flex-row">
           <h2 className="text-2xl font-bold">🎨 Sistema de Pedidos - Pinturería</h2>
