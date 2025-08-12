@@ -10,7 +10,10 @@ const vendedoresPermitidos = [
   "vendedor2@gmail.com",
   "franco.coronel.134@gmail.com",
   "agus.belen64@gmail.com",
-    "eliascalderon731@gmail.com"
+    "eliascalderon731@gmail.com",
+    "yarasosa16@gmail.com",
+"ayelenyamile97@gmail.com",
+"pintefaceargentina@gmail.com",
 ];
 
 function LoginVendedor() {
