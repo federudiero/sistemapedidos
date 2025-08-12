@@ -200,105 +200,112 @@ setProductosFirestore(lista);
         </div>
       )}
 
-      <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="space-y-6">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* DATOS DEL CLIENTE */}
-          <div className="shadow-lg card bg-base-200">
-            <div className="card-body">
-              <h2 className="text-xl font-bold">🧑 Datos del cliente</h2>
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="space-y-6">
+     <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 md:gap-6 md:items-stretch">
 
-              <label className="label">
-                <span className="label-text">👤 Nombre</span>
-              </label>
-              <input
-                type="text"
-                className="w-full input input-bordered"
-                value={nombre}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setNombre(val);
-                  setErrorNombre(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]*$/.test(val) ? "" : "❌ Solo letras y espacios.");
-                }}
-                disabled={bloqueado}
-              />
-              {errorNombre && <p className="text-sm text-error">{errorNombre}</p>}
+        {/* DATOS DEL CLIENTE */}
+       <div className="w-full col-span-1 shadow-lg card bg-base-200">
+  <div className="p-4 card-body sm:p-6">
+            <h2 className="text-xl font-bold">🧑 Datos del cliente</h2>
+      <label className="label">
+        <span className="label-text">👤 Nombre</span>
+      </label>
+      <input
+        type="text"
+        className="w-full input input-bordered"
+        value={nombre}
+        onChange={(e) => {
+          const val = e.target.value;
+          setNombre(val);
+          setErrorNombre(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]*$/.test(val) ? "" : "❌ Solo letras y espacios.");
+        }}
+        disabled={bloqueado}
+      />
+      {errorNombre && <p className="text-sm text-error">{errorNombre}</p>}
 
-              <label className="label">
-                <span className="label-text">🏠 Calle y altura</span>
-              </label>
-              <Autocomplete
-                onLoad={(a) => (autoCompleteRef.current = a)}
-                onPlaceChanged={handlePlaceChanged}
-              >
-                <input
-                  className="w-full input input-bordered"
-                  value={direccion}
-                  onChange={(e) => setDireccion(e.target.value)}
-                  placeholder="Buscar dirección"
-                  disabled={bloqueado}
-                />
-              </Autocomplete>
+      <label className="label">
+        <span className="label-text">🏠 Calle y altura</span>
+      </label>
+      <Autocomplete
+        onLoad={(a) => (autoCompleteRef.current = a)}
+        onPlaceChanged={handlePlaceChanged}
+      >
+        <input
+          className="w-full input input-bordered"
+          value={direccion}
+          onChange={(e) => setDireccion(e.target.value)}
+          placeholder="Buscar dirección"
+          disabled={bloqueado}
+        />
+      </Autocomplete>
 
-              {coordenadas && (
-                <div className="h-48 my-4 overflow-hidden border rounded-lg border-base-300">
-                 <GoogleMap
-  mapContainerStyle={{ width: "100%", height: "100%" }}
-  center={coordenadas}
-  zoom={16}
-  options={mapOptions} // 🔍 acá se aplican los estilos
->
-  <Marker position={coordenadas} />
-</GoogleMap>
-                </div>
-              )}
+      {coordenadas && (
+        <div
+          className="w-full my-4 overflow-hidden border rounded-lg border-base-300"
+          style={{ height: "300px" }} // 🔹 más alto en móviles
+        >
+          <GoogleMap
+            mapContainerStyle={{ width: "100%", height: "100%" }}
+            center={coordenadas}
+            zoom={16}
+            options={mapOptions}
+          >
+            <Marker position={coordenadas} />
+          </GoogleMap>
+        </div>
+      )}
 
-              <label className="label">
-                <span className="label-text">🗒️ Observación (entre calles)</span>
-              </label>
-              <input
-                type="text"
-                className="w-full input input-bordered"
-                value={entreCalles}
-                onChange={(e) => setEntreCalles(e.target.value)}
-                disabled={bloqueado}
-              />
+      <label className="label">
+        <span className="label-text">🗒️ Observación (entre calles)</span>
+      </label>
+      <input
+        type="text"
+        className="w-full input input-bordered"
+        value={entreCalles}
+        onChange={(e) => setEntreCalles(e.target.value)}
+        disabled={bloqueado}
+      />
 
-              <label className="label">
-                <span className="label-text">🌆 Ciudad o partido</span>
-              </label>
-              <input
-                type="text"
-                className="w-full input input-bordered"
-                value={partido}
-                onChange={(e) => setPartido(e.target.value)}
-                disabled={bloqueado}
-              />
+      <label className="label">
+        <span className="label-text">🌆 Ciudad o partido</span>
+      </label>
+      <input
+        type="text"
+        className="w-full input input-bordered"
+        value={partido}
+        onChange={(e) => setPartido(e.target.value)}
+        disabled={bloqueado}
+      />
 
-              <label className="label">
-                <span className="label-text">📞 Teléfono</span>
-              </label>
-              <input
-                type="text"
-                className="w-full input input-bordered"
-                value={telefono}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "");
-                  setTelefono(val);
-                  setErrorTelefono(/^[0-9]{6,15}$/.test(val) ? "" : "❌ Solo números (6 a 15 dígitos).");
-                }}
-                disabled={bloqueado}
-              />
-              {errorTelefono && <p className="text-sm text-error">{errorTelefono}</p>}
-            </div>
-          </div>
+      <label className="label">
+        <span className="label-text">📞 Teléfono</span>
+      </label>
+      <input
+        type="text"
+        className="w-full input input-bordered"
+        value={telefono}
+        onChange={(e) => {
+          const val = e.target.value.replace(/\D/g, "");
+          setTelefono(val);
+          setErrorTelefono(/^[0-9]{6,15}$/.test(val) ? "" : "❌ Solo números (6 a 15 dígitos).");
+        }}
+        disabled={bloqueado}
+      />
+      {errorTelefono && <p className="text-sm text-error">{errorTelefono}</p>}
+    </div>
+  </div>
 
           {/* PRODUCTOS */}
           {/* LISTA DE PRODUCTOS */}
-<div className="mb-6 border shadow-md card bg-base-100 border-base-300">
-  <div className="card-body">
+<div className="border shadow-md card bg-base-100 border-base-300">
+  {/* Altura fija dentro de la card para que haya scroll interno */}
+  <div className="flex flex-col card-body">
     <h2 className="text-lg font-bold">🛒 Productos disponibles</h2>
-
-    <div className="overflow-y-auto max-h-72">
+   <div
+  className="overflow-y-auto overscroll-contain max-h-[55vh] sm:max-h-[60vh] md:max-h-[540px]"
+  style={{ WebkitOverflowScrolling: "touch" }}
+>
+    
       {productosFirestore.map((prod, idx) => {
         const seleccionado = productosSeleccionados.find(p => p.nombre === prod.nombre);
         const cantidad = seleccionado?.cantidad || 0;

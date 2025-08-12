@@ -156,7 +156,7 @@ const verificarCierreDelDia = async (fecha) => {
           </div>
         </div>
 
-        <div className="p-6 mb-6 border shadow bg-base-100 border-base-300 rounded-xl animate-fade-in-up">
+        <div className="p-0 mb-6 overflow-hidden border shadow md:p-6 bg-base-100 border-base-300 rounded-xl animate-fade-in-up">
           <PedidoForm
   onAgregar={agregarPedido}
   onActualizar={actualizarPedido}
