@@ -7,6 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
 
+    <!-- Forzar tema -->
     <script>
       const THEME = "dim";
       try { localStorage.setItem("theme", THEME); } catch {}
@@ -14,6 +15,13 @@
     </script>
 
     <title>Estilos Pinturas</title>
+
+    <!-- Manifest y iconos -->
+    <link rel="manifest" href="/manifest.json?v=2">
+    <meta name="theme-color" content="#111827">
+
+    <!-- iOS / Safari -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   </head>
   <body>
     <div id="root"></div>
