@@ -10,6 +10,8 @@ const PedidoTabla = ({ pedidos, onEditar, onEliminar, bloqueado }) => {
 📍 Partido: ${pedido.partido}
 📱 Teléfono: ${pedido.telefono}
 📝 Pedido: ${pedido.pedido}
+${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
+
 📝 
 `.trim();
 
@@ -17,6 +19,33 @@ const PedidoTabla = ({ pedidos, onEditar, onEliminar, bloqueado }) => {
       Swal.fire("✅ Copiado", "El pedido completo fue copiado al portapapeles.", "success");
     });
   };
+
+
+  const toWhatsAppAR = (raw) => {
+  let d = String(raw || "").replace(/\D/g, ""); // solo dígitos
+
+  if (!d) return "";
+
+  // Si ya viene con 54...
+  if (d.startsWith("54")) {
+    d = d.slice(2);            // quito 54
+  }
+
+  // Quito 0 inicial de área si está
+  if (d.startsWith("0")) d = d.slice(1);
+
+  // Quito el "15" después del área (móviles locales: 0AA 15 XXXXXXXX)
+  // Área en AR puede ser 2 a 4 dígitos
+  d = d.replace(/^(\d{2,4})15/, "$1");
+
+  // Si ya venía con el 9 (caso +54 9 ...) lo dejamos; si no, lo agregamos (móvil)
+  if (!d.startsWith("9")) d = "9" + d;
+
+  // Devuelvo 54 + resto (sin '+')
+  return "54" + d;
+};
+const getPhones = (p) =>
+  [p.telefono, p.telefonoAlt].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
   return (
     <div className="container px-4 py-4 mx-auto">
@@ -50,7 +79,26 @@ const PedidoTabla = ({ pedidos, onEditar, onEliminar, bloqueado }) => {
                   <li><strong>📌 Dirección:</strong> {p.direccion}</li>
                   <li><strong>🌐 Observación (Entre calles):</strong> {p.entreCalles}</li>
                   <li><strong>📍 Ciudad o partido:</strong> {p.partido}</li>
-                  <li><strong>📱 Teléfono:</strong> {p.telefono}</li>
+                 <li>
+  <strong>📱 Teléfonos:</strong>
+  <div className="flex flex-col gap-1">
+    {getPhones(p).length === 0 ? (
+      <span className="opacity-70">—</span>
+    ) : (
+      getPhones(p).map((ph, i) => (
+        <a
+          key={i}
+          className="link link-accent"
+          href={`https://wa.me/${toWhatsAppAR(ph)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {i === 0 ? "Principal: " : "Alternativo: "} {ph}
+        </a>
+      ))
+    )}
+  </div>
+</li>
                   <li>
                     <strong>📝 Pedido:</strong>
                     <br />
@@ -68,9 +116,11 @@ const PedidoTabla = ({ pedidos, onEditar, onEliminar, bloqueado }) => {
                   </li>
                 </ul>
               </div>
-
+{(p.entregado || p.bloqueadoVendedor) && (
+  <div className="mb-2 text-sm text-success">✅ Entregado: edición deshabilitada</div>
+)}
               {/* Botones solo si no está bloqueado */}
-              {!bloqueado && (
+              {!(bloqueado || p.entregado || p.bloqueadoVendedor) && (
                 <div className="justify-end px-4 pb-4 card-actions">
                   <button
                     className="btn btn-sm btn-warning"

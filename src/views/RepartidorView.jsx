@@ -96,18 +96,25 @@ function RepartidorView() {
     setPedidos(lista);
   };
 
-  const toggleEntregado = async (pedido) => {
-    if (typeof pedido.monto !== "number" || isNaN(pedido.monto)) {
-      Swal.fire("⚠️ Error", "El monto del pedido no es válido", "warning");
-      return;
-    }
+  
+const toggleEntregado = async (pedido) => {
+  if (typeof pedido.monto !== "number" || isNaN(pedido.monto)) {
+    Swal.fire("⚠️ Error", "El monto del pedido no es válido", "warning");
+    return;
+  }
 
-    const nuevoEstado = !pedido.entregado;
-    await updateDoc(doc(db, "pedidos", pedido.id), { entregado: nuevoEstado });
-    setPedidos((prev) =>
-      prev.map((p) => (p.id === pedido.id ? { ...p, entregado: nuevoEstado } : p))
-    );
-  };
+  const nuevoEstado = !pedido.entregado;
+  await updateDoc(doc(db, "pedidos", pedido.id), {
+    entregado: nuevoEstado,
+    bloqueadoVendedor: nuevoEstado,
+    editLockByCourierAt: nuevoEstado ? Timestamp.now() : deleteField(),
+  });
+
+  setPedidos((prev) =>
+    prev.map((p) => (p.id === pedido.id ? { ...p, entregado: nuevoEstado, bloqueadoVendedor: nuevoEstado } : p))
+  );
+};
+
 
   // Cambiar método de pago
   const actualizarPago = async (pedidoId, metodoPagoNuevo) => {
@@ -268,6 +275,35 @@ function RepartidorView() {
     setBloqueado(!!docSnap.exists());
   };
 
+// Convierte casi cualquier formato AR (0AA 15 XXXXXXXX, AA15..., +54 9..., etc.)
+// al formato que WhatsApp espera: 549AAXXXXXXXX (sin +)
+const toWhatsAppAR = (raw) => {
+  let d = String(raw || "").replace(/\D/g, ""); // solo dígitos
+
+  if (!d) return "";
+
+  // Si ya viene con 54...
+  if (d.startsWith("54")) {
+    d = d.slice(2);            // quito 54
+  }
+
+  // Quito 0 inicial de área si está
+  if (d.startsWith("0")) d = d.slice(1);
+
+  // Quito el "15" después del área (móviles locales: 0AA 15 XXXXXXXX)
+  // Área en AR puede ser 2 a 4 dígitos
+  d = d.replace(/^(\d{2,4})15/, "$1");
+
+  // Si ya venía con el 9 (caso +54 9 ...) lo dejamos; si no, lo agregamos (móvil)
+  if (!d.startsWith("9")) d = "9" + d;
+
+  // Devuelvo 54 + resto (sin '+')
+  return "54" + d;
+};
+
+
+
+
   return (
     <div className="max-w-4xl px-4 py-6 mx-auto">
       <div className="flex items-center justify-between mb-4">
@@ -345,16 +381,23 @@ function RepartidorView() {
                 <p><strong>📦 Pedido:</strong> {pedido.pedido}</p>
                 <p><strong>💵 Monto:</strong> ${monto || 0}</p>
                 <p>
-                  <strong>📞 Teléfono:</strong>{" "}
-                  <a
-                    className="link link-accent"
-                    href={`https://wa.me/${pedido.telefono}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    WhatsApp
-                  </a>
-                </p>
+  <strong>📞 Teléfonos:</strong>{" "}
+  {[pedido.telefono, pedido.telefonoAlt]
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .map((ph, i) => (
+      <a
+        key={i}
+        className="ml-2 link link-accent"
+        href={`https://wa.me/${toWhatsAppAR(ph)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {i === 0 ? "Principal: " : "Alt: "} {ph}
+      </a>
+    ))}
+</p>
+
 
                 {/* Selector método de pago */}
                 <div className="mt-2">

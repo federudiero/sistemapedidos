@@ -211,7 +211,7 @@ useEffect(() => {
 } else if (metodo === "transferencia") {
   transferencia += monto;
 } else if (metodo === "transferencia10") {
-  transferencia10 += monto * 1.1; // ✅ Aplicamos el 10% extra
+  transferencia10 += Math.round(monto * 1.1 * 100) / 100; // ✅ redondeo a 2 decimales
 }
   });
 
@@ -303,17 +303,21 @@ const calcularCajaNeta = (totales, gastosRepartidor) => {
         totalEfectivo += monto;
       } else if (metodo === "transferencia") {
         totalTransferencia += monto;
-      } else if (metodo === "transferencia10") {
-        totalTransferencia10 += monto * 1.1;
-      } else if (metodo === "mixto") {
-        const ef = Number(pedido.pagoMixtoEfectivo || 0);
-        const tr = Number(pedido.pagoMixtoTransferencia || 0);
-        const con10 = !!pedido.pagoMixtoCon10;
-        totalEfectivo += ef;
-        if (con10) totalTransferencia10 += tr * 1.1;
-        else totalTransferencia += tr;
-      }
-    }
+     } else if (metodo === "transferencia10") {
+  totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
+} else if (metodo === "mixto") {
+  const ef = Number(pedido.pagoMixtoEfectivo || 0);
+  const tr = Number(pedido.pagoMixtoTransferencia || 0);
+  const con10 = !!pedido.pagoMixtoCon10;
+  totalEfectivo += ef;
+  if (con10) {
+    totalTransferencia10 += Math.round(tr * 1.1 * 100) / 100;
+  } else {
+    totalTransferencia += tr;
+  }
+
+  }
+  }
   }
 
   // Guardar resumen de ventas

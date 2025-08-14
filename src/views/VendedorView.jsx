@@ -19,6 +19,9 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import Swal from "sweetalert2";
+import SeguimientoRepartidores from "../components/SeguimientoRepartidores";
+
 
 function VendedorView() {
   const [usuario, setUsuario] = useState(null);
@@ -104,18 +107,37 @@ function VendedorView() {
   cargarPedidos(fechaSeleccionada);
 };
 
-  const actualizarPedido = async (pedidoActualizado) => {
-    const ref = doc(db, "pedidos", pedidoActualizado.id);
-    await updateDoc(ref, pedidoActualizado);
-    cargarPedidos(fechaSeleccionada);
-    setPedidoAEditar(null);
-  };
+ const actualizarPedido = async (pedidoActualizado) => {
+  const ref = doc(db, "pedidos", pedidoActualizado.id);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : null;
 
-  const eliminarPedido = async (id) => {
-    await deleteDoc(doc(db, "pedidos", id));
-    cargarPedidos(fechaSeleccionada);
-    cargarCantidadPedidos(fechaSeleccionada);
-  };
+  if (!data) return;
+
+  if (data.entregado || data.bloqueadoVendedor) {
+    await Swal.fire("Bloqueado", "No podés editar un pedido ya entregado.", "info");
+    return;
+  }
+
+  await updateDoc(ref, pedidoActualizado);
+  cargarPedidos(fechaSeleccionada);
+  setPedidoAEditar(null);
+};
+
+ const eliminarPedido = async (id) => {
+  const ref = doc(db, "pedidos", id);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : null;
+
+  if (data?.entregado || data?.bloqueadoVendedor) {
+    await Swal.fire("Bloqueado", "No podés eliminar un pedido ya entregado.", "info");
+    return;
+  }
+
+  await deleteDoc(ref);
+  cargarPedidos(fechaSeleccionada);
+  cargarCantidadPedidos(fechaSeleccionada);
+};
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -176,6 +198,11 @@ const verificarCierreDelDia = async (fecha) => {
          
         </div>
 
+  <SeguimientoRepartidores
+  fecha={fechaSeleccionada}
+  vendedorEmail={usuario?.email}
+/>
+
         <div className="p-6 border shadow bg-base-100 border-base-300 rounded-xl animate-fade-in-up">
           <h4 className="mb-4 text-lg font-semibold">📋 Tus pedidos del día</h4>
           <PedidoTabla
@@ -200,6 +227,8 @@ const verificarCierreDelDia = async (fecha) => {
   </div>
 )}
       </div>
+
+    
     </div>
   );
 }

@@ -19,6 +19,9 @@ import EditarPedidoModal from "../components/EditarPedidoModal";
 import Swal from "sweetalert2";
 import AdminNavbar from "../components/AdminNavbar";
 import { format } from "date-fns";
+import SeguimientoRepartidoresAdmin from "../components/SeguimientoRepartidoresAdmin";
+
+
 
 function AdminPedidos() {
   const navigate = useNavigate();
@@ -242,6 +245,34 @@ function AdminPedidos() {
     }
   };
 
+
+  // Convierte casi cualquier formato AR (0AA 15 XXXXXXXX, AA15..., +54 9..., etc.)
+// al formato que WhatsApp espera: 549AAXXXXXXXX (sin +)
+const toWhatsAppAR = (raw) => {
+  let d = String(raw || "").replace(/\D/g, ""); // solo dígitos
+
+  if (!d) return "";
+
+  // Si ya viene con 54...
+  if (d.startsWith("54")) {
+    d = d.slice(2);            // quito 54
+  }
+
+  // Quito 0 inicial de área si está
+  if (d.startsWith("0")) d = d.slice(1);
+
+  // Quito el "15" después del área (móviles locales: 0AA 15 XXXXXXXX)
+  // Área en AR puede ser 2 a 4 dígitos
+  d = d.replace(/^(\d{2,4})15/, "$1");
+
+  // Si ya venía con el 9 (caso +54 9 ...) lo dejamos; si no, lo agregamos (móvil)
+  if (!d.startsWith("9")) d = "9" + d;
+
+  // Devuelvo 54 + resto (sin '+')
+  return "54" + d;
+};
+
+
   return (
     <div className="min-h-screen bg-base-100 text-base-content">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
@@ -282,7 +313,15 @@ function AdminPedidos() {
           </div>
         ) : pedidos.length > 0 ? (
           <>
-            <div className="p-6 mb-6 overflow-x-auto border shadow-xl bg-base-200 border-info rounded-xl animate-fade-in-up">
+
+<div>
+
+    {!loading && pedidos.length > 0 && (
+  <SeguimientoRepartidoresAdmin pedidos={pedidos} />
+)}
+      
+</div>
+              <div className="p-6 mb-6 overflow-x-auto border shadow-xl bg-base-200 border-info rounded-xl animate-fade-in-up">
               <h3 className="mb-4 text-lg font-semibold text-info">
                 📦 Pedidos para la fecha seleccionada
               </h3>
@@ -325,7 +364,24 @@ function AdminPedidos() {
                           )}
                         </div>
                       </td>
-                      <td>{pedido.telefono}</td>
+                     <td>
+  <div className="flex flex-col">
+    {[pedido.telefono, pedido.telefonoAlt]
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .map((ph, i) => (
+        <a
+          key={i}
+          className="link link-accent"
+          href={`https://wa.me/${toWhatsAppAR(ph)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {i === 0 ? "Principal: " : "Alt: "} {ph}
+        </a>
+      ))}
+  </div>
+</td>
                       <td>
                         {pedido.vendedorEmail
                           ? pedido.vendedorEmail.split("@")[0]
