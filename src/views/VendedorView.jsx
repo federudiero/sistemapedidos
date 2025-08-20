@@ -17,10 +17,14 @@ import {
 import { format, startOfDay, endOfDay } from "date-fns";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import DatePicker from "react-datepicker";
+import DatePicker, { registerLocale } from "react-datepicker";
+import es from "date-fns/locale/es";
 import "react-datepicker/dist/react-datepicker.css";
 import Swal from "sweetalert2";
 import SeguimientoRepartidores from "../components/SeguimientoRepartidores";
+
+
+registerLocale("es", es);
 
 
 function VendedorView() {
@@ -168,11 +172,12 @@ const verificarCierreDelDia = async (fecha) => {
         <div className="mb-6 animate-fade-in-up">
           <label className="mr-2 font-semibold">📅 Ver cantidad de pedidos del día:</label>
           <DatePicker
-            selected={fechaSeleccionada}
-            onChange={(fecha) => setFechaSeleccionada(fecha)}
-            className="text-black bg-white input input-bordered"
-            dateFormat="dd/MM/yyyy"
-          />
+  selected={fechaSeleccionada}
+  onChange={(fecha) => setFechaSeleccionada(fecha)}
+  className="text-black bg-white input input-bordered"
+  dateFormat="dd/MM/yyyy"
+  locale="es"
+/>
           <div className="mt-2">
             <strong>Pedidos cargados ese día:</strong> {cantidadPedidos}
           </div>

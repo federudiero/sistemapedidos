@@ -45,7 +45,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     zoomControl: true,
     draggable: true,
     scrollwheel: true,
-    mapId: MAP_ID || undefined, // usa Map ID si existe
+    mapId: MAP_ID || undefined,
   };
 
   const ahora = new Date();
@@ -55,6 +55,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries: LIBRARIES,
   });
+
+  // 🔧 FIX: key para re-montar el Autocomplete tras submit
+  const [pacRefresh, setPacRefresh] = useState(0);
 
   // Marker con soporte para Advanced Marker y fallback a Marker clásico
   useEffect(() => {
@@ -77,24 +80,22 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
 
     (async () => {
       let AdvancedMarkerElement;
-     try {
-  ({ AdvancedMarkerElement } = await window.google.maps.importLibrary("marker"));
-} catch (err) {
-  console.warn("No se pudo cargar 'marker' (AdvancedMarker). Uso Marker clásico.", err);
-  AdvancedMarkerElement = undefined; // fuerza el fallback
-}
+      try {
+        ({ AdvancedMarkerElement } = await window.google.maps.importLibrary("marker"));
+      } catch (err) {
+        console.warn("No se pudo cargar 'marker' (AdvancedMarker). Uso Marker clásico.", err);
+        AdvancedMarkerElement = undefined;
+      }
       if (cancelled) return;
 
-      const hasMapId = !!(MAP_ID);
+      const hasMapId = !!MAP_ID;
       const canUseAdvanced = !!AdvancedMarkerElement && hasMapId;
 
       if (canUseAdvanced) {
-        // limpiar marker clásico si existía
         if (basicMarkerRef.current) {
           basicMarkerRef.current.setMap(null);
           basicMarkerRef.current = null;
         }
-        // mover/crear advanced
         if (advMarkerRef.current) {
           advMarkerRef.current.position = coordenadas;
           return;
@@ -105,7 +106,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
           title: (nombre || direccion || "Destino") + "",
         });
       } else {
-        // Fallback: Marker clásico
         if (advMarkerRef.current) {
           advMarkerRef.current.map = null;
           advMarkerRef.current = null;
@@ -149,23 +149,34 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     };
 
     (async () => {
-      const { PlaceAutocompleteElement } =
-        await window.google.maps.importLibrary("places");
+      const { PlaceAutocompleteElement } = await window.google.maps.importLibrary("places");
       el = new PlaceAutocompleteElement();
       el.placeholder = "Buscar dirección";
       el.style.display = "block";
       el.style.width = "100%";
       el.disabled = !!bloqueado;
       el.addEventListener("gmp-select", onSelect);
+
+      // Limpio y monto
       pacHostRef.current.innerHTML = "";
       pacHostRef.current.appendChild(el);
+
+      // 🔧 FIX: guardo instancia y fuerzo vacío por las dudas
       pacInstanceRef.current = el;
+      try {
+        pacInstanceRef.current.value = "";
+        // algunos builds requieren también:
+        if ("inputValue" in pacInstanceRef.current) {
+          pacInstanceRef.current.inputValue = "";
+        }
+      } catch (e) {console.error(e)}
     })();
 
     return () => {
       if (el) el.removeEventListener("gmp-select", onSelect);
     };
-  }, [isLoaded, bloqueado]);
+  // 🔧 FIX: agrego dependencia pacRefresh para re-montar limpio
+  }, [isLoaded, bloqueado, pacRefresh]);
 
   // Carga de productos
   useEffect(() => {
@@ -205,8 +216,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       setPartido(pedidoAEditar.partido || "");
       setTelefonoAlt(pedidoAEditar.telefonoAlt || "");
 
-      if (pedidoAEditar.coordenadas)
-        setCoordenadas(pedidoAEditar.coordenadas);
+      if (pedidoAEditar.coordenadas) setCoordenadas(pedidoAEditar.coordenadas);
 
       const nuevosProductos = pedidoAEditar.productos
         .map((pedidoProd) => {
@@ -251,6 +261,28 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     setProductosSeleccionados([]);
     setTelefonoAlt("");
     setErrorTelefonoAlt("");
+
+    setCoordenadas(null); // limpia el marcador/mapa
+
+    // 🔧 FIX: limpiar y re-montar el Autocomplete
+    try {
+      if (pacInstanceRef.current) {
+        pacInstanceRef.current.value = "";
+        if ("inputValue" in pacInstanceRef.current) {
+          pacInstanceRef.current.inputValue = "";
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setPacRefresh((k) => k + 1); // fuerza recreación del web component
+
+    // Opcional: sacar foco para cerrar teclado/sugerencias
+    try {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    } catch (e){console.error(e)}
   };
 
   const onSubmit = () => {
@@ -305,7 +337,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       confirmButtonText: "OK",
       customClass: { confirmButton: "swal2-confirm btn btn-primary" },
     }).then(() => {
-      resetFormulario();
+      resetFormulario(); // 🔧 ahora también vacía el Autocomplete
     });
   };
 
@@ -355,7 +387,8 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               <label className="label">
                 <span className="label-text">🏠 Calle y altura</span>
               </label>
-              <div ref={pacHostRef} className="w-full" />
+              {/* 🔧 FIX: el contenedor se re-monta cuando cambia pacRefresh */}
+              <div key={pacRefresh} ref={pacHostRef} className="w-full" />
 
               {coordenadas && (
                 <div
