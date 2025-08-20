@@ -26,6 +26,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
   const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
   const [telefonoAlt, setTelefonoAlt] = useState("");
   const [errorTelefonoAlt, setErrorTelefonoAlt] = useState("");
+  const [busqueda, setBusqueda] = useState("");
 
   // Estado/refs de mapa y marcadores
   const [mapReady, setMapReady] = useState(false);
@@ -179,32 +180,52 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
   }, [isLoaded, bloqueado, pacRefresh]);
 
   // Carga de productos
-  useEffect(() => {
-    const cargarProductos = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "productos"));
-        const lista = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        const regexPrioritarios = /^(envio|envío|combo)/i;
+useEffect(() => {
+  const cargarProductos = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "productos"));
+      const lista = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-        lista.sort((a, b) => {
-          const esAEnvioOCombo = regexPrioritarios.test(a.nombre);
-          const esBEnvioOCombo = regexPrioritarios.test(b.nombre);
-          if (esAEnvioOCombo && !esBEnvioOCombo) return -1;
-          if (!esAEnvioOCombo && esBEnvioOCombo) return 1;
-          return a.nombre.localeCompare(b.nombre);
-        });
+      const regexEnvio = /^(envio|envío)/i;
+      const regexCombo = /^combo/i;
+      const regexEntonador = /^entonador/i;
 
-        setProductosFirestore(lista);
-      } catch (error) {
-        console.error("Error al cargar productos:", error);
-        Swal.fire("❌ Error al cargar productos desde Firestore.");
-      }
-    };
-    cargarProductos();
-  }, []);
+      lista.sort((a, b) => {
+        const esEnvioA = regexEnvio.test(a.nombre);
+        const esEnvioB = regexEnvio.test(b.nombre);
+        const esComboA = regexCombo.test(a.nombre);
+        const esComboB = regexCombo.test(b.nombre);
+        const esEntonadorA = regexEntonador.test(a.nombre);
+        const esEntonadorB = regexEntonador.test(b.nombre);
+
+        // 1️⃣ Primero "envíos"
+        if (esEnvioA && !esEnvioB) return -1;
+        if (!esEnvioA && esEnvioB) return 1;
+
+        // 2️⃣ Después "combos"
+        if (esComboA && !esComboB) return -1;
+        if (!esComboA && esComboB) return 1;
+
+        // 3️⃣ Al final "entonadores"
+        if (esEntonadorA && !esEntonadorB) return 1;
+        if (!esEntonadorA && esEntonadorB) return -1;
+
+        // 4️⃣ El resto en orden alfabético
+        return a.nombre.localeCompare(b.nombre);
+      });
+
+      setProductosFirestore(lista);
+    } catch (error) {
+      console.error("Error al cargar productos:", error);
+      Swal.fire("❌ Error al cargar productos desde Firestore.");
+    }
+  };
+  cargarProductos();
+}, []);
+
 
   // Si edita pedido, reconstruir productos seleccionados + coords
   useEffect(() => {
@@ -481,76 +502,89 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
           </div>
 
           {/* LISTA DE PRODUCTOS */}
-          <div className="border shadow-md card bg-base-100 border-base-300">
-            <div className="flex flex-col card-body">
-              <h2 className="text-lg font-bold">🛒 Productos disponibles</h2>
-              <div
-                className="overflow-y-auto overscroll-contain max-h-[55vh] sm:max-h-[60vh] md:max-h-[540px]"
-                style={{ WebkitOverflowScrolling: "touch" }}
-              >
-                {productosFirestore.map((prod, idx) => {
-                  const seleccionado = productosSeleccionados.find(
-                    (p) => p.nombre === prod.nombre
-                  );
-                  const cantidad = seleccionado?.cantidad || 0;
+          <div className="flex flex-col card-body">
+  <h2 className="text-lg font-bold">🛒 Productos disponibles</h2>
 
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between py-2 border-b border-base-200"
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={!!seleccionado}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setProductosSeleccionados((prev) => [
-                                ...prev,
-                                { ...prod, cantidad: 1 },
-                              ]);
-                            } else {
-                              setProductosSeleccionados((prev) =>
-                                prev.filter((p) => p.nombre !== prod.nombre)
-                              );
-                            }
-                          }}
-                          disabled={bloqueado}
-                          className="checkbox"
-                        />
-                        <div>
-                          <p className="font-semibold">{prod.nombre}</p>
-                          <p className="text-sm text-gray-500">
-                            ${prod.precio.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
+  {/* 🔍 Buscador */}
+  <input
+    type="text"
+    placeholder="Buscar producto..."
+    value={busqueda}
+    onChange={(e) => setBusqueda(e.target.value)}
+    className="w-full mb-3 input input-bordered input-sm"
+    disabled={bloqueado}
+  />
 
-                      {!!seleccionado && (
-                        <input
-                          type="number"
-                          min="1"
-                          value={cantidad}
-                          onChange={(e) => {
-                            const cant = parseInt(e.target.value, 10);
-                            setProductosSeleccionados((prev) =>
-                              prev.map((p) =>
-                                p.nombre === prod.nombre
-                                  ? { ...p, cantidad: cant }
-                                  : p
-                              )
-                            );
-                          }}
-                          className="w-20 input input-sm input-bordered"
-                          disabled={bloqueado}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+  <div
+    className="overflow-y-auto overscroll-contain max-h-[55vh] sm:max-h-[60vh] md:max-h-[540px]"
+    style={{ WebkitOverflowScrolling: "touch" }}
+  >
+    {productosFirestore
+      .filter((prod) =>
+        prod.nombre.toLowerCase().includes(busqueda.toLowerCase())
+      )
+      .map((prod, idx) => {
+        const seleccionado = productosSeleccionados.find(
+          (p) => p.nombre === prod.nombre
+        );
+        const cantidad = seleccionado?.cantidad || 0;
+
+        return (
+          <div
+            key={idx}
+            className="flex items-center justify-between py-2 border-b border-base-200"
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!!seleccionado}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setProductosSeleccionados((prev) => [
+                      ...prev,
+                      { ...prod, cantidad: 1 },
+                    ]);
+                  } else {
+                    setProductosSeleccionados((prev) =>
+                      prev.filter((p) => p.nombre !== prod.nombre)
+                    );
+                  }
+                }}
+                disabled={bloqueado}
+                className="checkbox"
+              />
+              <div>
+                <p className="font-semibold">{prod.nombre}</p>
+                <p className="text-sm text-gray-500">
+                  ${prod.precio.toLocaleString()}
+                </p>
               </div>
             </div>
+
+            {!!seleccionado && (
+              <input
+                type="number"
+                min="1"
+                value={cantidad}
+                onChange={(e) => {
+                  const cant = parseInt(e.target.value, 10);
+                  setProductosSeleccionados((prev) =>
+                    prev.map((p) =>
+                      p.nombre === prod.nombre
+                        ? { ...p, cantidad: cant }
+                        : p
+                    )
+                  );
+                }}
+                className="w-20 input input-sm input-bordered"
+                disabled={bloqueado}
+              />
+            )}
           </div>
+        );
+      })}
+  </div>
+</div>
 
           {/* BOTÓN PARA AGREGAR DEVOLUCIÓN */}
           <button
