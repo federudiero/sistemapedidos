@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es" data-theme="dim">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+
+    <!-- Forzar tema -->
+    <script>
+      const THEME = "dim";
+      try { localStorage.setItem("theme", THEME); } catch {}
+      document.documentElement.setAttribute("data-theme", THEME);
+    </script>
+
+    <title>Estilos Pinturas</title>
+
+    <!-- Manifest y iconos -->
+    <link rel="manifest" href="/manifest.json?v=2">
+    <meta name="theme-color" content="#111827">
+
+    <!-- iOS / Safari -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

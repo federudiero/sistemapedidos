@@ -1,0 +1,100 @@
+import React, { useEffect, useState } from "react";
+import { auth } from "../firebase/firebase";
+import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
+import { useProvincia } from "../hooks/useProvincia.js";
+import { isSuperAdmin } from "../constants/superadmins";
+import { db } from "../firebase/firebase";
+import { doc, getDoc } from "firebase/firestore";
+
+const toArray = (v) => Array.isArray(v) ? v : (v && typeof v === "object") ? Object.keys(v) : [];
+
+export default function AdminLogin() {
+  const navigate = useNavigate();
+  const [error, setError] = useState("");
+  const [loadingLogin, setLoadingLogin] = useState(false);
+  const [emailForm, setEmailForm] = useState("");
+  const [passForm, setPassForm] = useState("");
+
+  const { provinciaId, setProvincia } = useProvincia();
+
+  useEffect(() => {
+    if (!provinciaId) navigate("/seleccionar-provincia", { replace: true });
+  }, [provinciaId, navigate]);
+
+  const validarAdmin = async (email) => {
+    if (isSuperAdmin(email)) return true;
+    const ref = doc(db, "provincias", provinciaId, "config", "usuarios");
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : {};
+    const admins = toArray(data.admins).map((e) => String(e || "").toLowerCase());
+    return admins.includes(email);
+  };
+
+  const loginEmailPass = async () => {
+    if (!provinciaId) return;
+    setError(""); setLoadingLogin(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, emailForm, passForm);
+      const email = String(cred.user?.email || "").toLowerCase();
+      const ok = await validarAdmin(email);
+      if (!ok) { await signOut(auth); return setError("❌ Este correo no es administrador de esta provincia."); }
+      localStorage.setItem("adminAutenticado", "true");
+      navigate("/admin/pedidos", { replace: true });
+    } catch (e) {
+      console.error(e); setError("❌ Usuario/contraseña inválidos.");
+    } finally { setLoadingLogin(false); }
+  };
+
+  const iniciarGoogle = async () => {
+    if (!provinciaId) return;
+    setError(""); setLoadingLogin(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const res = await signInWithPopup(auth, provider);
+      const email = String(res.user?.email || "").toLowerCase();
+      const ok = await validarAdmin(email);
+      if (!ok) { await signOut(auth); return setError("❌ Este correo no es administrador de esta provincia."); }
+      localStorage.setItem("adminAutenticado", "true");
+      navigate("/admin/pedidos", { replace: true });
+    } catch (err) {
+      console.error(err); setError("❌ Error al iniciar sesión.");
+    } finally { setLoadingLogin(false); }
+  };
+
+  const cambiarProvincia = () => { setProvincia(""); navigate("/seleccionar-provincia"); };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-base-100 text-base-content">
+      <div className="w-full max-w-md p-8 border shadow-lg border-base-300 bg-base-200 rounded-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold">🔐 Acceso Administrador</h2>
+          <div className="flex items-center gap-2">
+            <span className="font-mono badge badge-primary">Prov: {provinciaId || "—"}</span>
+            <button className="btn btn-xs btn-outline" onClick={cambiarProvincia}>Cambiar provincia</button>
+          </div>
+        </div>
+
+        {/* Email + Pass */}
+        <div className="mb-4 space-y-2">
+          <input className="w-full input input-bordered" placeholder="email@dominio.com"
+                 value={emailForm} onChange={(e) => setEmailForm(e.target.value)} />
+          <input className="w-full input input-bordered" type="password" placeholder="Contraseña"
+                 value={passForm} onChange={(e) => setPassForm(e.target.value)} />
+          <button className="w-full btn btn-primary" onClick={loginEmailPass} disabled={loadingLogin}>Ingresar</button>
+        </div>
+
+        <div className="divider">o</div>
+
+        <button className="w-full btn btn-outline text-base-content hover:bg-base-300"
+                onClick={iniciarGoogle} disabled={!provinciaId || loadingLogin}>
+          Iniciar sesión con Google
+        </button>
+
+        <button className="w-full btn btn-outline" onClick={() => navigate("/home")}>⬅ Volver a Home</button>
+
+        {error && <div className="mt-6 text-sm alert alert-error">{error}</div>}
+      </div>
+    </div>
+  );
+}
