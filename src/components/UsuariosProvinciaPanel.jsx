@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { db } from "../firebase/firebase";
 import { useProvincia } from "../hooks/useProvincia";
 import {
@@ -7,48 +7,44 @@ import {
   onSnapshot,
   setDoc,
   updateDoc,
-  arrayUnion,
-  arrayRemove,
   getDoc,
   deleteField,
+  runTransaction,
 } from "firebase/firestore";
-
-import { useNavigate } from "react-router-dom"; 
+import { useNavigate } from "react-router-dom";
 
 // ===== Permisos fijos por rol Repartidor (visibles en TODAS las provincias)
 const PERMISOS_REPARTIDOR = [
-  { key: "repartidorEntregar",  label: "Marcar entregado" },
-  { key: "repartidorPagos",     label: "Editar pagos" },
-  { key: "repartidorBloquear",  label: "Bloquear vendedor al entregar" },
-  { key: "repartidorEditar",    label: "Editar campos operativos" },
+  { key: "repartidorEntregar", label: "Marcar entregado" },
+  { key: "repartidorPagos", label: "Editar pagos" },
+  { key: "repartidorBloquear", label: "Bloquear vendedor al entregar" },
+  { key: "repartidorEditar", label: "Editar campos operativos" },
 ];
 
 // ===== Permisos extra GLOBAL (visibles en TODAS las provincias)
 const PERMISOS_EXTRA = [
-  { key: "repartidorNotas",  label: "repartidorNotas" },
-  { key: "anularCierre",     label: "anularCierre" },
-  { key: "vendedorEditar",   label: "vendedorEditar" },
-  { key: "editarStock",      label: "editarStock" },
-  { key: "cerrarGlobal",     label: "cerrarGlobal" },
-  { key: "exportarExcel",    label: "exportarExcel" },
-  { key: "vendedorCrear",    label: "vendedorCrear" },
+  { key: "repartidorNotas", label: "repartidorNotas" },
+  { key: "anularCierre", label: "anularCierre" },
+  { key: "vendedorEditar", label: "vendedorEditar" },
+  { key: "editarStock", label: "editarStock" },
+  { key: "cerrarGlobal", label: "cerrarGlobal" },
+  { key: "exportarExcel", label: "exportarExcel" },
+  { key: "vendedorCrear", label: "vendedorCrear" },
   { key: "vendedorEliminar", label: "vendedorEliminar" },
 ];
 
 export default function UsuariosProvinciaPanel() {
   const { provinciaId, provincia } = useProvincia();
   const prov = provinciaId || provincia || null;
+  const navigate = useNavigate();
 
-   const navigate = useNavigate(); // 👈 hook para navegar
-
-  // ===== Estado (igual) =====
+  // ===== Estado =====
   const [cfgUsuarios, setCfgUsuarios] = useState({
     admins: [],
     vendedores: [],
     repartidores: [],
   });
-  const [permisos, setPermisos] = useState({}); // { [email]: {clave:boolean} }
-
+  const [permisos, setPermisos] = useState({}); // { [emailLower]: {clave:boolean} }
   const [nuevoEmail, setNuevoEmail] = useState("");
   const [rolesNuevos, setRolesNuevos] = useState({
     admin: false,
@@ -56,9 +52,10 @@ export default function UsuariosProvinciaPanel() {
     repartidor: false,
   });
   const [permisoCustom, setPermisoCustom] = useState("");
+  const [deleting, setDeleting] = useState(null);
 
   // Refs
-  const refCfg  = prov ? doc(db, "provincias", prov, "config", "usuarios")  : null;
+  const refCfg = prov ? doc(db, "provincias", prov, "config", "usuarios") : null;
   const refPerm = prov ? doc(db, "provincias", prov, "config", "permisos") : null;
 
   // ===== Suscripciones =====
@@ -76,96 +73,189 @@ export default function UsuariosProvinciaPanel() {
     })();
     const unsub = onSnapshot(refCfg, (snap) => {
       const d = snap.data() || {};
+      const toLowerArr = (arr) => (arr || []).map((e) => (e || "").toLowerCase()).filter(Boolean);
       setCfgUsuarios({
-        admins: d.admins || [],
-        vendedores: d.vendedores || [],
-        repartidores: d.repartidores || [],
+        admins: toLowerArr(d.admins),
+        vendidos: undefined, // safeguard (no se usa)
+        vendedores: toLowerArr(d.vendedores),
+        repartidores: toLowerArr(d.repartidores),
       });
     });
     return () => unsub();
   }, [refCfg]);
 
+  // --- Normalización única de claves en /config/permisos (fusiona A@B y a@b en a@b)
+  const normalizedOnce = useRef(false);
   useEffect(() => {
-    if (!refPerm) return;
+    if (!refPerm || normalizedOnce.current) return;
     (async () => {
       const snap = await getDoc(refPerm);
-      if (!snap.exists()) await setDoc(refPerm, {}, { merge: true });
-    })();
-    const unsub = onSnapshot(refPerm, (snap) => setPermisos(snap.data() || {}));
+      if (!snap.exists()) {
+        await setDoc(refPerm, {}, { merge: true });
+        normalizedOnce.current = true;
+        return;
+      }
+      const data = snap.data() || {};
+      const merged = {};
+      const deletes = {};
+      for (const [k, v] of Object.entries(data)) {
+        const lk = (k || "").toLowerCase();
+        merged[lk] = { ...(merged[lk] || {}), ...(v || {}) };
+        if (k !== lk) deletes[k] = deleteField();
+      }
+      // escribe en minúsculas y elimina las variantes
+      await setDoc(refPerm, merged, { merge: true });
+      if (Object.keys(deletes).length) await updateDoc(refPerm, deletes);
+      normalizedOnce.current = true;
+    })().catch(() => {
+      // si falla por reglas, no rompemos la UI
+      normalizedOnce.current = true;
+    });
+  }, [refPerm]);
+
+  useEffect(() => {
+    if (!refPerm) return;
+    const unsub = onSnapshot(refPerm, (snap) => {
+      const raw = snap.data() || {};
+      const norm = {};
+      Object.entries(raw).forEach(([k, v]) => (norm[(k || "").toLowerCase()] = v || {}));
+      setPermisos(norm);
+    });
     return () => unsub();
   }, [refPerm]);
 
-  // Emails unificados
+  // ===== Emails unificados (roles + permisos con AL MENOS un true) =====
   const emails = useMemo(() => {
-    const s = new Set(
-      [
-        ...cfgUsuarios.admins,
-        ...cfgUsuarios.vendedores,
-        ...cfgUsuarios.repartidores,
-        ...Object.keys(permisos || {}),
-      ]
-        .map((e) => (e || "").toLowerCase())
-        .filter(Boolean)
-    );
-    return Array.from(s).sort();
+    const roles = [
+      ...cfgUsuarios.admins,
+      ...cfgUsuarios.vendedores,
+      ...cfgUsuarios.repartidores,
+    ].map((e) => (e || "").toLowerCase());
+
+    const permEmails = Object.entries(permisos || {})
+      .filter(([, val]) => val && Object.values(val).some(Boolean))
+      .map(([k]) => (k || "").toLowerCase());
+
+    return Array.from(new Set([...roles, ...permEmails].filter(Boolean))).sort();
   }, [cfgUsuarios, permisos]);
 
-  // Catálogo permisos
+  // ===== Catálogo de permisos a mostrar =====
   const allPermsCatalog = useMemo(() => {
     const keysFromDoc = Object.values(permisos || {}).flatMap((p) =>
       Object.keys(p || {}).map((k) => ({ key: k, label: k }))
     );
     const merged = [...PERMISOS_REPARTIDOR, ...PERMISOS_EXTRA, ...keysFromDoc];
     const seen = new Set();
-    return merged.filter(({ key }) => {
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return merged.filter(({ key }) => key && !seen.has(key) && seen.add(key));
   }, [permisos]);
 
   if (!prov) {
-    return (
-      <div className="alert alert-warning">
-        Primero seleccioná una provincia para gestionar usuarios y permisos.
-      </div>
-    );
+    return <div className="alert alert-warning">Seleccioná una provincia primero.</div>;
   }
 
   // ===== Acciones =====
   const setPerm = async (email, clave, valor) => {
-    if (!email || !refPerm) return;
-    const actual = permisos[email] || {};
-    await setDoc(refPerm, { [email]: { ...actual, [clave]: valor } }, { merge: true });
+    try {
+      if (!email || !refPerm) return;
+      const e = (email || "").toLowerCase();
+      const actual = permisos[e] || {};
+      const next = { ...actual, [clave]: valor };
+      await setDoc(refPerm, { [e]: next }, { merge: true });
+
+      // Limpieza: si quedó todo en false, borramos TODAS las variantes de la key
+      if (!Object.values(next).some(Boolean)) {
+        const snap = await getDoc(refPerm);
+        if (snap.exists()) {
+          const data = snap.data() || {};
+          const updates = {};
+          Object.keys(data).forEach((k) => {
+            if ((k || "").toLowerCase() === e) updates[k] = deleteField();
+          });
+          if (Object.keys(updates).length) await updateDoc(refPerm, updates);
+        }
+      }
+    } catch (err) {
+      console.error("setPerm error", err);
+      alert("No se pudieron guardar los permisos. Revisá las reglas o la consola.");
+    }
   };
 
-  // Eliminar usuario (roles + permisos)
+  // 🔥 Eliminación robusta con transacción (normaliza, filtra listas y borra TODAS las variantes)
   const removeUsuario = async (email) => {
-    if (!refCfg || !refPerm) return;
-    await Promise.all([
-      updateDoc(refCfg, {
-        admins: arrayRemove(email),
-        vendedores: arrayRemove(email),
-        repartidores: arrayRemove(email),
+  const e = (email || "").toLowerCase();
+  if (!e || !refCfg || !refPerm) return;
+  setDeleting(e);
+
+  try {
+    await runTransaction(db, async (tx) => {
+      // 1) TODAS las lecturas primero
+      const cfgSnap  = await tx.get(refCfg);
+      const permSnap = await tx.get(refPerm);
+
+      const data = cfgSnap.exists()
+        ? cfgSnap.data()
+        : { admins: [], vendedores: [], repartidores: [] };
+
+      const norm = (arr) => (arr || []).map((x) => (x || "").toLowerCase());
+      const admins       = norm(data.admins).filter((x) => x !== e);
+      const vendedores   = norm(data.vendedores).filter((x) => x !== e);
+      const repartidores = norm(data.repartidores).filter((x) => x !== e);
+
+      // preparar updates para permisos (borra TODAS las variantes de casing)
+      const permUpdates = {};
+      if (permSnap.exists()) {
+        const permData = permSnap.data() || {};
+        Object.keys(permData).forEach((k) => {
+          if ((k || "").toLowerCase() === e) permUpdates[k] = deleteField();
+        });
+      }
+
+      // 2) TODAS las escrituras después de las lecturas
+      if (!cfgSnap.exists()) {
+        tx.set(refCfg, { admins: [], vendedores: [], repartidores: [] }, { merge: true });
+      }
+      tx.update(refCfg, {
+        admins,
+        vendedores,
+        repartidores,
         updatedAt: new Date().toISOString(),
-      }),
-      updateDoc(refPerm, { [email]: deleteField() }),
-    ]);
-  };
+      });
+
+      if (Object.keys(permUpdates).length) {
+        tx.update(refPerm, permUpdates);
+      }
+    });
+  } catch (err) {
+    console.error("removeUsuario error", err);
+    alert("No se pudo eliminar el usuario. Revisá reglas/console.");
+  } finally {
+    setDeleting(null);
+  }
+};
 
   const addUsuario = async () => {
-    const email = (nuevoEmail || "").trim().toLowerCase();
-    if (!email || !refCfg) return;
+    try {
+      const email = (nuevoEmail || "").trim().toLowerCase();
+      if (!email || !refCfg) return;
 
-    const writes = [];
-    if (rolesNuevos.admin)      writes.push(updateDoc(refCfg, { admins: arrayUnion(email) }));
-    if (rolesNuevos.vendedor)   writes.push(updateDoc(refCfg, { vendedores: arrayUnion(email) }));
-    if (rolesNuevos.repartidor) writes.push(updateDoc(refCfg, { repartidores: arrayUnion(email) }));
-    if (!rolesNuevos.admin && !rolesNuevos.vendedor && !rolesNuevos.repartidor) {
-      writes.push(updateDoc(refCfg, { vendedores: arrayUnion(email) })); // default vendedor
+      const writes = {};
+      if (rolesNuevos.admin) writes.admins = [...new Set([...(cfgUsuarios.admins || []), email])];
+      if (rolesNuevos.vendedor)
+        writes.vendedores = [...new Set([...(cfgUsuarios.vendedores || []), email])];
+      if (rolesNuevos.repartidor)
+        writes.repartidores = [...new Set([...(cfgUsuarios.repartidores || []), email])];
+
+      // default vendedor si no marcó nada
+      if (!rolesNuevos.admin && !rolesNuevos.vendedor && !rolesNuevos.repartidor) {
+        writes.vendedores = [...new Set([...(cfgUsuarios.vendedores || []), email])];
+      }
+
+      await updateDoc(refCfg, { ...writes, updatedAt: new Date().toISOString() });
+      setNuevoEmail("");
+    } catch (err) {
+      console.error("addUsuario error", err);
+      alert("No se pudo agregar el usuario. Revisá las reglas o la consola.");
     }
-    await Promise.all(writes);
-    setNuevoEmail("");
   };
 
   const agregarPermisoCustom = () => {
@@ -185,16 +275,13 @@ export default function UsuariosProvinciaPanel() {
 
   const permisosUsuario = (email) => permisos[email] || {};
 
-  // ===== Render (cards; sin “Rol asignado”; fix overflow) =====
+  // ===== Render =====
   return (
     <div className="space-y-8">
+      <button onClick={() => navigate("/admin/pedidos")} className="btn btn-outline btn-sm">
+        ← Volver a Pedidos
+      </button>
 
-     <button
-          onClick={() => navigate("/admin/pedidos")}
-          className="btn btn-outline btn-sm"
-        >
-          ← Volver a Pedidos
-        </button>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-2xl font-bold">
           Usuarios y Permisos — Prov: <span className="badge badge-primary">{prov}</span>
@@ -250,19 +337,17 @@ export default function UsuariosProvinciaPanel() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {emails.map((email) => {
           const pu = permisosUsuario(email);
+          const isDel = deleting === email;
           return (
             <div
               key={email}
               className="p-5 overflow-hidden border shadow-xl rounded-2xl bg-base-100 border-base-300"
             >
-              {/* Header card */}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-semibold break-words">{email}</div>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {tieneRol(email, "admin") && (
-                      <span className="badge badge-secondary">admin</span>
-                    )}
+                    {tieneRol(email, "admin") && <span className="badge badge-secondary">admin</span>}
                     {tieneRol(email, "vendedor") && <span className="badge">vendedor</span>}
                     {tieneRol(email, "repartidor") && (
                       <span className="badge badge-accent">repartidor</span>
@@ -270,19 +355,17 @@ export default function UsuariosProvinciaPanel() {
                   </div>
                 </div>
                 <button
-                  className="btn btn-xs btn-outline btn-error"
+                  className={`btn btn-xs btn-outline btn-error ${isDel ? "loading" : ""}`}
                   onClick={() => removeUsuario(email)}
+                  disabled={isDel}
                   title="Eliminar usuario (roles + permisos)"
                 >
-                  Eliminar usuario
+                  {isDel ? "Eliminando..." : "Eliminar usuario"}
                 </button>
               </div>
 
-              {/* Permisos */}
               <div className="mt-5">
                 <div className="mb-2 text-sm font-medium opacity-70">Permisos</div>
-
-                {/* grilla flexible + anti-overflow */}
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {allPermsCatalog.map((p) => (
                     <label key={p.key} className="flex items-start min-w-0 gap-2">
@@ -302,11 +385,8 @@ export default function UsuariosProvinciaPanel() {
             </div>
           );
         })}
-
         {!emails.length && (
-          <div className="p-4 text-center opacity-70 col-span-full">
-            No hay usuarios en esta provincia.
-          </div>
+          <div className="p-4 text-center opacity-70 col-span-full">No hay usuarios en esta provincia.</div>
         )}
       </div>
 
@@ -325,8 +405,8 @@ export default function UsuariosProvinciaPanel() {
           </button>
         </div>
         <p className="mt-2 text-sm opacity-70">
-          La clave aparecerá como columna; se guarda en{" "}
-          <code>/provincias/{prov}/config/permisos</code> cuando la tildes para un usuario.
+          La clave aparece cuando la tildes para un usuario en{" "}
+          <code>/provincias/{prov}/config/permisos</code>.
         </p>
       </div>
     </div>

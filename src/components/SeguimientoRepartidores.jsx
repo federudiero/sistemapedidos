@@ -1,15 +1,48 @@
+// src/components/SeguimientoRepartidores.jsx
 import React, { useEffect, useState } from "react";
-import { db } from "../firebase/firebase";
-import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { db, auth } from "../firebase/firebase";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  Timestamp,
+  doc,
+  getDoc,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { startOfDay, endOfDay } from "date-fns";
 import { useProvincia } from "../hooks/useProvincia.js";
 
+/**
+ * Detecta el rol del usuario en la provincia actual
+ * leyendo provincias/{prov}/config/usuarios
+ */
+async function getRoleForUser(provinciaId, email) {
+  if (!provinciaId || !email) return "none";
+  const ref = doc(db, "provincias", provinciaId, "config", "usuarios");
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : {};
+  const toArr = (v) => (Array.isArray(v) ? v : v && typeof v === "object" ? Object.keys(v) : []);
+  const admins = toArr(data.admins).map(String);
+  const vendedores = toArr(data.vendedores).map(String);
+  const repartidores = toArr(data.repartidores).map(String);
+
+  if (admins.includes(email)) return "admin";
+  if (vendedores.includes(email)) return "vendedor";
+  if (repartidores.includes(email)) return "repartidor";
+  return "none";
+}
+
 export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
   const { provinciaId } = useProvincia();
-
   const [cargando, setCargando] = useState(true);
   const [grupos, setGrupos] = useState([]);
+  const [miEmail, setMiEmail] = useState("");
+  const [miRol, setMiRol] = useState("none"); // admin | vendedor | repartidor | none
 
+  // Normalizadores
+  const justDigits = (t) => String(t || "").replace(/\D/g, "");
   const toWhatsAppAR = (raw) => {
     let d = String(raw || "").replace(/\D/g, "");
     if (!d) return "";
@@ -19,9 +52,7 @@ export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
     if (!d.startsWith("9")) d = "9" + d;
     return "54" + d;
   };
-
   const getPhones = (p) => {
-    const justDigits = (t) => String(t || "").replace(/\D/g, "");
     const candidatos = [p.telefono, p.telefonoAlt].filter(Boolean);
     const unicos = [];
     for (const c of candidatos) {
@@ -31,22 +62,53 @@ export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
     return unicos;
   };
 
+  // Tomo el usuario actual y su rol en la provincia
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      const email = String(user?.email || "");
+      setMiEmail(email);
+      if (email && provinciaId) {
+        const rol = await getRoleForUser(provinciaId, email);
+        setMiRol(rol);
+      } else {
+        setMiRol("none");
+      }
+    });
+    return () => unsub();
+  }, [provinciaId]);
+
   useEffect(() => {
     const cargar = async () => {
-      if (!provinciaId) return;
+      if (!provinciaId || !fecha || !miEmail) return;
       setCargando(true);
       try {
         const inicio = Timestamp.fromDate(startOfDay(fecha));
         const fin = Timestamp.fromDate(endOfDay(fecha));
+        const col = collection(db, "provincias", provinciaId, "pedidos");
 
-        const q = query(
-          collection(db, "provincias", provinciaId, "pedidos"),
-          where("fecha", ">=", inicio),
-          where("fecha", "<=", fin),
-          where("vendedorEmail", "==", vendedorEmail || "")
-        );
+        // Filtros comunes por fecha
+        const filtros = [where("fecha", ">=", inicio), where("fecha", "<=", fin)];
 
+        // Armo el filtro según rol (alineado con reglas)
+        if (miRol === "admin") {
+          // Admin puede ver todo; si vino vendedorEmail por props, filtramos por ese
+          if (vendedorEmail) filtros.push(where("vendedorEmail", "==", vendedorEmail));
+        } else if (miRol === "vendedor") {
+          // Vendedor: solo sus pedidos (NO usar prop)
+          filtros.push(where("vendedorEmail", "==", miEmail));
+        } else if (miRol === "repartidor") {
+          // Repartidor: solo pedidos asignados a él
+          filtros.push(where("asignadoA", "array-contains", miEmail));
+        } else {
+          // Sin rol válido: no pedir nada
+          setGrupos([]);
+          setCargando(false);
+          return;
+        }
+
+        const q = query(col, ...filtros);
         const snap = await getDocs(q);
+
         const pedidos = snap.docs.map((d) => {
           const data = { id: d.id, ...d.data() };
           const repartidor = Array.isArray(data.asignadoA)
@@ -54,10 +116,10 @@ export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
             : (data.repartidor || "SIN_REPARTIDOR");
           const ordenRuta = Number.isFinite(Number(data.ordenRuta)) ? Number(data.ordenRuta) : 999;
           const entregado = typeof data.entregado === "boolean" ? data.entregado : false;
-
           return { ...data, repartidor, ordenRuta, entregado };
         });
 
+        // Agrupar por repartidor y calcular progreso
         const mapa = new Map();
         for (const p of pedidos) {
           if (!mapa.has(p.repartidor)) mapa.set(p.repartidor, []);
@@ -86,24 +148,27 @@ export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
     };
 
     cargar();
-  }, [fecha, vendedorEmail, provinciaId]);
+  }, [fecha, provinciaId, miEmail, miRol, vendedorEmail]);
 
   if (cargando) {
-    return <div className="p-4 mt-6 border bg-base-100 border-base-300 rounded-xl">
-      Cargando seguimiento de repartidores…
-    </div>;
+    return (
+      <div className="p-4 mt-6 border bg-base-100 border-base-300 rounded-xl">
+        Cargando seguimiento de repartidores…
+      </div>
+    );
   }
 
   if (grupos.length === 0) {
-    return <div className="p-4 mt-6 border bg-base-100 border-base-300 rounded-xl">
-      No hay repartos asignados para esta fecha.
-    </div>;
+    return (
+      <div className="p-4 mt-6 border bg-base-100 border-base-300 rounded-xl">
+        No hay repartos asignados para esta fecha.
+      </div>
+    );
   }
 
   return (
     <div className="p-6 mt-6 border shadow bg-base-100 border-base-300 rounded-xl animate-fade-in-up">
       <h4 className="mb-4 text-lg font-semibold">🚚 Seguimiento de repartidores</h4>
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {grupos.map((g) => (
           <div key={g.repartidor} className="p-4 shadow-inner rounded-xl bg-base-200">
@@ -121,8 +186,12 @@ export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
             <div className="mt-3">
               {g.proximo ? (
                 <div className="p-3 rounded-lg bg-base-100">
-                  <p className="mb-1 text-sm opacity-70">Próxima parada (orden #{g.proximo.ordenRuta})</p>
-                  <p><strong>👤 {g.proximo.nombre}</strong></p>
+                  <p className="mb-1 text-sm opacity-70">
+                    Próxima parada (orden #{g.proximo.ordenRuta})
+                  </p>
+                  <p>
+                    <strong>👤 {g.proximo.nombre}</strong>
+                  </p>
                   <p>📍 {g.proximo.direccion}</p>
                   {g.proximo.monto ? <p>💵 ${g.proximo.monto}</p> : null}
 
@@ -131,7 +200,12 @@ export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
                       {getPhones(g.proximo).map((num, idx) => (
                         <p key={num}>
                           📱{" "}
-                          <a className="link link-accent" href={`https://wa.me/${toWhatsAppAR(num)}`} target="_blank" rel="noopener noreferrer">
+                          <a
+                            className="link link-accent"
+                            href={`https://wa.me/${toWhatsAppAR(num)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             {num}
                           </a>
                           <span className="ml-1 opacity-70">
@@ -144,7 +218,9 @@ export default function SeguimientoRepartidores({ fecha, vendedorEmail }) {
                   )}
                 </div>
               ) : (
-                <div className="p-3 rounded-lg bg-base-100 text-success">✅ ¡Ruta completada!</div>
+                <div className="p-3 rounded-lg bg-base-100 text-success">
+                  ✅ ¡Ruta completada!
+                </div>
               )}
             </div>
 

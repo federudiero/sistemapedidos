@@ -4,7 +4,9 @@ export const PROVINCIAS = [
   { id: "CAT", nombre: "Catamarca",    base: "San Fernando del Valle de Catamarca, Catamarca" },
   { id: "CHA", nombre: "Chaco",        base: "Resistencia, Chaco" },
   { id: "CHU", nombre: "Chubut",       base: "Trelew, Chubut" },
-  { id: "CBA", nombre: "Córdoba",      base: "Marino Gabbiani 1330, Córdoba, Córdoba, Argentina" },
+  { id: "CBA", nombre: "Córdoba",      base: "Marino Gabbarini 1330, Córdoba" },
+ 
+  
   { id: "COR", nombre: "Corrientes",   base: "Corrientes, Corrientes" },
   { id: "ER",  nombre: "Entre Ríos",   base: "Paraná, Entre Ríos" },
   { id: "FOR", nombre: "Formosa",      base: "Formosa, Formosa" },
