@@ -13,15 +13,18 @@ import CierreCaja from "./components/CierreCaja";
 import PanelStock from "./components/PanelStock";
 import ResumenFinancieroMensual from "./components/ResumenFinancieroMensual";
 import UsuariosProvinciaPanel from "./components/UsuariosProvinciaPanel";
-import GeneradorPedidosTest from "./views/GeneradorPedidosTest";
+
 import EliminarPedidosPorFecha from "./views/EliminarPedidosPorFecha.jsx";
 import RepartidorView from "./views/RepartidorView";
 import SeleccionarProvincia from "./views/SeleccionarProvincia";
 
-// Utilidad para replicar catálogo (import corregido)
-import CopiarCatalogoATodas from "./utils/CopiarCatalogoATodas.jsx";
+
+// Utilidad para replicar catálogo (import corregido) import CopiarCatalogoATodas from "./utils/CopiarCatalogoATodas.jsx"; import GeneradorPedidosTest from "./views/GeneradorPedidosTest";
+
 
 function App() {
+  
+
   return (
     <div className="min-h-screen">
       <Routes>
@@ -47,11 +50,11 @@ function App() {
         <Route path="/login-repartidor" element={<LoginRepartidor />} />
         <Route path="/repartidor" element={<RepartidorView />} />
 
-        <Route path="/generar-pedidos-test" element={<GeneradorPedidosTest />} />
+        
         <Route path="/eliminar-test" element={<EliminarPedidosPorFecha />} />
 
-        {/* Utilidades */}
-      <Route path="/admin/utils/replicar-catalogo" element={<CopiarCatalogoATodas />} />
+        {/* <Route path="/admin/utils/replicar-catalogo" element={<CopiarCatalogoATodas />} ,<Route path="/generar-pedidos-test" element={<GeneradorPedidosTest />} /> /> */}
+      
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

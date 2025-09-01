@@ -13,6 +13,7 @@ import {
   onSnapshot,
   Timestamp,
   writeBatch,
+  increment,            // 👈 NUEVO: usamos increment() para descontar/restaurar sin leer
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import DatePicker from "react-datepicker";
@@ -103,6 +104,13 @@ function acumular(map, ref, pathStr, cantidad) {
   const prev = map.get(pathStr) || { ref, qty: 0 };
   prev.qty += Number(cantidad) || 0;
   map.set(pathStr, prev);
+}
+
+// 👇 NUEVO: helper para dividir arrays en tandas (batches)
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 export default function CierreCaja() {
@@ -307,7 +315,6 @@ export default function CierreCaja() {
 
     await Swal.fire("Caja cerrada", `Caja de ${email} cerrada correctamente.`, "success");
 
-    // 🔧 Actualizo estado local con TODO lo necesario (sin esperar recargar)
     setCierres((prev) => ({
       ...prev,
       [email]: {
@@ -344,7 +351,6 @@ export default function CierreCaja() {
 
     // 1) Recorrer cierres individuales -> acumular cantidades y armar resumen visible
     for (const email of Object.keys(cierres)) {
-      // ⚠️ A prueba de balas: si no está en memoria, leo Firestore
       let cierre = cierres[email];
       if (!cierre?.pedidosEntregados) {
         const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
@@ -360,7 +366,6 @@ export default function CierreCaja() {
           const cant = Number(item?.cantidad || 0);
           if (!cant) continue;
 
-          // Resolver ref principal (prioridad: ruta > id > nombre)
           const { ref, pathStr } = await resolverRefDesdeProdItem(
             item,
             provinciaId,
@@ -372,18 +377,18 @@ export default function CierreCaja() {
             continue;
           }
 
-          // Leer data del producto principal
+          // Leer data del producto principal (solo para nombre y si es combo)
           const data = await leerProducto(ref, pathStr);
           if (!data) continue;
 
           // Descontar el propio producto en stock
           acumular(acumuladoPorProductoPath, ref, pathStr, cant);
 
-          // Resumen visible: sólo el item vendido
+          // Resumen visible
           const nombreBase = data?.nombre || item?.nombre || "SIN_NOMBRE";
           resumenPorNombre[nombreBase] = (resumenPorNombre[nombreBase] || 0) + cant;
 
-          // Si es combo, descontar también los componentes (afecta stock, no el resumen)
+          // Si es combo, descontar también los componentes (afecta stock, no resumen)
           if (data?.esCombo && Array.isArray(data?.componentes)) {
             for (const comp of data.componentes) {
               const compCant = cant * Number(comp?.cantidad || 0);
@@ -457,13 +462,17 @@ export default function CierreCaja() {
       return;
     }
 
-    // 5) Descontar stock de todos los productos acumulados (incluye componentes de combos)
-    for (const { ref, qty } of acumuladoPorProductoPath.values()) {
-      const snap = await getDoc(ref);
-      if (!snap.exists()) continue;
-      const stockActual = Number(snap.data()?.stock || 0);
-      const nuevoStock = Math.max(stockActual - Number(qty || 0), 0);
-      await setDoc(ref, { stock: nuevoStock }, { merge: true });
+    // 5) Descontar stock SOLO de los productos acumulados (sin leer, con batches + increment)
+    const ops = Array.from(acumuladoPorProductoPath.values());
+    const grupos = chunk(ops, 450); // margen bajo el límite de 500
+    for (const grupo of grupos) {
+      const batch = writeBatch(db);
+      for (const { ref, qty } of grupo) {
+        const n = Number(qty || 0);
+        if (!n) continue;
+        batch.update(ref, { stock: increment(-n) });
+      }
+      await batch.commit();
     }
 
     // 6) Guardar el cierre global con flag stockDescontado
@@ -474,7 +483,7 @@ export default function CierreCaja() {
       stockDescontado: true,
       provinciaId,
       timestamp: new Date(),
-    });
+    }, { merge: true });
 
     await Swal.fire({
       icon: "success",
@@ -555,7 +564,7 @@ export default function CierreCaja() {
     }
   };
 
-  // ✅ Nueva versión: restaura stock (incluye combos) antes de eliminar documentos
+  // ✅ Nueva versión: restaura stock (incluye combos) ANTES de eliminar docs, usando increment() + batch
   const anularCierreGlobal = async () => {
     const confirmacion = await Swal.fire({
       title: "¿Anular cierre global?",
@@ -577,14 +586,11 @@ export default function CierreCaja() {
       const yaDesconto =
         cierreSnap.exists() && !!cierreSnap.data()?.stockDescontado;
 
-      // ---- (1) Si el stock fue descontado, lo REVERTIMOS ----
+      // ---- (1) Si el stock fue descontado, lo REVERTIMOS con increment(+qty) en batches ----
       if (yaDesconto) {
-        // Acumulo cantidades por producto (incluye componentes de combos)
         const acumulado = new Map(); // pathStr -> { ref, qty }
 
-        // Usamos la lista de repartidores detectados en la vista.
         for (const email of repartidores) {
-          // A prueba de balas: leo de memoria o de Firestore
           let cierreRep = cierres[email];
           if (!cierreRep?.pedidosEntregados) {
             const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
@@ -599,7 +605,6 @@ export default function CierreCaja() {
               const cant = Number(item?.cantidad || 0);
               if (!cant) continue;
 
-              // Resolver referencia del producto vendido
               const { ref, pathStr } = await resolverRefDesdeProdItem(
                 item,
                 provinciaId,
@@ -608,7 +613,6 @@ export default function CierreCaja() {
               );
               if (!ref || !pathStr) continue;
 
-              // Sumar el propio producto
               acumular(acumulado, ref, pathStr, cant);
 
               // Si era combo, sumar componentes
@@ -633,13 +637,17 @@ export default function CierreCaja() {
           }
         }
 
-        // Aplicar RESTAURACIÓN de stock (sumar lo descontado)
-        for (const { ref, qty } of acumulado.values()) {
-          const snap = await getDoc(ref);
-          if (!snap.exists()) continue;
-          const stockActual = Number(snap.data()?.stock || 0);
-          const nuevoStock = stockActual + Number(qty || 0);
-          await setDoc(ref, { stock: nuevoStock }, { merge: true });
+        // Aplicar RESTAURACIÓN de stock en tandas (increment +qty)
+        const ops = Array.from(acumulado.values());
+        const grupos = chunk(ops, 450);
+        for (const grupo of grupos) {
+          const batch = writeBatch(db);
+          for (const { ref, qty } of grupo) {
+            const n = Number(qty || 0);
+            if (!n) continue;
+            batch.update(ref, { stock: increment(+n) });
+          }
+          await batch.commit();
         }
       }
 

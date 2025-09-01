@@ -1,16 +1,18 @@
+
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { ProvinciaProvider } from "./context/ProvinciaContext";
 import App from "./App.jsx";
 import "./index.css";
-import { ProvinciaProvider } from "./context/ProvinciaContext";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <ProvinciaProvider>
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ProvinciaProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ProvinciaProvider>
   </React.StrictMode>
-  </ProvinciaProvider>
 );
