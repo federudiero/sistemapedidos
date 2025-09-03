@@ -396,14 +396,14 @@ function AdminPedidos() {
                         <button
                           className="btn btn-xs btn-warning"
                           onClick={() => editarPedido(pedido)}
-                          disabled={diaCerrado}
+                          disabled={diaCerrado || pedido.entregado}
                         >
                           Editar
                         </button>
                         <button
                           className="btn btn-xs btn-error"
                           onClick={() => eliminarPedido(pedido.id)}
-                          disabled={diaCerrado}
+                          disabled={diaCerrado || pedido.entregado}
                         >
                           Eliminar
                         </button>

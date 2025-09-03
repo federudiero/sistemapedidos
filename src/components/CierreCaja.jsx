@@ -13,7 +13,7 @@ import {
   onSnapshot,
   Timestamp,
   writeBatch,
-  increment,            // 👈 NUEVO: usamos increment() para descontar/restaurar sin leer
+  increment,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import DatePicker from "react-datepicker";
@@ -40,7 +40,11 @@ function limpiarFirestoreData(value) {
   }
   if (value instanceof Date) return value.toISOString();
   if (value?.toDate && typeof value.toDate === "function") {
-    try { return value.toDate().toISOString(); } catch { return String(value); }
+    try {
+      return value.toDate().toISOString();
+    } catch {
+      return String(value);
+    }
   }
   if (
     (typeof value.latitude === "number" && typeof value.longitude === "number") ||
@@ -81,8 +85,8 @@ async function resolverRefDesdeProdItem(prodItem, provinciaId, colProductos, db)
   }
 
   if (id) {
-    const ref = doc(db, "provincias", provinciaId || "_", "productos", id);
-    return { ref, pathStr: `provincias/${provinciaId || "_"}/productos/${id}` };
+    const ref = doc(db, "provincias", provinciaId, "productos", id);
+    return { ref, pathStr: `provincias/${provinciaId}/productos/${id}` };
   }
 
   const nombre = String(prodItem?.nombre || "").trim();
@@ -95,7 +99,7 @@ async function resolverRefDesdeProdItem(prodItem, provinciaId, colProductos, db)
   const ref = snap.docs[0].ref;
   return {
     ref,
-    pathStr: `provincias/${provinciaId || "_"}/productos/${snap.docs[0].id}`,
+    pathStr: `provincias/${provinciaId}/productos/${snap.docs[0].id}`,
   };
 }
 
@@ -106,11 +110,32 @@ function acumular(map, ref, pathStr, cantidad) {
   map.set(pathStr, prev);
 }
 
-// 👇 NUEVO: helper para dividir arrays en tandas (batches)
+// Helper para dividir arrays en tandas (batches)
 function chunk(arr, size) {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+// 🔧 Sanea el tipo del campo stock antes de aplicar increment()
+// Si un producto tiene stock "10" (string) o null, lo setea a 0 (o Number("10")) primero.
+async function sanearStocksSiNecesario(ops) {
+  const aCorregir = [];
+  for (const { ref } of ops) {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) continue; // con merge+increment no hay problema si no existe
+    const st = snap.data()?.stock;
+    if (typeof st !== "number" || !Number.isFinite(st)) {
+      aCorregir.push({ ref, valor: Number(st) || 0 });
+    }
+  }
+  for (const grupo of chunk(aCorregir, 450)) {
+    const batch = writeBatch(db);
+    for (const { ref, valor } of grupo) {
+      batch.set(ref, { stock: valor }, { merge: true });
+    }
+    await batch.commit();
+  }
 }
 
 export default function CierreCaja() {
@@ -128,35 +153,37 @@ export default function CierreCaja() {
     [fechaSeleccionada]
   );
 
-  // ====================== Rutas scoped por provincia ======================
+  // ====================== Rutas scoped por provincia (sin "_") ======================
   const colPedidos = useMemo(
-    () => collection(db, "provincias", provinciaId || "_", "pedidos"),
+    () => (provinciaId ? collection(db, "provincias", provinciaId, "pedidos") : null),
     [provinciaId]
   );
   const colProductos = useMemo(
-    () => collection(db, "provincias", provinciaId || "_", "productos"),
+    () => (provinciaId ? collection(db, "provincias", provinciaId, "productos") : null),
     [provinciaId]
   );
   const colCierres = useMemo(
-    () => collection(db, "provincias", provinciaId || "_", "cierres"),
+    () => (provinciaId ? collection(db, "provincias", provinciaId, "cierres") : null),
     [provinciaId]
   );
   const colCierresRepartidor = useMemo(
-    () => collection(db, "provincias", provinciaId || "_", "cierresRepartidor"),
+    () =>
+      provinciaId ? collection(db, "provincias", provinciaId, "cierresRepartidor") : null,
     [provinciaId]
   );
   const colResumenVentas = useMemo(
-    () => collection(db, "provincias", provinciaId || "_", "resumenVentas"),
+    () => (provinciaId ? collection(db, "provincias", provinciaId, "resumenVentas") : null),
     [provinciaId]
   );
   const colAnulaciones = useMemo(
-    () => collection(db, "provincias", provinciaId || "_", "anulacionesCierre"),
+    () =>
+      provinciaId ? collection(db, "provincias", provinciaId, "anulacionesCierre") : null,
     [provinciaId]
   );
 
   // ====================== Carga pedidos & cierres individuales ======================
   useEffect(() => {
-    if (!provinciaId) return;
+    if (!provinciaId || !colPedidos || !colCierresRepartidor) return;
 
     const cargarPedidosYRepartidores = async () => {
       const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
@@ -202,7 +229,7 @@ export default function CierreCaja() {
 
   // ====================== Resumen global (live) ======================
   useEffect(() => {
-    if (!provinciaId) return;
+    if (!provinciaId || !colResumenVentas || !colCierres) return;
 
     const refResumen = doc(colResumenVentas, fechaStr);
     const refCierre = doc(colCierres, `global_${fechaStr}`);
@@ -285,8 +312,10 @@ export default function CierreCaja() {
     }));
   };
 
-  // ====================== Cierre individual ======================
+  // ====================== Cierre individual (sin optimistic update) ======================
   const cerrarCajaIndividual = async (email) => {
+    if (!provinciaId || !colCierresRepartidor || !colResumenVentas) return;
+
     const pedidosRepartidor = pedidos.filter((p) => p.repartidor === email);
     const entregados = pedidosRepartidor.filter((p) => p.entregado);
     const noEntregados = pedidosRepartidor.filter((p) => !p.entregado);
@@ -299,40 +328,56 @@ export default function CierreCaja() {
       extra: 0,
     };
 
-    const docRef = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-    await setDoc(docRef, {
-      fechaStr,
-      emailRepartidor: email,
-      pedidosEntregados: entregados,
-      pedidosNoEntregados: noEntregados,
-      efectivo: totales.efectivo,
-      transferencia: totales.transferencia,
-      transferencia10: totales.transferencia10,
-      gastos: gastosRepartidor,
-      provinciaId,
-      timestamp: new Date(),
-    });
-
-    await Swal.fire("Caja cerrada", `Caja de ${email} cerrada correctamente.`, "success");
-
-    setCierres((prev) => ({
-      ...prev,
-      [email]: {
+    try {
+      const docRef = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+      await setDoc(docRef, {
+        fechaStr,
+        emailRepartidor: email,
         pedidosEntregados: entregados,
         pedidosNoEntregados: noEntregados,
         efectivo: totales.efectivo,
         transferencia: totales.transferencia,
         transferencia10: totales.transferencia10,
         gastos: gastosRepartidor,
-      },
-    }));
+        provinciaId,
+        timestamp: new Date(),
+      });
+
+      setCierres((prev) => ({
+        ...prev,
+        [email]: {
+          pedidosEntregados: entregados,
+          pedidosNoEntregados: noEntregados,
+          efectivo: totales.efectivo,
+          transferencia: totales.transferencia,
+          transferencia10: totales.transferencia10,
+          gastos: gastosRepartidor,
+        },
+      }));
+
+      await Swal.fire("Caja cerrada", `Caja de ${email} cerrada correctamente.`, "success");
+    } catch (e) {
+      console.error("No se pudo cerrar caja individual:", e);
+      Swal.fire("Error", "No se pudo cerrar la caja (reglas o red).", "error");
+    }
   };
 
   // ====================== Cierre GLOBAL (provincia) ======================
   const cerrarGlobal = async () => {
-    // 0) Validación: todos los repartidores deben tener cierre individual
-    if (repartidores.length !== Object.keys(cierres).length) {
-      Swal.fire("Falta cerrar cajas", "Hay repartidores sin cierre individual.", "warning");
+    if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas) return;
+
+    // 0) Validación fuerte: todos los repartidores deben tener cierre individual EN FIRESTORE
+    const faltan = [];
+    for (const email of repartidores) {
+      const snap = await getDoc(doc(colCierresRepartidor, `${fechaStr}_${email}`));
+      if (!snap.exists()) faltan.push(email);
+    }
+    if (faltan.length) {
+      Swal.fire(
+        "Falta cerrar cajas",
+        `Aún faltan: ${faltan.join(", ")}`,
+        "warning"
+      );
       return;
     }
 
@@ -350,7 +395,7 @@ export default function CierreCaja() {
     };
 
     // 1) Recorrer cierres individuales -> acumular cantidades y armar resumen visible
-    for (const email of Object.keys(cierres)) {
+    for (const email of repartidores) {
       let cierre = cierres[email];
       if (!cierre?.pedidosEntregados) {
         const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
@@ -394,8 +439,8 @@ export default function CierreCaja() {
               const compCant = cant * Number(comp?.cantidad || 0);
               if (!compCant) continue;
 
-              const compRef = doc(db, "provincias", provinciaId || "_", "productos", comp.id);
-              const compPath = `provincias/${provinciaId || "_"}/productos/${comp.id}`;
+              const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
+              const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
               await leerProducto(compRef, compPath); // opcional
               acumular(acumuladoPorProductoPath, compRef, compPath, compCant);
             }
@@ -409,7 +454,7 @@ export default function CierreCaja() {
     let totalTransferencia = 0;
     let totalTransferencia10 = 0;
 
-    for (const email of Object.keys(cierres)) {
+    for (const email of repartidores) {
       let cierre = cierres[email];
       if (!cierre?.pedidosEntregados) {
         const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
@@ -419,17 +464,20 @@ export default function CierreCaja() {
 
       const entregados = cierre?.pedidosEntregados || [];
       for (const pedido of entregados) {
-        const metodo = pedido?.metodoPago || "efectivo";
+        const metodo = pedido?.metodoPago ?? "efectivo";
         const monto = Number(pedido?.monto || 0);
 
-        if (metodo === "efectivo") totalEfectivo += monto;
-        else if (metodo === "transferencia") totalTransferencia += monto;
-        else if (metodo === "transferencia10")
+        if (metodo === "efectivo") {
+          totalEfectivo += monto;
+        } else if (metodo === "transferencia") {
+          totalTransferencia += monto;
+        } else if (metodo === "transferencia10") {
           totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
-        else if (metodo === "mixto") {
+        } else if (metodo === "mixto") {
           const ef = Number(pedido?.pagoMixtoEfectivo || 0);
           const tr = Number(pedido?.pagoMixtoTransferencia || 0);
           const con10 = !!pedido?.pagoMixtoCon10;
+
           totalEfectivo += ef;
           if (con10) totalTransferencia10 += Math.round(tr * 1.1 * 100) / 100;
           else totalTransferencia += tr;
@@ -437,7 +485,7 @@ export default function CierreCaja() {
       }
     }
 
-    // 3) Guardar resumen de ventas (para la UI)
+    // 3) Guardar resumen de ventas (para la UI) -> provincias/{prov}/resumenVentas/{fechaStr}
     await setDoc(doc(colResumenVentas, fechaStr), {
       fechaStr,
       totalPorProducto: resumenPorNombre,
@@ -462,28 +510,47 @@ export default function CierreCaja() {
       return;
     }
 
-    // 5) Descontar stock SOLO de los productos acumulados (sin leer, con batches + increment)
+    // 5) Descontar stock SOLO de los productos acumulados (batches + increment)
     const ops = Array.from(acumuladoPorProductoPath.values());
+
+    // 🔧 Saneamos tipo de stock (por si hay strings/null)
+    await sanearStocksSiNecesario(ops);
+
     const grupos = chunk(ops, 450); // margen bajo el límite de 500
     for (const grupo of grupos) {
       const batch = writeBatch(db);
       for (const { ref, qty } of grupo) {
         const n = Number(qty || 0);
         if (!n) continue;
-        batch.update(ref, { stock: increment(-n) });
+        // ✅ set + merge: no falla si el doc no existe
+        batch.set(ref, { stock: increment(-n) }, { merge: true });
       }
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (e) {
+        console.error("Falló batch de descuento:", e?.code, e?.message);
+        await Swal.fire(
+          "Error al descontar stock",
+          `${e?.code || ""} ${e?.message || ""}`,
+          "error"
+        );
+        return; // aborta el cierre global
+      }
     }
 
     // 6) Guardar el cierre global con flag stockDescontado
-    await setDoc(cierreGlobalRef, {
-      fechaStr,
-      tipo: "global",
-      repartidores: Object.keys(cierres),
-      stockDescontado: true,
-      provinciaId,
-      timestamp: new Date(),
-    }, { merge: true });
+    await setDoc(
+      cierreGlobalRef,
+      {
+        fechaStr,
+        tipo: "global",
+        repartidores,
+        stockDescontado: true,
+        provinciaId,
+        timestamp: new Date(),
+      },
+      { merge: true }
+    );
 
     await Swal.fire({
       icon: "success",
@@ -520,6 +587,8 @@ export default function CierreCaja() {
 
   // ====================== Anulaciones ======================
   const anularCierreIndividual = async (email) => {
+    if (!provinciaId || !colCierresRepartidor || !colAnulaciones) return;
+
     const confirmacion = await Swal.fire({
       title: "¿Anular cierre?",
       text: `¿Estás seguro que querés anular el cierre de ${email}?`,
@@ -564,8 +633,10 @@ export default function CierreCaja() {
     }
   };
 
-  // ✅ Nueva versión: restaura stock (incluye combos) ANTES de eliminar docs, usando increment() + batch
+  // ✅ Restaura stock (incluye combos) usando increment(+n) + set merge
   const anularCierreGlobal = async () => {
+    if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas || !colAnulaciones) return;
+
     const confirmacion = await Swal.fire({
       title: "¿Anular cierre global?",
       text: `¿Estás seguro que querés anular el cierre global del ${fechaStr}?`,
@@ -625,11 +696,11 @@ export default function CierreCaja() {
                   const compRef = doc(
                     db,
                     "provincias",
-                    provinciaId || "_",
+                    provinciaId,
                     "productos",
                     comp.id
                   );
-                  const compPath = `provincias/${provinciaId || "_"}/productos/${comp.id}`;
+                  const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
                   acumular(acumulado, compRef, compPath, compCant);
                 }
               }
@@ -645,9 +716,19 @@ export default function CierreCaja() {
           for (const { ref, qty } of grupo) {
             const n = Number(qty || 0);
             if (!n) continue;
-            batch.update(ref, { stock: increment(+n) });
+            batch.set(ref, { stock: increment(+n) }, { merge: true });
           }
-          await batch.commit();
+          try {
+            await batch.commit();
+          } catch (e) {
+            console.error("Falló batch de restauración:", e?.code, e?.message);
+            await Swal.fire(
+              "Error al restaurar stock",
+              `${e?.code || ""} ${e?.message || ""}`,
+              "error"
+            );
+            return;
+          }
         }
       }
 
@@ -815,7 +896,7 @@ export default function CierreCaja() {
               </button>
             )}
 
-            {yaCerrado && !resumenGlobal && (
+            {yaCerrado && (!resumenGlobal || !resumenGlobal.stockDescontado) && (
               <button
                 onClick={() => anularCierreIndividual(email)}
                 className="mt-2 btn btn-warning"
@@ -824,7 +905,7 @@ export default function CierreCaja() {
               </button>
             )}
 
-            {yaCerrado && resumenGlobal && (
+            {yaCerrado && resumenGlobal?.stockDescontado === true && (
               <button disabled className="mt-2 btn btn-disabled">
                 🔒 Cierre global realizado
               </button>
@@ -853,9 +934,9 @@ export default function CierreCaja() {
               className="btn btn-accent"
               onClick={cerrarGlobal}
               disabled={
-                repartidores.length === 0 ||
-                repartidores.length !== Object.keys(cierres).length
+                repartidores.length === 0
               }
+              title="Requiere que todos los repartidores hayan cerrado (verificación en Firestore)."
             >
               🔐 Cerrar caja global del día
             </button>

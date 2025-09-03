@@ -22,6 +22,7 @@ import {
   where,
   getDocs,
   doc,
+  getDoc, // (leer repartidores desde config/usuarios)
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
@@ -37,9 +38,8 @@ import AdminNavbar from "../components/AdminNavbar";
 import MapaRutaRepartidor from "../components/MapaRutaRepartidor";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { baseDireccion } from "../constants/provincias";
-import { useUsuariosProv } from "../lib/useUsuariosProv";
 
-// --- Item ordenable de la lista
+// --- Item ordenable (sin cambios de comportamiento)
 function SortablePedido({ pedido }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: pedido.id });
@@ -65,11 +65,10 @@ function SortablePedido({ pedido }) {
 }
 
 export default function AdminHojaRuta() {
-  // Provincia desde el contexto
   const { provinciaId } = useProvincia();
   const BASE_DIRECCION = baseDireccion(provinciaId);
 
-  // Auth: esperar a que esté listo el usuario antes de consultar Firestore
+  // Esperar usuario
   const [user, setUser] = useState(() => auth.currentUser);
   const [authReady, setAuthReady] = useState(Boolean(auth.currentUser));
   useEffect(() => {
@@ -80,8 +79,37 @@ export default function AdminHojaRuta() {
     return () => unsub();
   }, []);
 
-  // Usuarios configurados (repartidores) de la provincia
-  const { repartidores: repEmails, loading: loadingUsuarios } = useUsuariosProv();
+  // ===== Repartidores desde /config/usuarios =====
+  const [repEmails, setRepEmails] = useState([]);
+  const [loadingUsuarios, setLoadingUsuarios] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    async function cargarRepartidores() {
+      if (!provinciaId || !authReady) return;
+      try {
+        const ref = doc(db, "provincias", provinciaId, "config", "usuarios");
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? snap.data() : {};
+        const toArr = (v) => (Array.isArray(v) ? v : v ? Object.keys(v) : []);
+        const reps = toArr(data.repartidores).map((e) => String(e || "").toLowerCase());
+        if (alive) {
+          setRepEmails(reps);
+          setLoadingUsuarios(false);
+        }
+      } catch {
+        if (alive) {
+          setRepEmails([]);
+          setLoadingUsuarios(false);
+        }
+      }
+    }
+    setLoadingUsuarios(true);
+    cargarRepartidores();
+    return () => {
+      alive = false;
+    };
+  }, [provinciaId, authReady]);
 
   // Mapeo a objetos {label, email}
   const repartidores = useMemo(
@@ -99,7 +127,6 @@ export default function AdminHojaRuta() {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
-  // Colecciones scoping por provincia
   const colPedidos = useMemo(
     () => collection(db, "provincias", provinciaId, "pedidos"),
     [provinciaId]
@@ -109,7 +136,19 @@ export default function AdminHojaRuta() {
     [provinciaId]
   );
 
-  // Cargar pedidos del día para cada repartidor (solo cuando hay auth y usuarios listos)
+  // 🔧 helpers de match (array/string y case-insensitive)
+  const asignadoAContains = (asg, email) => {
+    const em = String(email || "").toLowerCase();
+    if (Array.isArray(asg)) {
+      return asg.some((e) => String(e || "").toLowerCase() === em);
+    }
+    if (typeof asg === "string") {
+      return asg.toLowerCase() === em;
+    }
+    return false;
+  };
+
+  // Cargar pedidos del día
   useEffect(() => {
     const cargarPedidos = async () => {
       setLoading(true);
@@ -117,7 +156,7 @@ export default function AdminHojaRuta() {
       const fin = Timestamp.fromDate(endOfDay(fechaSeleccionada));
       const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
 
-      // ¿Hay cierre global del día?
+      // ¿Hay cierre global del día? (misma lógica)
       const cierreSnap = await getDocs(query(colCierres, where("fechaStr", "==", fechaStr)));
       setCierreYaProcesado(!cierreSnap.empty);
 
@@ -127,11 +166,23 @@ export default function AdminHojaRuta() {
       );
       const pedidos = pedidosSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-      // Agrupar por repartidor y ordenar por ordenRuta
+      // 🔧 Fallback: si no hay repartidores en config/usuarios, derivarlos desde pedidos
+      let repsToUse = repartidores;
+      if (!repsToUse.length) {
+        const setDeriv = new Set();
+        for (const p of pedidos) {
+          const asg = p.asignadoA;
+          if (Array.isArray(asg)) asg.forEach((e) => setDeriv.add(String(e || "").toLowerCase()));
+          else if (typeof asg === "string") setDeriv.add(asg.toLowerCase());
+        }
+        repsToUse = Array.from(setDeriv).map((email, i) => ({ label: `R${i + 1}`, email }));
+      }
+
+      // Agrupar por repartidor con filtro tolerante y ordenRuta
       const agrupados = {};
-      (repartidores || []).forEach((r) => {
+      (repsToUse || []).forEach((r) => {
         const asignados = pedidos
-          .filter((p) => Array.isArray(p.asignadoA) && p.asignadoA.includes(r.email))
+          .filter((p) => asignadoAContains(p.asignadoA, r.email))
           .sort((a, b) => (a.ordenRuta ?? 999) - (b.ordenRuta ?? 999));
         agrupados[r.email] = asignados;
       });
@@ -203,10 +254,8 @@ export default function AdminHojaRuta() {
           const ordenOptimizado = result.routes[0].waypoint_order;
           const nuevosPedidos = ordenOptimizado.map((idx) => pedidos[idx]);
 
-          // Estado local
           setPedidosPorRepartidor((prev) => ({ ...prev, [email]: nuevosPedidos }));
 
-          // Persistir orden optimizado
           try {
             await Promise.all(
               nuevosPedidos.map((p, index) =>
@@ -252,55 +301,66 @@ export default function AdminHojaRuta() {
       {(loadingUsuarios || !authReady) && <p className="text-lg">Cargando…</p>}
       {!loadingUsuarios && authReady && loading && <p className="text-lg">Cargando pedidos…</p>}
 
-      {!loadingUsuarios && authReady && !loading && repartidores.map((r) => (
-        <div
-          key={r.email}
-          className="p-4 mb-8 border shadow-md rounded-xl border-base-300 bg-base-200"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <h3 className="text-lg font-semibold text-primary">
-              🛵 {r.label} — {r.email}
-            </h3>
-            <div className="flex gap-2">
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => guardarOrden(r.email)}
-                disabled={cierreYaProcesado}
+      {!loadingUsuarios && authReady && !loading &&
+        // Si no se encontraron repartidores (ni en config ni derivados), mostrar aviso útil
+        (Object.keys(pedidosPorRepartidor).length === 0 ? (
+          <p className="opacity-70">
+            No hay repartidores ni pedidos con <code>asignadoA</code> para esta fecha.
+          </p>
+        ) : (
+          Object.keys(pedidosPorRepartidor).map((email, idx) => {
+            const r = { email, label: `R${idx + 1}` };
+            return (
+              <div
+                key={r.email}
+                className="p-4 mb-8 border shadow-md rounded-xl border-base-300 bg-base-200"
               >
-                💾 Guardar orden
-              </button>
-              <button
-                className="btn btn-sm btn-accent"
-                onClick={() => optimizarRuta(r.email)}
-                disabled={cierreYaProcesado}
-              >
-                🧠 Optimizar ruta
-              </button>
-            </div>
-          </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <h3 className="text-lg font-semibold text-primary">
+                    🛵 {r.label} — {r.email}
+                  </h3>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn btn-sm btn-primary"
+                      onClick={() => guardarOrden(r.email)}
+                      disabled={cierreYaProcesado}
+                    >
+                      💾 Guardar orden
+                    </button>
+                    <button
+                      className="btn btn-sm btn-accent"
+                      onClick={() => optimizarRuta(r.email)}
+                      disabled={cierreYaProcesado}
+                    >
+                      🧠 Optimizar ruta
+                    </button>
+                  </div>
+                </div>
 
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(event) => handleDragEnd(event, r.email)}
-          >
-            <SortableContext
-              items={(pedidosPorRepartidor[r.email] || []).map((p) => p.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <ul className="mt-2">
-                {(pedidosPorRepartidor[r.email] || []).map((pedido) => (
-                  <SortablePedido key={pedido.id} pedido={pedido} />
-                ))}
-              </ul>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(event) => handleDragEnd(event, r.email)}
+                >
+                  <SortableContext
+                    items={(pedidosPorRepartidor[r.email] || []).map((p) => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ul className="mt-2">
+                      {(pedidosPorRepartidor[r.email] || []).map((pedido) => (
+                        <SortablePedido key={pedido.id} pedido={pedido} />
+                      ))}
+                    </ul>
 
-              {pedidosPorRepartidor[r.email]?.length > 0 && (
-                <MapaRutaRepartidor pedidos={pedidosPorRepartidor[r.email]} />
-              )}
-            </SortableContext>
-          </DndContext>
-        </div>
-      ))}
+                    {pedidosPorRepartidor[r.email]?.length > 0 && (
+                      <MapaRutaRepartidor pedidos={pedidosPorRepartidor[r.email]} />
+                    )}
+                  </SortableContext>
+                </DndContext>
+              </div>
+            );
+          })
+        ))}
     </div>
   );
 }

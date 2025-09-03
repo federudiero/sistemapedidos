@@ -5,14 +5,14 @@ import { auth } from "../firebase/firebase";
 import { signOut } from "firebase/auth";
 import { LogOut, Menu } from "lucide-react";
 
-import { isSuperAdmin } from "../constants/superadmins";
+
 
 const AdminNavbar = () => {
   const navigate = useNavigate();
 // "admin" para admin de la provincia
 
-  const email = (auth.currentUser?.email || "").toLowerCase();
-  const isSA = isSuperAdmin(email);       // <-- solo superadmin
+  
+      // <-- solo superadmin
 
   const handleLogout = async () => {
     try {
@@ -39,9 +39,7 @@ const AdminNavbar = () => {
           >
             <li><Link to="/admin/pedidos">Pedidos</Link></li>
 
-            {/* SOLO SUPERADMIN ve este ítem */}
-          {isSA && <li><Link to="/admin/usuarios-provincia">Usuarios por provincia</Link></li>}
-
+           
             <li><Link to="/admin/dividir-pedidos">División de Pedidos</Link></li>
             <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
             <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
@@ -58,8 +56,7 @@ const AdminNavbar = () => {
         <ul className="px-1 menu menu-horizontal">
           <li><Link to="/admin/pedidos">Pedidos</Link></li>
 
-          {/* SOLO SUPERADMIN ve este ítem */}
-          {isSA && <li><Link to="/admin/usuarios-provincia">Usuarios por provincia</Link></li>}
+       
 
           <li><Link to="/admin/dividir-pedidos">División</Link></li>
           <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>

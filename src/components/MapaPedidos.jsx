@@ -1,8 +1,10 @@
+// src/components/MapaPedidos.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { baseDireccion } from "../constants/provincias";
-import { useUsuariosProv } from "../lib/useUsuariosProv";
+import { db } from "../firebase/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 // Para evitar geocodificar lo mismo muchas veces en una sesión
 const geoCache = new Map();
@@ -13,7 +15,36 @@ const GOOGLE_MAPS_LOADER_ID = "google-map-script"; // <— MISMO ID EN TODA LA A
 
 const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
   const { provinciaId } = useProvincia();
-  const { repartidores, loading: loadingReps } = useUsuariosProv(provinciaId);
+
+  // ===== Repartidores: lectura directa del doc de roles =====
+  const [repartidores, setRepartidores] = useState([]);
+  const [loadingReps, setLoadingReps] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    async function cargarReps() {
+      if (!provinciaId) return;
+      try {
+        const ref = doc(db, "provincias", provinciaId, "config", "usuarios");
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? snap.data() : {};
+        const toArr = (v) => (Array.isArray(v) ? v : v ? Object.keys(v) : []);
+        const reps = toArr(data.repartidores).map((e) => String(e || "").toLowerCase());
+        if (alive) {
+          setRepartidores(reps);
+          setLoadingReps(false);
+        }
+      } catch {
+        if (alive) {
+          setRepartidores([]);
+          setLoadingReps(false);
+        }
+      }
+    }
+    setLoadingReps(true);
+    cargarReps();
+    return () => { alive = false; };
+  }, [provinciaId]);
 
   const [centro, setCentro] = useState({ lat: -34.6037, lng: -58.3816 }); // fallback (CABA)
   const [pines, setPines] = useState([]);
@@ -21,7 +52,7 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
 
   const geocoderRef = useRef(null);
 
-  // Carga de Google Maps (UNIFICADA)
+  // Carga de Google Maps (respeta tu API KEY env)
   const { isLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_LOADER_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,

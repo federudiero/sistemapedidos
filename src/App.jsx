@@ -12,7 +12,7 @@ import AdminStock from "./components/AdminStock";
 import CierreCaja from "./components/CierreCaja";
 import PanelStock from "./components/PanelStock";
 import ResumenFinancieroMensual from "./components/ResumenFinancieroMensual";
-import UsuariosProvinciaPanel from "./components/UsuariosProvinciaPanel";
+
 
 import EliminarPedidosPorFecha from "./views/EliminarPedidosPorFecha.jsx";
 import RepartidorView from "./views/RepartidorView";
@@ -31,9 +31,6 @@ function App() {
         <Route path="/" element={<SeleccionarProvincia />} />
         <Route path="/home" element={<Home />} />
 
-        {/* Usuarios por provincia: ruta oficial + alias */}
-        <Route path="/admin/usuarios-provincia" element={<UsuariosProvinciaPanel />} />
-        <Route path="/usuarios-provincia" element={<UsuariosProvinciaPanel />} />
 
         <Route path="/login-vendedor" element={<LoginVendedor />} />
         <Route path="/vendedor" element={<VendedorView />} />

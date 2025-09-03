@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { db, auth } from "../firebase/firebase";
 import {
   collection, query, where, getDocs, doc, updateDoc,
-  Timestamp, getDoc, deleteField, onSnapshot
+  Timestamp, getDoc, deleteField
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { format, startOfDay, endOfDay } from "date-fns";
@@ -11,7 +11,6 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-
 
 import MapaRutaRepartidor from "../components/MapaRutaRepartidor";
 import BotonIniciarViaje from "../components/BotonIniciarViaje";
@@ -21,7 +20,6 @@ import { useProvincia } from "../hooks/useProvincia.js";
 const colPedidos = (prov) => collection(db, "provincias", prov, "pedidos");
 const docCierreRepartidor = (prov, fechaStr, email) =>
   doc(db, "provincias", prov, "cierresRepartidor", `${fechaStr}_${email}`);
-const docPermisos = (prov) => doc(db, "provincias", prov, "config", "permisos");
 const docUsuarios = (prov) => doc(db, "provincias", prov, "config", "usuarios");
 
 function RepartidorView() {
@@ -34,7 +32,6 @@ function RepartidorView() {
   const [emailRepartidor, setEmailRepartidor] = useState("");
 
   const [bloqueado, setBloqueado] = useState(false);
-  const [permisos, setPermisos] = useState({});
 
   /* ===== sesión Firebase (gate) ===== */
   useEffect(() => {
@@ -49,23 +46,13 @@ function RepartidorView() {
     return unsub;
   }, [navigate]);
 
-  /* ===== permisos dinámicos ===== */
-  useEffect(() => {
-    if (!provinciaId || !emailRepartidor) return;
-    const unsub = onSnapshot(
-      docPermisos(provinciaId),
-      (snap) => {
-        const map = snap.exists() ? snap.data() : {};
-        setPermisos(map[emailRepartidor] || {});
-      },
-      () => setPermisos({})
-    );
-    return unsub;
-  }, [provinciaId, emailRepartidor]);
-
-  const puedeEntregar = !!permisos.repartidorEntregar || !!permisos.repartidorEditar;
-  const puedePagos = !!permisos.repartidorPagos;
-  const puedeBloquear = !!permisos.repartidorBloquear;
+  /* ===== (nuevo) permisos manejados por REGLAS =====
+   * Como ahora todo lo controla Firestore Rules, habilitamos la UI.
+   * Si una acción no está permitida, updateDoc fallará con "permission-denied"
+   * y lo mostramos con Swal. */
+  const puedeEntregar = true;
+  const puedePagos = true;
+  const puedeBloquear = true;
 
   /* ===== cargar pedidos ===== */
   useEffect(() => {
@@ -115,10 +102,6 @@ function RepartidorView() {
   const cargarPedidos = async (email) => {
     const ref = colPedidos(provinciaId);
 
-    console.log("=== RepartidorView (consulta tolerante) ===");
-    console.log("provinciaId:", provinciaId);
-    console.log("email:", email);
-
     let docs = [];
     let algunExito = false;
     let ultimoPermError = null;
@@ -128,13 +111,10 @@ function RepartidorView() {
       const qArray = query(ref, where("asignadoA", "array-contains", email));
       const snapArray = await getDocs(qArray);
       docs = docs.concat(snapArray.docs);
-      algunExito = true; // permiso OK para esta consulta
+      algunExito = true;
     } catch (e) {
       if (e?.code === "permission-denied") {
         ultimoPermError = e;
-        console.warn("array-contains denegado (seguimos con ==).");
-      } else {
-        console.error("Error query array-contains:", e);
       }
     }
 
@@ -148,9 +128,6 @@ function RepartidorView() {
       } catch (e) {
         if (e?.code === "permission-denied") {
           ultimoPermError = e;
-          console.warn("== denegado también.");
-        } else {
-          console.error("Error query ==:", e);
         }
       }
     }
@@ -177,13 +154,7 @@ function RepartidorView() {
     const lista = Array.from(byId.values())
       .sort((a, b) => Number(a.ordenRuta ?? 999) - Number(b.ordenRuta ?? 999));
 
-    console.log(`[RepartidorView] docs visibles hoy: ${lista.length}`);
-
     setPedidos(lista);
-
-    if (!lista.length && !ultimoPermError) {
-      console.info("[RepartidorView] Sin pedidos asignados para esta fecha.");
-    }
   };
 
   const normalizeDoc = (id, raw) => {
@@ -232,8 +203,11 @@ function RepartidorView() {
       setPedidos((prev) =>
         prev.map((p) => (p.id === pedido.id ? { ...p, entregado: nuevoEstado } : p))
       );
-    } catch {
-      Swal.fire("Error", "No se pudo actualizar el estado.", "error");
+    } catch (e) {
+      const msg = e?.code === "permission-denied"
+        ? "No tenés permiso (reglas)."
+        : "No se pudo actualizar el estado.";
+      Swal.fire("Error", msg, "error");
     }
   };
 
@@ -246,23 +220,23 @@ function RepartidorView() {
     if (!prev) return;
 
     // Optimista
-   setPedidos((ps) =>
-  ps.map((p) =>
-    p.id === pedidoId
-      ? {
-          ...p,
-          metodoPago: metodoPagoNuevo,
-          ...(metodoPagoNuevo !== "mixto"
-            ? { 
-                pagoMixtoEfectivo: 0,
-                pagoMixtoTransferencia: 0,
-                pagoMixtoCon10: true,
-              }
-            : {}), // ← no re-inyectes p
-        }
-      : p
-  )
-);
+    setPedidos((ps) =>
+      ps.map((p) =>
+        p.id === pedidoId
+          ? {
+              ...p,
+              metodoPago: metodoPagoNuevo,
+              ...(metodoPagoNuevo !== "mixto"
+                ? {
+                    pagoMixtoEfectivo: 0,
+                    pagoMixtoTransferencia: 0,
+                    pagoMixtoCon10: true,
+                  }
+                : {}),
+            }
+          : p
+      )
+    );
 
     try {
       const ref = doc(db, "provincias", provinciaId, "pedidos", pedidoId);
@@ -282,8 +256,11 @@ function RepartidorView() {
           pagoMixtoCon10: deleteField(),
         });
       }
-    } catch {
-      Swal.fire("Error", "No se pudo guardar el método de pago.", "error");
+    } catch (e) {
+      const msg = e?.code === "permission-denied"
+        ? "No tenés permiso (reglas)."
+        : "No se pudo guardar el método de pago.";
+      Swal.fire("Error", msg, "error");
     }
   };
 
@@ -324,8 +301,11 @@ function RepartidorView() {
         pagoMixtoCon10: !!pedido.pagoMixtoCon10,
       });
       Swal.fire("✅ Guardado", "Pago mixto actualizado.", "success");
-    } catch {
-      Swal.fire("Error", "No se pudo actualizar el pago mixto.", "error");
+    } catch (e) {
+      const msg = e?.code === "permission-denied"
+        ? "No tenés permiso (reglas)."
+        : "No se pudo actualizar el pago mixto.";
+      Swal.fire("Error", msg, "error");
     }
   };
 
@@ -437,9 +417,7 @@ function RepartidorView() {
                 className="p-4 border rounded-lg shadow bg-base-200 border-base-300"
               >
                 <p className="mb-1 text-sm opacity-60">🛣️ Pedido #{idx + 1}</p>
-                <p>
-                  <strong>🧍 Cliente:</strong> {p.nombre}
-                </p>
+                <p><strong>🧍 Cliente:</strong> {p.nombre}</p>
                 <p>
                   <strong>📍 Dirección:</strong> {p.direccion}
                   <a
@@ -453,12 +431,8 @@ function RepartidorView() {
                     🧭 Ir a mapa
                   </a>
                 </p>
-                <p>
-                  <strong>📦 Pedido:</strong> {p.pedido}
-                </p>
-                <p>
-                  <strong>💵 Monto:</strong> ${monto || 0}
-                </p>
+                <p><strong>📦 Pedido:</strong> {p.pedido}</p>
+                <p><strong>💵 Monto:</strong> ${monto || 0}</p>
 
                 <div className="mt-2">
                   <label className="mr-2 font-semibold">💳 Método de pago:</label>
@@ -466,7 +440,7 @@ function RepartidorView() {
                     className="select select-sm select-bordered"
                     value={p.metodoPago || ""}
                     onChange={(e) => actualizarPago(p.id, e.target.value)}
-                    disabled={bloqueado || !puedePagos}
+                    disabled={bloqueado /* reglas bloquean si no corresponde */}
                   >
                     <option value="">-- Seleccionar --</option>
                     <option value="efectivo">Efectivo</option>
@@ -491,7 +465,7 @@ function RepartidorView() {
                           onChange={(e) =>
                             setMixtoLocal(p.id, "pagoMixtoEfectivo", e.target.value)
                           }
-                          disabled={bloqueado || !puedePagos}
+                          disabled={bloqueado}
                         />
                       </div>
                       <div>
@@ -506,7 +480,7 @@ function RepartidorView() {
                           onChange={(e) =>
                             setMixtoLocal(p.id, "pagoMixtoTransferencia", e.target.value)
                           }
-                          disabled={bloqueado || !puedePagos}
+                          disabled={bloqueado}
                         />
                       </div>
                       <label className="flex items-center gap-2">
@@ -517,7 +491,7 @@ function RepartidorView() {
                           onChange={(e) =>
                             setMixtoLocal(p.id, "pagoMixtoCon10", e.target.checked)
                           }
-                          disabled={bloqueado || !puedePagos}
+                          disabled={bloqueado}
                         />
                         <span className="text-sm">Aplicar +10% a la transferencia</span>
                       </label>
@@ -530,9 +504,7 @@ function RepartidorView() {
                     <button
                       className="mt-3 btn btn-xs btn-primary"
                       onClick={() => guardarPagoMixto(p)}
-                      disabled={
-                        bloqueado || !puedePagos || !(ef + tr === monto) || ef < 0 || tr < 0
-                      }
+                      disabled={bloqueado || !(ef + tr === monto) || ef < 0 || tr < 0}
                       title="La suma debe coincidir con el monto."
                     >
                       💾 Guardar pago mixto
@@ -542,7 +514,7 @@ function RepartidorView() {
 
                 <div className="mt-2">
                   <button
-                    disabled={bloqueado || !puedeEntregar}
+                    disabled={bloqueado}
                     onClick={() => toggleEntregado(p)}
                     className={`btn btn-sm mt-2 ${
                       p.entregado ? "btn-success" : "btn-warning"
@@ -563,19 +535,11 @@ function RepartidorView() {
 
       <div className="p-4 mt-8 bg-base-200 rounded-xl">
         <h3 className="mb-2 text-lg font-semibold">💰 Resumen Recaudado</h3>
-        <p>
-          <strong>Total efectivo:</strong> ${Math.round(efectivo)}
-        </p>
-        <p>
-          <strong>Total transferencia (+10%):</strong> ${Math.round(transferencia10)}
-        </p>
-        <p>
-          <strong>Total transferencia (sin 10%):</strong> ${Math.round(transferencia0)}
-        </p>
+        <p><strong>Total efectivo:</strong> ${Math.round(efectivo)}</p>
+        <p><strong>Total transferencia (+10%):</strong> ${Math.round(transferencia10)}</p>
+        <p><strong>Total transferencia (sin 10%):</strong> ${Math.round(transferencia0)}</p>
         <hr className="my-2" />
-        <p>
-          <strong>🧾 Total general:</strong> ${Math.round(total)}
-        </p>
+        <p><strong>🧾 Total general:</strong> ${Math.round(total)}</p>
       </div>
 
       <MapaRutaRepartidor pedidos={pedidos} />
