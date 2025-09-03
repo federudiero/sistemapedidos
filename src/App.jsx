@@ -14,7 +14,7 @@ import PanelStock from "./components/PanelStock";
 import ResumenFinancieroMensual from "./components/ResumenFinancieroMensual";
 
 
-import EliminarPedidosPorFecha from "./views/EliminarPedidosPorFecha.jsx";
+
 import RepartidorView from "./views/RepartidorView";
 import SeleccionarProvincia from "./views/SeleccionarProvincia";
 
@@ -46,12 +46,7 @@ function App() {
 
         <Route path="/login-repartidor" element={<LoginRepartidor />} />
         <Route path="/repartidor" element={<RepartidorView />} />
-
-        
-        <Route path="/eliminar-test" element={<EliminarPedidosPorFecha />} />
-
-        {/* <Route path="/admin/utils/replicar-catalogo" element={<CopiarCatalogoATodas />} ,<Route path="/generar-pedidos-test" element={<GeneradorPedidosTest />} /> /> */}
-      
+             
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

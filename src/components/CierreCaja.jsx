@@ -25,7 +25,7 @@ import Swal from "sweetalert2";
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia.js";
 
-// =============== Helpers de serialización para logs =================
+// ---------- Utils seguros para serializar datos a logs/auditoría ----------
 function limpiarFirestoreData(value) {
   if (
     value === null ||
@@ -40,11 +40,7 @@ function limpiarFirestoreData(value) {
   }
   if (value instanceof Date) return value.toISOString();
   if (value?.toDate && typeof value.toDate === "function") {
-    try {
-      return value.toDate().toISOString();
-    } catch {
-      return String(value);
-    }
+    try { return value.toDate().toISOString(); } catch { return String(value); }
   }
   if (
     (typeof value.latitude === "number" && typeof value.longitude === "number") ||
@@ -65,17 +61,12 @@ function limpiarFirestoreData(value) {
   return out;
 }
 
-// =============== Helpers para resolver refs por ruta/id/nombre + combos ===============
-const splitPathSegments = (pathStr) =>
-  String(pathStr || "").split("/").filter(Boolean);
+// ---------- Helpers de productos / paths / combos ----------
+const splitPathSegments = (s) => String(s || "").split("/").filter(Boolean);
 
 async function resolverRefDesdeProdItem(prodItem, provinciaId, colProductos, db) {
   const rawPath =
-    prodItem?.ruta ||
-    prodItem?.refPath ||
-    prodItem?.productoRefPath ||
-    prodItem?.productPath;
-
+    prodItem?.ruta || prodItem?.refPath || prodItem?.productoRefPath || prodItem?.productPath;
   const id = prodItem?.id || prodItem?.productoId || prodItem?.productId;
 
   if (rawPath) {
@@ -97,10 +88,7 @@ async function resolverRefDesdeProdItem(prodItem, provinciaId, colProductos, db)
   if (snap.empty) return { ref: null, pathStr: null };
 
   const ref = snap.docs[0].ref;
-  return {
-    ref,
-    pathStr: `provincias/${provinciaId}/productos/${snap.docs[0].id}`,
-  };
+  return { ref, pathStr: `provincias/${provinciaId}/productos/${snap.docs[0].id}` };
 }
 
 function acumular(map, ref, pathStr, cantidad) {
@@ -110,20 +98,18 @@ function acumular(map, ref, pathStr, cantidad) {
   map.set(pathStr, prev);
 }
 
-// Helper para dividir arrays en tandas (batches)
-function chunk(arr, size) {
+const chunk = (arr, size) => {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
-}
+};
 
-// 🔧 Sanea el tipo del campo stock antes de aplicar increment()
-// Si un producto tiene stock "10" (string) o null, lo setea a 0 (o Number("10")) primero.
+// 🔧 Sanea el tipo de stock **solo para los productos a descontar**
 async function sanearStocksSiNecesario(ops) {
   const aCorregir = [];
   for (const { ref } of ops) {
     const snap = await getDoc(ref);
-    if (!snap.exists()) continue; // con merge+increment no hay problema si no existe
+    if (!snap.exists()) continue;
     const st = snap.data()?.stock;
     if (typeof st !== "number" || !Number.isFinite(st)) {
       aCorregir.push({ ref, valor: Number(st) || 0 });
@@ -153,7 +139,7 @@ export default function CierreCaja() {
     [fechaSeleccionada]
   );
 
-  // ====================== Rutas scoped por provincia (sin "_") ======================
+  // Colecciones POR PROVINCIA
   const colPedidos = useMemo(
     () => (provinciaId ? collection(db, "provincias", provinciaId, "pedidos") : null),
     [provinciaId]
@@ -167,8 +153,7 @@ export default function CierreCaja() {
     [provinciaId]
   );
   const colCierresRepartidor = useMemo(
-    () =>
-      provinciaId ? collection(db, "provincias", provinciaId, "cierresRepartidor") : null,
+    () => (provinciaId ? collection(db, "provincias", provinciaId, "cierresRepartidor") : null),
     [provinciaId]
   );
   const colResumenVentas = useMemo(
@@ -176,12 +161,11 @@ export default function CierreCaja() {
     [provinciaId]
   );
   const colAnulaciones = useMemo(
-    () =>
-      provinciaId ? collection(db, "provincias", provinciaId, "anulacionesCierre") : null,
+    () => (provinciaId ? collection(db, "provincias", provinciaId, "anulacionesCierre") : null),
     [provinciaId]
   );
 
-  // ====================== Carga pedidos & cierres individuales ======================
+  // ====== Carga pedidos del día y lista de repartidores del día ======
   useEffect(() => {
     if (!provinciaId || !colPedidos || !colCierresRepartidor) return;
 
@@ -189,11 +173,7 @@ export default function CierreCaja() {
       const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
       const fin = Timestamp.fromDate(endOfDay(fechaSeleccionada));
 
-      const qPedidos = query(
-        colPedidos,
-        where("fecha", ">=", inicio),
-        where("fecha", "<=", fin)
-      );
+      const qPedidos = query(colPedidos, where("fecha", ">=", inicio), where("fecha", "<=", fin));
       const snap = await getDocs(qPedidos);
 
       const pedidosDelDia = [];
@@ -201,10 +181,7 @@ export default function CierreCaja() {
 
       snap.forEach((d) => {
         const data = d.data();
-        const repartidor = Array.isArray(data.asignadoA)
-          ? data.asignadoA[0]
-          : data.repartidor;
-
+        const repartidor = Array.isArray(data.asignadoA) ? data.asignadoA[0] : data.repartidor;
         if (typeof repartidor === "string" && repartidor.trim() !== "") {
           repartidorSet.add(repartidor);
           pedidosDelDia.push({ id: d.id, ...data, repartidor });
@@ -214,20 +191,20 @@ export default function CierreCaja() {
       setPedidos(pedidosDelDia);
       setRepartidores([...repartidorSet]);
 
-      // Traer cierres individuales existentes (esta provincia)
-      const nuevosCierres = {};
+      // Traigo cierres individuales existentes de la fecha (por si recargan)
+      const nuevos = {};
       for (const email of repartidorSet) {
-        const docRef = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) nuevosCierres[email] = docSnap.data();
+        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+        const ds = await getDoc(ref);
+        if (ds.exists()) nuevos[email] = ds.data();
       }
-      setCierres(nuevosCierres);
+      setCierres(nuevos);
     };
 
     cargarPedidosYRepartidores();
   }, [provinciaId, fechaSeleccionada, colPedidos, colCierresRepartidor, fechaStr]);
 
-  // ====================== Resumen global (live) ======================
+  // ====== Resumen global en vivo (incluye flag de stockDescontado) ======
   useEffect(() => {
     if (!provinciaId || !colResumenVentas || !colCierres) return;
 
@@ -235,15 +212,10 @@ export default function CierreCaja() {
     const refCierre = doc(colCierres, `global_${fechaStr}`);
 
     const unsubResumen = onSnapshot(refResumen, async (snap) => {
-      if (!snap.exists()) {
-        setResumenGlobal(null);
-        return;
-      }
+      if (!snap.exists()) { setResumenGlobal(null); return; }
       const base = snap.data();
       const cierreSnap = await getDoc(refCierre);
-      const stockDescontado = cierreSnap.exists()
-        ? !!cierreSnap.data().stockDescontado
-        : false;
+      const stockDescontado = cierreSnap.exists() ? !!cierreSnap.data().stockDescontado : false;
       setResumenGlobal({ ...base, stockDescontado });
     });
 
@@ -252,30 +224,20 @@ export default function CierreCaja() {
       setResumenGlobal((prev) => (prev ? { ...prev, stockDescontado: flag } : prev));
     });
 
-    return () => {
-      unsubResumen();
-      unsubCierre();
-    };
+    return () => { unsubResumen(); unsubCierre(); };
   }, [provinciaId, colResumenVentas, colCierres, fechaStr]);
 
-  // ====================== Totales (incluye mixto) ======================
+  // ====== Totales (maneja mixto) ======
   const calcularTotales = (pedidosRepartidor) => {
-    let efectivo = 0;
-    let transferencia = 0;
-    let transferencia10 = 0;
-
+    let efectivo = 0, transferencia = 0, transferencia10 = 0;
     pedidosRepartidor.forEach((p) => {
       if (!p.entregado) return;
       const monto = Number(p.monto || 0);
       const metodo = p.metodoPago || "efectivo";
-
-      if (metodo === "efectivo") {
-        efectivo += monto;
-      } else if (metodo === "transferencia") {
-        transferencia += monto;
-      } else if (metodo === "transferencia10") {
-        transferencia10 += Math.round(monto * 1.1 * 100) / 100;
-      } else if (metodo === "mixto") {
+      if (metodo === "efectivo") efectivo += monto;
+      else if (metodo === "transferencia") transferencia += monto;
+      else if (metodo === "transferencia10") transferencia10 += Math.round(monto * 1.1 * 100) / 100;
+      else if (metodo === "mixto") {
         const ef = Number(p.pagoMixtoEfectivo || 0);
         const tr = Number(p.pagoMixtoTransferencia || 0);
         const con10 = !!p.pagoMixtoCon10;
@@ -284,53 +246,33 @@ export default function CierreCaja() {
         else transferencia += tr;
       }
     });
-
     return { efectivo, transferencia, transferencia10 };
   };
 
-  const calcularCajaNeta = (totales, gastosRepartidor) => {
-    const gastosTotales =
-      (gastosRepartidor?.repartidor || 0) +
-      (gastosRepartidor?.acompanante || 0) +
-      (gastosRepartidor?.combustible || 0) +
-      (gastosRepartidor?.extra || 0);
-
-    const totalCaja =
-      totales.efectivo + totales.transferencia + totales.transferencia10 - gastosTotales;
-
-    return Math.round(totalCaja * 100) / 100;
+  const calcularCajaNeta = (tot, g) => {
+    const gastos = (g?.repartidor || 0) + (g?.acompanante || 0) + (g?.combustible || 0) + (g?.extra || 0);
+    return Math.round((tot.efectivo + tot.transferencia + tot.transferencia10 - gastos) * 100) / 100;
   };
 
-  // ====================== Handlers de gastos ======================
+  // ====== Handlers de gastos ======
   const handleGastoChange = (email, tipo, valor) => {
-    setGastos((prev) => ({
-      ...prev,
-      [email]: {
-        ...prev[email],
-        [tipo]: Number(valor),
-      },
-    }));
+    setGastos((prev) => ({ ...prev, [email]: { ...prev[email], [tipo]: Number(valor) } }));
   };
 
-  // ====================== Cierre individual (sin optimistic update) ======================
+  // ====== Cierre individual ======
   const cerrarCajaIndividual = async (email) => {
     if (!provinciaId || !colCierresRepartidor || !colResumenVentas) return;
 
-    const pedidosRepartidor = pedidos.filter((p) => p.repartidor === email);
-    const entregados = pedidosRepartidor.filter((p) => p.entregado);
-    const noEntregados = pedidosRepartidor.filter((p) => !p.entregado);
+    const pedidosRep = pedidos.filter((p) => p.repartidor === email);
+    const entregados = pedidosRep.filter((p) => p.entregado);
+    const noEntregados = pedidosRep.filter((p) => !p.entregado);
 
     const totales = calcularTotales(entregados);
-    const gastosRepartidor = gastos[email] || {
-      repartidor: 0,
-      combustible: 0,
-      acompanante: 0,
-      extra: 0,
-    };
+    const g = gastos[email] || { repartidor: 0, combustible: 0, acompanante: 0, extra: 0 };
 
     try {
-      const docRef = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-      await setDoc(docRef, {
+      const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+      await setDoc(ref, {
         fechaStr,
         emailRepartidor: email,
         pedidosEntregados: entregados,
@@ -338,21 +280,14 @@ export default function CierreCaja() {
         efectivo: totales.efectivo,
         transferencia: totales.transferencia,
         transferencia10: totales.transferencia10,
-        gastos: gastosRepartidor,
+        gastos: g,
         provinciaId,
         timestamp: new Date(),
       });
 
       setCierres((prev) => ({
         ...prev,
-        [email]: {
-          pedidosEntregados: entregados,
-          pedidosNoEntregados: noEntregados,
-          efectivo: totales.efectivo,
-          transferencia: totales.transferencia,
-          transferencia10: totales.transferencia10,
-          gastos: gastosRepartidor,
-        },
+        [email]: { pedidosEntregados: entregados, pedidosNoEntregados: noEntregados, ...totales, gastos: g },
       }));
 
       await Swal.fire("Caja cerrada", `Caja de ${email} cerrada correctamente.`, "success");
@@ -362,27 +297,23 @@ export default function CierreCaja() {
     }
   };
 
-  // ====================== Cierre GLOBAL (provincia) ======================
+  // ====== Cierre GLOBAL (por provincia y por día) ======
   const cerrarGlobal = async () => {
     if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas) return;
 
-    // 0) Validación fuerte: todos los repartidores deben tener cierre individual EN FIRESTORE
+    // A) Bloquear si falta cerrar alguien (verificación **en Firestore**)
     const faltan = [];
     for (const email of repartidores) {
       const snap = await getDoc(doc(colCierresRepartidor, `${fechaStr}_${email}`));
       if (!snap.exists()) faltan.push(email);
     }
     if (faltan.length) {
-      Swal.fire(
-        "Falta cerrar cajas",
-        `Aún faltan: ${faltan.join(", ")}`,
-        "warning"
-      );
+      await Swal.fire("Faltan cierres individuales", `No podés cerrar global. Restan: ${faltan.join(", ")}`, "warning");
       return;
     }
 
-    const acumuladoPorProductoPath = new Map(); // pathStr -> { ref, qty }
-    const resumenPorNombre = {}; // nombre del item vendido -> cantidad
+    const acumuladoPorPath = new Map(); // pathStr -> { ref, qty }
+    const resumenPorNombre = {};        // nombre visible -> cantidad
 
     // Cache lecturas de productos
     const cacheProducto = new Map();
@@ -394,7 +325,7 @@ export default function CierreCaja() {
       return data;
     };
 
-    // 1) Recorrer cierres individuales -> acumular cantidades y armar resumen visible
+    // B) Recorrer cierres individuales **de la fecha** y acumular SOLO vendidos
     for (const email of repartidores) {
       let cierre = cierres[email];
       if (!cierre?.pedidosEntregados) {
@@ -402,7 +333,6 @@ export default function CierreCaja() {
         const snap = await getDoc(ref);
         if (snap.exists()) cierre = snap.data();
       }
-
       const entregados = cierre?.pedidosEntregados || [];
 
       for (const pedido of entregados) {
@@ -411,49 +341,37 @@ export default function CierreCaja() {
           const cant = Number(item?.cantidad || 0);
           if (!cant) continue;
 
-          const { ref, pathStr } = await resolverRefDesdeProdItem(
-            item,
-            provinciaId,
-            colProductos,
-            db
-          );
-          if (!ref || !pathStr) {
-            console.warn("Producto no encontrado (sin ruta/id y no matchea por nombre):", item);
-            continue;
-          }
+          const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
+          if (!ref || !pathStr) continue;
 
-          // Leer data del producto principal (solo para nombre y si es combo)
+          // lee producto (por si es combo y para nombre)
           const data = await leerProducto(ref, pathStr);
           if (!data) continue;
 
-          // Descontar el propio producto en stock
-          acumular(acumuladoPorProductoPath, ref, pathStr, cant);
+          // descuenta el propio producto
+          acumular(acumuladoPorPath, ref, pathStr, cant);
 
-          // Resumen visible
+          // resumen visible por nombre base
           const nombreBase = data?.nombre || item?.nombre || "SIN_NOMBRE";
           resumenPorNombre[nombreBase] = (resumenPorNombre[nombreBase] || 0) + cant;
 
-          // Si es combo, descontar también los componentes (afecta stock, no resumen)
+          // si es combo, sumar componentes
           if (data?.esCombo && Array.isArray(data?.componentes)) {
             for (const comp of data.componentes) {
               const compCant = cant * Number(comp?.cantidad || 0);
               if (!compCant) continue;
-
               const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
               const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
-              await leerProducto(compRef, compPath); // opcional
-              acumular(acumuladoPorProductoPath, compRef, compPath, compCant);
+              await leerProducto(compRef, compPath);
+              acumular(acumuladoPorPath, compRef, compPath, compCant);
             }
           }
         }
       }
     }
 
-    // 2) Calcular totales por método
-    let totalEfectivo = 0;
-    let totalTransferencia = 0;
-    let totalTransferencia10 = 0;
-
+    // C) Totales por método
+    let totalEfectivo = 0, totalTransferencia = 0, totalTransferencia10 = 0;
     for (const email of repartidores) {
       let cierre = cierres[email];
       if (!cierre?.pedidosEntregados) {
@@ -461,23 +379,17 @@ export default function CierreCaja() {
         const snap = await getDoc(ref);
         if (snap.exists()) cierre = snap.data();
       }
-
       const entregados = cierre?.pedidosEntregados || [];
-      for (const pedido of entregados) {
-        const metodo = pedido?.metodoPago ?? "efectivo";
-        const monto = Number(pedido?.monto || 0);
-
-        if (metodo === "efectivo") {
-          totalEfectivo += monto;
-        } else if (metodo === "transferencia") {
-          totalTransferencia += monto;
-        } else if (metodo === "transferencia10") {
-          totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
-        } else if (metodo === "mixto") {
-          const ef = Number(pedido?.pagoMixtoEfectivo || 0);
-          const tr = Number(pedido?.pagoMixtoTransferencia || 0);
-          const con10 = !!pedido?.pagoMixtoCon10;
-
+      for (const p of entregados) {
+        const metodo = p?.metodoPago ?? "efectivo";
+        const monto = Number(p?.monto || 0);
+        if (metodo === "efectivo") totalEfectivo += monto;
+        else if (metodo === "transferencia") totalTransferencia += monto;
+        else if (metodo === "transferencia10") totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
+        else if (metodo === "mixto") {
+          const ef = Number(p?.pagoMixtoEfectivo || 0);
+          const tr = Number(p?.pagoMixtoTransferencia || 0);
+          const con10 = !!p?.pagoMixtoCon10;
           totalEfectivo += ef;
           if (con10) totalTransferencia10 += Math.round(tr * 1.1 * 100) / 100;
           else totalTransferencia += tr;
@@ -485,7 +397,22 @@ export default function CierreCaja() {
       }
     }
 
-    // 3) Guardar resumen de ventas (para la UI) -> provincias/{prov}/resumenVentas/{fechaStr}
+    // D) Confirmación con conteo real de escrituras
+    const ops = Array.from(acumuladoPorPath.values());
+    const totalDocsAActualizar = ops.length;
+    const totalUnidades = ops.reduce((a, b) => a + (Number(b.qty) || 0), 0);
+
+    const ok = await Swal.fire({
+      icon: "warning",
+      title: "Confirmar cierre global",
+      html: `Se actualizarán <b>${totalDocsAActualizar}</b> productos (<b>${totalUnidades}</b> unidades). ¿Deseás continuar?`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, descontar stock",
+      cancelButtonText: "Cancelar",
+    });
+    if (!ok.isConfirmed) return;
+
+    // E) Guardar resumen visible
     await setDoc(doc(colResumenVentas, fechaStr), {
       fechaStr,
       totalPorProducto: resumenPorNombre,
@@ -496,49 +423,30 @@ export default function CierreCaja() {
       timestamp: new Date(),
     });
 
-    // 4) Evitar doble descuento de stock
+    // F) Evitar doble descuento
     const cierreGlobalRef = doc(colCierres, `global_${fechaStr}`);
     const cierreSnap = await getDoc(cierreGlobalRef);
     if (cierreSnap.exists() && cierreSnap.data()?.stockDescontado) {
-      await Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "El stock ya fue descontado en este cierre global.",
-        buttonsStyling: false,
-        customClass: { confirmButton: "btn btn-error" },
-      });
+      await Swal.fire("Ya cerrado", "El stock ya fue descontado en este cierre global.", "info");
       return;
     }
 
-    // 5) Descontar stock SOLO de los productos acumulados (batches + increment)
-    const ops = Array.from(acumuladoPorProductoPath.values());
-
-    // 🔧 Saneamos tipo de stock (por si hay strings/null)
+    // G) Saneamos tipo de stock **solo** en los productos a tocar y descontamos en chunks
     await sanearStocksSiNecesario(ops);
 
-    const grupos = chunk(ops, 450); // margen bajo el límite de 500
+    const grupos = chunk(ops, 450);
     for (const grupo of grupos) {
       const batch = writeBatch(db);
       for (const { ref, qty } of grupo) {
         const n = Number(qty || 0);
         if (!n) continue;
-        // ✅ set + merge: no falla si el doc no existe
         batch.set(ref, { stock: increment(-n) }, { merge: true });
       }
-      try {
-        await batch.commit();
-      } catch (e) {
-        console.error("Falló batch de descuento:", e?.code, e?.message);
-        await Swal.fire(
-          "Error al descontar stock",
-          `${e?.code || ""} ${e?.message || ""}`,
-          "error"
-        );
-        return; // aborta el cierre global
-      }
+      await batch.commit();
+      await new Promise((r) => setTimeout(r, 120)); // respiro pequeño
     }
 
-    // 6) Guardar el cierre global con flag stockDescontado
+    // H) Marcar cierre global + auditoría mínima
     await setDoc(
       cierreGlobalRef,
       {
@@ -547,21 +455,16 @@ export default function CierreCaja() {
         repartidores,
         stockDescontado: true,
         provinciaId,
+        ejecutadoPor: (window?.__authEmail) || null, // opcional si tenés auth.global
         timestamp: new Date(),
       },
       { merge: true }
     );
 
-    await Swal.fire({
-      icon: "success",
-      title: "Cierre Global realizado",
-      text: "El cierre del día ha sido completado y se guardó el resumen con descuento de stock.",
-      buttonsStyling: false,
-      customClass: { confirmButton: "btn btn-success" },
-    });
+    await Swal.fire("Cierre Global realizado", "Se descontó stock y se guardó el resumen.", "success");
   };
 
-  // ====================== Exportar Excel ======================
+  // ====== Exportar Excel ======
   const exportarExcel = () => {
     const rows = Object.entries(cierres).map(([email, cierre]) => ({
       Provincia: provinciaId,
@@ -575,77 +478,63 @@ export default function CierreCaja() {
       Gasto_Combustible: cierre.gastos?.combustible || 0,
       Gasto_Extra: cierre.gastos?.extra || 0,
     }));
-
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "CierreCaja");
-
     const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     const blob = new Blob([buf], { type: "application/octet-stream" });
     saveAs(blob, `CierreCaja_${provinciaId}_${fechaStr}.xlsx`);
   };
 
-  // ====================== Anulaciones ======================
+  // ====== Anulación individual ======
   const anularCierreIndividual = async (email) => {
     if (!provinciaId || !colCierresRepartidor || !colAnulaciones) return;
 
-    const confirmacion = await Swal.fire({
+    const confirm = await Swal.fire({
       title: "¿Anular cierre?",
-      text: `¿Estás seguro que querés anular el cierre de ${email}?`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Sí, anular",
-      cancelButtonText: "Cancelar",
+      text: `¿Seguro que querés anular el cierre de ${email}?`,
+      icon: "warning", showCancelButton: true,
+      confirmButtonText: "Sí, anular", cancelButtonText: "Cancelar",
     });
-    if (!confirmacion.isConfirmed) return;
+    if (!confirm.isConfirmed) return;
 
     const docId = `${fechaStr}_${email}`;
-    const docRef = doc(colCierresRepartidor, docId);
+    const ref = doc(colCierresRepartidor, docId);
 
     try {
-      const snap = await getDoc(docRef);
+      const snap = await getDoc(ref);
       if (snap.exists()) {
-        const data = snap.data();
         await addDoc(colAnulaciones, {
-          provinciaId,
-          fechaStr,
-          emailRepartidor: email,
-          timestamp: Timestamp.now(),
-          tipo: "individual",
+          provinciaId, fechaStr, emailRepartidor: email,
+          timestamp: Timestamp.now(), tipo: "individual",
           motivo: "Anulación manual desde panel",
           docIdOriginal: docId,
-          datosAnulados: limpiarFirestoreData(data),
+          datosAnulados: limpiarFirestoreData(snap.data()),
         });
       }
+      await deleteDoc(ref);
 
-      await deleteDoc(docRef);
-
-      await Swal.fire("Anulado", `Cierre de ${email} anulado correctamente.`, "success");
-
+      Swal.fire("Anulado", `Cierre de ${email} anulado.`, "success");
       setCierres((prev) => {
-        const copia = { ...prev };
-        delete copia[email];
-        return copia;
+        const copia = { ...prev }; delete copia[email]; return copia;
       });
-    } catch (error) {
-      console.error("Error al anular cierre:", error);
+    } catch (e) {
+      console.error("Error al anular cierre:", e);
       Swal.fire("Error", "No se pudo anular el cierre. Ver consola.", "error");
     }
   };
 
-  // ✅ Restaura stock (incluye combos) usando increment(+n) + set merge
+  // ====== Anulación global (restaura stock si corresponde) ======
   const anularCierreGlobal = async () => {
     if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas || !colAnulaciones) return;
 
-    const confirmacion = await Swal.fire({
+    const confirm = await Swal.fire({
       title: "¿Anular cierre global?",
-      text: `¿Estás seguro que querés anular el cierre global del ${fechaStr}?`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Sí, anular",
-      cancelButtonText: "Cancelar",
+      text: `¿Seguro que querés anular el cierre global del ${fechaStr}?`,
+      icon: "warning", showCancelButton: true,
+      confirmButtonText: "Sí, anular", cancelButtonText: "Cancelar",
     });
-    if (!confirmacion.isConfirmed) return;
+    if (!confirm.isConfirmed) return;
 
     const docId = `global_${fechaStr}`;
     const cierreRef = doc(colCierres, docId);
@@ -654,12 +543,11 @@ export default function CierreCaja() {
     try {
       const cierreSnap = await getDoc(cierreRef);
       const resumenSnap = await getDoc(resumenRef);
-      const yaDesconto =
-        cierreSnap.exists() && !!cierreSnap.data()?.stockDescontado;
+      const yaDesconto = cierreSnap.exists() && !!cierreSnap.data()?.stockDescontado;
 
-      // ---- (1) Si el stock fue descontado, lo REVERTIMOS con increment(+qty) en batches ----
       if (yaDesconto) {
-        const acumulado = new Map(); // pathStr -> { ref, qty }
+        // Recalcular cantidades y RESTAURAR stock (increment +qty)
+        const acumulado = new Map();
 
         for (const email of repartidores) {
           let cierreRep = cierres[email];
@@ -676,30 +564,18 @@ export default function CierreCaja() {
               const cant = Number(item?.cantidad || 0);
               if (!cant) continue;
 
-              const { ref, pathStr } = await resolverRefDesdeProdItem(
-                item,
-                provinciaId,
-                colProductos,
-                db
-              );
+              const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
               if (!ref || !pathStr) continue;
 
               acumular(acumulado, ref, pathStr, cant);
 
-              // Si era combo, sumar componentes
               const prodSnap = await getDoc(ref);
               if (prodSnap.exists() && prodSnap.data()?.esCombo) {
                 const comps = prodSnap.data().componentes || [];
                 for (const comp of comps) {
                   const compCant = cant * Number(comp?.cantidad || 0);
                   if (!compCant) continue;
-                  const compRef = doc(
-                    db,
-                    "provincias",
-                    provinciaId,
-                    "productos",
-                    comp.id
-                  );
+                  const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
                   const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
                   acumular(acumulado, compRef, compPath, compCant);
                 }
@@ -708,7 +584,6 @@ export default function CierreCaja() {
           }
         }
 
-        // Aplicar RESTAURACIÓN de stock en tandas (increment +qty)
         const ops = Array.from(acumulado.values());
         const grupos = chunk(ops, 450);
         for (const grupo of grupos) {
@@ -718,77 +593,48 @@ export default function CierreCaja() {
             if (!n) continue;
             batch.set(ref, { stock: increment(+n) }, { merge: true });
           }
-          try {
-            await batch.commit();
-          } catch (e) {
-            console.error("Falló batch de restauración:", e?.code, e?.message);
-            await Swal.fire(
-              "Error al restaurar stock",
-              `${e?.code || ""} ${e?.message || ""}`,
-              "error"
-            );
-            return;
-          }
+          await batch.commit();
         }
       }
 
-      // ---- (2) Registrar anulación (auditoría) ----
-      const datosCierre = cierreSnap.exists() ? cierreSnap.data() : null;
-      const datosResumen = resumenSnap.exists() ? resumenSnap.data() : null;
-
+      // Auditoría + borrar registros
       await addDoc(
         colAnulaciones,
         limpiarFirestoreData({
-          provinciaId,
-          fechaStr,
-          tipo: "global",
-          timestamp: new Date(),
-          motivo: "Anulación manual desde panel",
-          docIdOriginal: docId,
+          provinciaId, fechaStr, tipo: "global", timestamp: new Date(),
+          motivo: "Anulación manual desde panel", docIdOriginal: docId,
           restauracionDeStock: !!yaDesconto,
           datosAnulados: {
-            cierreGlobal: datosCierre
-              ? {
-                  fechaStr: datosCierre.fechaStr,
-                  repartidores: datosCierre.repartidores || [],
-                  stockDescontado: !!datosCierre.stockDescontado,
-                }
+            cierreGlobal: cierreSnap.exists()
+              ? { fechaStr, repartidores: cierreSnap.data().repartidores || [], stockDescontado: !!cierreSnap.data().stockDescontado }
               : null,
-            resumenVentas: datosResumen
+            resumenVentas: resumenSnap.exists()
               ? {
-                  fechaStr: datosResumen.fechaStr,
-                  totalEfectivo: datosResumen.totalEfectivo || 0,
-                  totalTransferencia: datosResumen.totalTransferencia || 0,
-                  totalTransferencia10: datosResumen.totalTransferencia10 || 0,
-                  totalPorProducto: datosResumen.totalPorProducto || {},
+                  fechaStr,
+                  totalEfectivo: resumenSnap.data().totalEfectivo || 0,
+                  totalTransferencia: resumenSnap.data().totalTransferencia || 0,
+                  totalTransferencia10: resumenSnap.data().totalTransferencia10 || 0,
+                  totalPorProducto: resumenSnap.data().totalPorProducto || {},
                 }
               : null,
           },
         })
       );
 
-      // ---- (3) Borrar cierre global + resumen ----
       const batch = writeBatch(db);
       batch.delete(cierreRef);
       batch.delete(resumenRef);
       await batch.commit();
 
-      Swal.fire(
-        "Cierre global anulado",
-        yaDesconto
-          ? "Se restauró el stock y se eliminaron los registros."
-          : "No se había descontado stock; se eliminaron los registros.",
-        "success"
-      );
+      Swal.fire("Cierre global anulado", yaDesconto ? "Se restauró el stock y se eliminaron los registros." : "No se había descontado stock; se eliminaron los registros.", "success");
       setResumenGlobal(null);
-    } catch (error) {
-      console.error("Error al anular cierre global:", error);
-      const detalle = error?.code ? `${error.code}: ${error.message}` : String(error);
-      Swal.fire("Error", `No se pudo anular el cierre global. ${detalle}`, "error");
+    } catch (e) {
+      console.error("Error al anular cierre global:", e);
+      Swal.fire("Error", "No se pudo anular el cierre global. Ver consola.", "error");
     }
   };
 
-  // ====================== UI ======================
+  // ====== UI ======
   return (
     <div className="p-4">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
@@ -798,9 +644,7 @@ export default function CierreCaja() {
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">Cierre de Caja (Administrador)</h2>
-        <span className="font-mono badge badge-primary">
-          Prov: {provinciaId || "—"}
-        </span>
+        <span className="font-mono badge badge-primary">Prov: {provinciaId || "—"}</span>
       </div>
 
       <div className="mb-4">
@@ -814,17 +658,14 @@ export default function CierreCaja() {
       </div>
 
       {repartidores.map((email) => {
-        const pedidosRepartidor = pedidos.filter((p) => p.repartidor === email);
-        const entregados = pedidosRepartidor.filter((p) => p.entregado);
-        const noEntregados = pedidosRepartidor.filter((p) => !p.entregado);
+        const pedidosRep = pedidos.filter((p) => p.repartidor === email);
+        const entregados = pedidosRep.filter((p) => p.entregado);
+        const noEntregados = pedidosRep.filter((p) => !p.entregado);
         const yaCerrado = !!cierres[email];
-        const totales = calcularTotales(pedidosRepartidor);
+        const totales = calcularTotales(pedidosRep);
 
         return (
-          <div
-            key={email}
-            className="p-4 mb-6 border shadow-lg rounded-xl bg-base-200 animate-fade-in-up"
-          >
+          <div key={email} className="p-4 mb-6 border shadow-lg rounded-xl bg-base-200 animate-fade-in-up">
             <h3 className="mb-2 text-xl font-bold">{email}</h3>
             <p className={`font-semibold ${yaCerrado ? "text-success" : "text-error"}`}>
               Estado: {yaCerrado ? "Cerrado" : "Abierto"}
@@ -836,9 +677,7 @@ export default function CierreCaja() {
                 <ul className="space-y-2">
                   {entregados.map((p) => (
                     <li key={p.id} className="pb-2 border-b border-base-300">
-                      <p className="font-semibold">
-                        {p.nombre} - ${p.monto || 0} ({p.metodoPago || "efectivo"})
-                      </p>
+                      <p className="font-semibold">{p.nombre} - ${p.monto || 0} ({p.metodoPago || "efectivo"})</p>
                       <p className="text-sm text-base-content/80">{p.pedido}</p>
                     </li>
                   ))}
@@ -888,44 +727,32 @@ export default function CierreCaja() {
             </div>
 
             {!yaCerrado && (
-              <button
-                onClick={() => cerrarCajaIndividual(email)}
-                className="mt-4 btn btn-success"
-              >
+              <button onClick={() => cerrarCajaIndividual(email)} className="mt-4 btn btn-success">
                 Cerrar caja de {email}
               </button>
             )}
 
             {yaCerrado && (!resumenGlobal || !resumenGlobal.stockDescontado) && (
-              <button
-                onClick={() => anularCierreIndividual(email)}
-                className="mt-2 btn btn-warning"
-              >
+              <button onClick={() => anularCierreIndividual(email)} className="mt-2 btn btn-warning">
                 🧨 Anular cierre de {email}
               </button>
             )}
 
             {yaCerrado && resumenGlobal?.stockDescontado === true && (
-              <button disabled className="mt-2 btn btn-disabled">
-                🔒 Cierre global realizado
-              </button>
+              <button disabled className="mt-2 btn btn-disabled">🔒 Cierre global realizado</button>
             )}
           </div>
         );
       })}
 
-      {/* Cierre Global */}
+      {/* Acciones Globales */}
       <div className="mt-8">
         <h3 className="mb-2 text-xl font-bold">Cierre Global</h3>
         <p>Total de repartidores: {repartidores.length}</p>
         <p>Cajas cerradas: {Object.keys(cierres).length}</p>
 
         <div className="flex flex-wrap gap-4 mt-4">
-          <button
-            className="btn btn-primary"
-            onClick={exportarExcel}
-            disabled={repartidores.length === 0}
-          >
+          <button className="btn btn-primary" onClick={exportarExcel} disabled={repartidores.length === 0}>
             📤 Exportar resumen a Excel
           </button>
 
@@ -933,10 +760,8 @@ export default function CierreCaja() {
             <button
               className="btn btn-accent"
               onClick={cerrarGlobal}
-              disabled={
-                repartidores.length === 0
-              }
-              title="Requiere que todos los repartidores hayan cerrado (verificación en Firestore)."
+              disabled={repartidores.length === 0}
+              title="Requiere que todos los repartidores hayan cerrado (se verifica en Firestore)."
             >
               🔐 Cerrar caja global del día
             </button>
@@ -953,35 +778,25 @@ export default function CierreCaja() {
       {/* Resumen Global */}
       {resumenGlobal && (
         <div className="p-4 mt-8 shadow-lg rounded-xl bg-base-200 animate-fade-in-up">
-          <h3 className="mb-4 text-2xl font-bold">
-            📊 Resumen global de productos vendidos
-          </h3>
+          <h3 className="mb-4 text-2xl font-bold">📊 Resumen global de productos vendidos</h3>
 
           <div className="overflow-x-auto">
             <table className="table w-full table-zebra">
               <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th className="text-right">Cantidad</th>
-                </tr>
+                <tr><th>Producto</th><th className="text-right">Cantidad</th></tr>
               </thead>
               <tbody>
-                {resumenGlobal?.totalPorProducto ? (
-                  Object.entries(resumenGlobal.totalPorProducto).map(
-                    ([nombre, cantidad]) => (
-                      <tr key={nombre}>
-                        <td>{nombre}</td>
-                        <td className="text-right">{cantidad}</td>
-                      </tr>
-                    )
-                  )
-                ) : (
-                  <tr>
-                    <td colSpan="2" className="italic text-center text-base-content/50">
-                      No hay productos cargados.
-                    </td>
-                  </tr>
-                )}
+                {resumenGlobal?.totalPorProducto
+                  ? Object.entries(resumenGlobal.totalPorProducto).map(([nombre, cantidad]) => (
+                      <tr key={nombre}><td>{nombre}</td><td className="text-right">{cantidad}</td></tr>
+                    ))
+                  : (
+                    <tr>
+                      <td colSpan="2" className="italic text-center text-base-content/50">
+                        No hay productos cargados.
+                      </td>
+                    </tr>
+                  )}
               </tbody>
             </table>
           </div>
@@ -1001,37 +816,7 @@ export default function CierreCaja() {
                   resumenGlobal.totalEfectivo || 0,
                   resumenGlobal.totalTransferencia || 0,
                   resumenGlobal.totalTransferencia10 || 0,
-                ]
-                  .reduce((a, b) => a + b, 0)
-                  .toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
-              </p>
-            </div>
-
-            <div className="p-4 shadow-inner bg-base-100 rounded-xl">
-              <h4 className="mb-2 text-lg font-bold">💼 Neto después de gastos</h4>
-              <p className="text-xl font-bold text-secondary">
-                {(() => {
-                  const totalRecaudado =
-                    (resumenGlobal.totalEfectivo || 0) +
-                    (resumenGlobal.totalTransferencia || 0) +
-                    (resumenGlobal.totalTransferencia10 || 0);
-
-                  const totalGastos = Object.values(cierres).reduce((acc, cierre) => {
-                    const g = cierre.gastos || {};
-                    return (
-                      acc +
-                      (g.repartidor || 0) +
-                      (g.acompanante || 0) +
-                      (g.combustible || 0) +
-                      (g.extra || 0)
-                    );
-                  }, 0);
-
-                  return (totalRecaudado - totalGastos).toLocaleString("es-AR", {
-                    style: "currency",
-                    currency: "ARS",
-                  });
-                })()}
+                ].reduce((a, b) => a + b, 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
               </p>
             </div>
 
@@ -1042,15 +827,10 @@ export default function CierreCaja() {
                   ? new Date(resumenGlobal.timestamp.seconds * 1000).toLocaleString()
                   : "Sin fecha de cierre"}
               </p>
-
               <p className="mt-1">
-                {resumenGlobal?.stockDescontado ? (
-                  <span className="font-semibold text-success">✔️ Stock descontado</span>
-                ) : (
-                  <span className="font-semibold text-error">
-                    ⚠️ Stock NO descontado
-                  </span>
-                )}
+                {resumenGlobal?.stockDescontado
+                  ? <span className="font-semibold text-success">✔️ Stock descontado</span>
+                  : <span className="font-semibold text-error">⚠️ Stock NO descontado</span>}
               </p>
             </div>
           </div>
