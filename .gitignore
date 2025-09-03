@@ -26,4 +26,8 @@ dist-ssr
 
 # Env files
 .env
-.env.*
+.env.*vite.config.zip
+
+# grandes
+vite.config.zip
+*.zip
