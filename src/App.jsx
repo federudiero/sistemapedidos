@@ -12,6 +12,8 @@ import AdminStock from "./components/AdminStock";
 import CierreCaja from "./components/CierreCaja";
 import PanelStock from "./components/PanelStock";
 import ResumenFinancieroMensual from "./components/ResumenFinancieroMensual";
+import LiquidacionesComisiones from "./components/LiquidacionesComisiones";
+
 
 
 
@@ -43,6 +45,8 @@ function App() {
         <Route path="/admin/cierre-caja" element={<CierreCaja />} />
         <Route path="/admin/panel-stock" element={<PanelStock />} />
         <Route path="/admin/estadisticas" element={<ResumenFinancieroMensual />} />
+        <Route path="/admin/LiquidacionesComisiones" element={<LiquidacionesComisiones />} />
+         
 
         <Route path="/login-repartidor" element={<LoginRepartidor />} />
         <Route path="/repartidor" element={<RepartidorView />} />

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import { format } from "date-fns";
 import { collection, getDocs } from "firebase/firestore";
-import { db } from "../firebase/firebase";
+import { db, auth } from "../firebase/firebase"; // 👈 uso auth para vendedorEmail
 import { useLoadScript, GoogleMap } from "@react-google-maps/api";
 import { useProvincia } from "../hooks/useProvincia.js";
 
@@ -30,7 +30,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
   const [errorTelefonoAlt, setErrorTelefonoAlt] = useState("");
   const [busqueda, setBusqueda] = useState("");
 
-  // Estado/refs de mapa y marcadores
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
   const advMarkerRef = useRef(null);
@@ -59,14 +58,11 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     libraries: LIBRARIES,
   });
 
-  // 🔧 FIX: key para re-montar el Autocomplete tras submit
   const [pacRefresh, setPacRefresh] = useState(0);
 
-  // Marker con soporte para Advanced Marker y fallback a Marker clásico
   useEffect(() => {
     if (!isLoaded || !mapReady || !mapRef.current) return;
 
-    // Sin coordenadas: limpiar ambos tipos de marker
     if (!coordenadas) {
       if (advMarkerRef.current) {
         advMarkerRef.current.map = null;
@@ -130,7 +126,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     };
   }, [isLoaded, mapReady, coordenadas, nombre, direccion]);
 
-  // Autocomplete (único efecto) + disabled si bloqueado
   useEffect(() => {
     if (!isLoaded || !pacHostRef.current || !window.google?.maps) return;
 
@@ -160,11 +155,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       el.disabled = !!bloqueado;
       el.addEventListener("gmp-select", onSelect);
 
-      // Limpio y monto
       pacHostRef.current.innerHTML = "";
       pacHostRef.current.appendChild(el);
 
-      // 🔧 FIX: guardo instancia y fuerzo vacío por las dudas
       pacInstanceRef.current = el;
       try {
         pacInstanceRef.current.value = "";
@@ -179,7 +172,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     };
   }, [isLoaded, bloqueado, pacRefresh]);
 
-  // === Cargar productos desde la provincia seleccionada ===
   useEffect(() => {
     const cargarProductos = async () => {
       if (!provinciaId) return;
@@ -220,7 +212,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     cargarProductos();
   }, [provinciaId]);
 
-  // Si edita pedido, reconstruir productos seleccionados + coords
   useEffect(() => {
     if (pedidoAEditar && productosFirestore.length > 0) {
       setNombre(pedidoAEditar.nombre || "");
@@ -298,7 +289,11 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     const { resumen, total } = calcularResumenPedido();
     const pedidoFinal = `${resumen} | TOTAL: $${total}`;
 
+    // vendedorEmail según sesión actual
+    const vendedorEmail = String(auth?.currentUser?.email || "").toLowerCase();
+
     const pedidoConProductos = {
+      vendedorEmail,        // 👈 requerido por las reglas
       nombre,
       telefono,
       telefonoAlt: telefonoAlt?.trim() ? telefonoAlt : null,
@@ -315,6 +310,8 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       fecha: ahora,
       fechaStr: fechaStr,
       monto: total,
+      entregado: false,
+      asignadoA: [],
     };
 
     if (pedidoAEditar) {
@@ -450,7 +447,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
           <div className="flex flex-col card-body">
             <h2 className="text-lg font-bold">🛒 Productos disponibles</h2>
 
-            {/* 🔍 Buscador */}
             <input
               type="text"
               placeholder="Buscar producto..."
@@ -513,7 +509,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
             </div>
           </div>
 
-          {/* BOTÓN PARA AGREGAR DEVOLUCIÓN */}
           <button
             type="button"
             className="w-full mb-4 btn btn-outline btn-error btn-sm"
@@ -523,7 +518,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
             {mostrarDevolucion ? "❌ Ocultar devoluciones" : "🔁 Agregar devolución"}
           </button>
 
-          {/* PANEL DE DEVOLUCIONES */}
           {mostrarDevolucion && (
             <div className="border shadow-md card bg-error-content/10 border-error">
               <div className="card-body">
@@ -586,14 +580,12 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
             </div>
           )}
 
-          {/* Botón submit */}
           <div className="mt-6 text-right">
             <button type="submit" className={`btn ${pedidoAEditar ? "btn-warning" : "btn-primary"}`} disabled={bloqueado}>
               {pedidoAEditar ? "✏️ Actualizar pedido" : "➕ Agregar pedido"}
             </button>
           </div>
 
-          {/* RESUMEN DEL PEDIDO */}
           <div className="mt-6">
             <label className="label">
               <span className="label-text">📝 Pedido generado</span>

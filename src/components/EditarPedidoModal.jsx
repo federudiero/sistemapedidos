@@ -1,5 +1,17 @@
-// src/components/EditarPedidoModal.jsx
-import React, { useState, useEffect } from "react";
+// src/components/EditarPedidoModal.jsx — versión optimizada
+// Misma lógica que tu archivo original:
+// - Carga catálogo por provincia cuando el modal está visible
+// - Prellena el formulario con los datos del pedido
+// - Permite editar campos básicos y la lista de productos (nombre/cantidad)
+// - El precio se toma del catálogo cuando cambia el nombre
+// - Genera el string `pedido` con el resumen y TOTAL y llama a `onGuardar`
+// Mejoras sin cambiar el flujo:
+// - Sanitiza entradas (trim, números válidos)
+// - Evita NaN/negativos en cantidad
+// - Usa useMemo para catálogos y resumen (menos renders)
+// - Botones type="button" para evitar submit accidental con Enter
+
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useProvincia } from "../hooks/useProvincia.js";
@@ -31,6 +43,13 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
     fetchProductos();
   }, [show, provinciaId]);
 
+  // Índice por nombre para lookup rápido de precio
+  const catalogoByNombre = useMemo(() => {
+    const m = new Map();
+    for (const p of catalogo) m.set(String(p.nombre || ""), p);
+    return m;
+  }, [catalogo]);
+
   // Inicializar formulario cuando abre el modal, cambia el pedido o el catálogo
   useEffect(() => {
     if (!show || !pedido) return;
@@ -39,83 +58,101 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
 
     const productosClonados = Array.isArray(copia.productos)
       ? copia.productos.map((p) => {
-          const encontrado = catalogo.find((prod) => prod.nombre === p.nombre);
+          const encontrado = catalogoByNombre.get(String(p.nombre || ""));
           return {
             ...p,
-            // si el pedido no trae precio, intentamos completar con el catálogo
             precio: p.precio ?? encontrado?.precio ?? 0,
+            cantidad: Number.isFinite(Number(p.cantidad)) ? Number(p.cantidad) : 1,
           };
         })
       : [];
 
     setForm({
-      nombre: copia.nombre || "",
-      direccion: copia.direccion || "",
-      entreCalles: copia.entreCalles || "",
-      partido: copia.partido || "",
-      telefono: copia.telefono || "",
+      nombre: (copia.nombre || "").trim(),
+      direccion: (copia.direccion || "").trim(),
+      entreCalles: (copia.entreCalles || "").trim(),
+      partido: (copia.partido || "").trim(),
+      telefono: (copia.telefono || "").trim(),
       productos: productosClonados,
     });
-  }, [show, pedido, catalogo]);
+  }, [show, pedido, catalogoByNombre]);
 
-  const handleInputChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
-  const handleProductoChange = (index, campo, valor) => {
-    const nuevos = [...form.productos];
-    nuevos[index][campo] = campo === "cantidad" ? parseInt(valor) || 0 : valor;
+  const handleProductoChange = useCallback(
+    (index, campo, valor) => {
+      setForm((prev) => {
+        const productos = [...prev.productos];
+        const item = { ...productos[index] };
 
-    if (campo === "nombre") {
-      const prod = catalogo.find((p) => p.nombre === valor);
-      // si cambia el nombre, actualizamos el precio desde el catálogo (si existe)
-      nuevos[index].precio = prod?.precio ?? 0;
-    }
+        if (campo === "nombre") {
+          item.nombre = valor;
+          const prod = catalogoByNombre.get(String(valor));
+          item.precio = prod?.precio ?? 0; // mantener lógica: precio viene del catálogo
+        } else if (campo === "cantidad") {
+          const n = Math.max(0, parseInt(valor, 10) || 0); // sin negativos/NaN
+          item.cantidad = n;
+        }
 
-    setForm({ ...form, productos: nuevos });
-  };
+        productos[index] = item;
+        return { ...prev, productos };
+      });
+    },
+    [catalogoByNombre]
+  );
 
-  const agregarProducto = () => {
+  const agregarProducto = useCallback(() => {
     setForm((prev) => ({
       ...prev,
       productos: [...prev.productos, { nombre: "", cantidad: 1, precio: 0 }],
     }));
-  };
+  }, []);
 
-  const eliminarProducto = (index) => {
-    const nuevos = [...form.productos];
-    nuevos.splice(index, 1);
-    setForm({ ...form, productos: nuevos });
-  };
+  const eliminarProducto = useCallback((index) => {
+    setForm((prev) => {
+      const productos = [...prev.productos];
+      productos.splice(index, 1);
+      return { ...prev, productos };
+    });
+  }, []);
 
-  const calcularResumen = () => {
-    const resumen = form.productos
-      .map((p) => {
-        const linea = `${p.nombre} x${p.cantidad}`;
-        return p.precio
-          ? `${linea} ($${(p.precio * p.cantidad).toLocaleString("es-AR")})`
-          : linea;
-      })
-      .join(" - ");
+  // Resumen y total (memoizado)
+  const { resumen, total } = useMemo(() => {
+    const lineas = [];
+    let t = 0;
+    for (const p of form.productos) {
+      const nombre = String(p.nombre || "");
+      const cantidad = Number(p.cantidad) || 0;
+      const precio = Number(p.precio) || 0;
+      if (!nombre || cantidad <= 0) continue; // no contaminar el resumen
+      const subtotal = precio * cantidad;
+      t += subtotal;
+      lineas.push(
+        precio
+          ? `${nombre} x${cantidad} ($${subtotal.toLocaleString("es-AR")})`
+          : `${nombre} x${cantidad}`
+      );
+    }
+    return {
+      resumen: lineas.join(" - "),
+      total: t,
+    };
+  }, [form.productos]);
 
-    const total = form.productos.reduce(
-      (acc, p) => acc + (p.precio || 0) * (p.cantidad || 0),
-      0
-    );
-
-    return { resumen, total };
-  };
-
-  const handleGuardar = () => {
-    const { resumen, total } = calcularResumen();
+  const handleGuardar = useCallback(() => {
     const pedidoFinal = `${resumen} | TOTAL: $${total.toLocaleString("es-AR")}`;
+    // Mantener la lógica: devolvemos el pedido con los campos editados y la cadena `pedido`
     onGuardar({
       ...pedido,
       ...form,
       pedido: pedidoFinal,
       productos: form.productos,
+      monto: total
     });
-  };
+  }, [onGuardar, pedido, form, resumen, total]);
 
   if (!show) return null;
 
@@ -124,10 +161,10 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
       <div className="w-full max-w-2xl p-6 shadow-lg bg-base-100 text-base-content rounded-xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">✏️ Editar Pedido</h2>
-          <button onClick={onClose} className="text-white btn btn-sm btn-error">✖</button>
+          <button type="button" onClick={onClose} className="text-white btn btn-sm btn-error">✖</button>
         </div>
 
-        <form className="grid gap-4">
+        <form className="grid gap-4" onSubmit={(e) => e.preventDefault()}>
           {["nombre", "direccion", "entreCalles", "partido", "telefono"].map((campo) => (
             <div key={campo}>
               <label className="block font-semibold capitalize">{campo}</label>
@@ -160,6 +197,7 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
                 <input
                   className="col-span-2 input input-bordered"
                   type="number"
+                  min={0}
                   placeholder="Cant."
                   value={prod.cantidad}
                   onChange={(e) => handleProductoChange(i, "cantidad", e.target.value)}
@@ -168,9 +206,9 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
                   ${prod.precio ?? 0}
                 </div>
                 <button
+                  type="button"
                   className="col-span-2 btn btn-sm btn-error"
                   onClick={() => eliminarProducto(i)}
-                  type="button"
                 >
                   ❌
                 </button>
@@ -187,19 +225,14 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
               className="w-full textarea textarea-bordered"
               readOnly
               rows={3}
-              value={
-                (() => {
-                  const { resumen, total } = calcularResumen();
-                  return `${resumen} | TOTAL: $${total.toLocaleString("es-AR")}`;
-                })()
-              }
+              value={`${resumen} | TOTAL: $${total.toLocaleString("es-AR")}`}
             />
           </div>
         </form>
 
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={onClose} className="btn btn-outline">Cancelar</button>
-          <button onClick={handleGuardar} className="btn btn-primary">Guardar cambios</button>
+          <button type="button" onClick={onClose} className="btn btn-outline">Cancelar</button>
+          <button type="button" onClick={handleGuardar} className="btn btn-primary">Guardar cambios</button>
         </div>
       </div>
     </div>

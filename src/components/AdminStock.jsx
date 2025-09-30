@@ -1,4 +1,5 @@
-// src/components/AdminStock.jsx
+// src/components/AdminStock.jsx — agrega Exportar Excel (productos)
+/* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -13,11 +14,13 @@ import { nanoid } from "nanoid";
 import Swal from "sweetalert2";
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia.js";
+import * as XLSX from "xlsx";
 
 function AdminStock() {
   const { provinciaId } = useProvincia();
 
   const [productos, setProductos] = useState([]);
+  const [originales, setOriginales] = useState({});
   const [filtro, setFiltro] = useState("");
 
   const [nuevoProducto, setNuevoProducto] = useState({
@@ -38,34 +41,69 @@ function AdminStock() {
     const snapshot = await getDocs(colProductos);
     const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
     setProductos(data);
+
+    const ori = {};
+    for (const p of data) {
+      ori[p.id] = normalizarPayload(p);
+    }
+    setOriginales(ori);
   };
 
-  // ---------- GUARDAR UNO (sin recargar toda la lista) ----------
+  // ---------- helpers ----------
+  const normalizarPayload = (obj) => ({
+    nombre: String(obj.nombre || "").trim(),
+    precio: Number(obj.precio) || 0,
+    stock: Number(obj.stock) || 0,
+    stockMinimo: Number(obj.stockMinimo) || 0,
+    esCombo: !!obj.esCombo,
+    componentes: Array.isArray(obj.componentes) ? obj.componentes : [],
+  });
+
+  const igualesShallow = (a, b) => {
+    if (
+      (a.nombre || "") !== (b.nombre || "") ||
+      Number(a.precio || 0) !== Number(b.precio || 0) ||
+      Number(a.stock || 0) !== Number(b.stock || 0) ||
+      Number(a.stockMinimo || 0) !== Number(b.stockMinimo || 0) ||
+      Boolean(a.esCombo) !== Boolean(b.esCombo) ||
+      JSON.stringify(a.componentes || []) !== JSON.stringify(b.componentes || [])
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  // ---------- GUARDAR UNO ----------
   const actualizarProducto = async (producto) => {
-    const payload = {
-      nombre: producto.nombre,
-      precio: Number(producto.precio) || 0,
-      stock: Number(producto.stock) || 0,
-      stockMinimo: Number(producto.stockMinimo) || 0,
-      esCombo: !!producto.esCombo,
-      componentes: producto.componentes || [],
-    };
+    const payload = normalizarPayload(producto);
+    const originalNorm = originales[producto.id] || normalizarPayload({});
+
+    if (igualesShallow(originalNorm, payload)) {
+      return Swal.fire({
+        icon: "info",
+        title: "Sin cambios",
+        text: `No hay cambios en "${payload.nombre}"`,
+        toast: true,
+        position: "top-end",
+        timer: 1400,
+        showConfirmButton: false,
+      });
+    }
 
     try {
       await updateDoc(
         doc(db, "provincias", provinciaId, "productos", producto.id),
         payload
       );
-
-      // Actualizo SOLO ese item en el estado local (no pisamos el resto)
       setProductos((prev) =>
         prev.map((p) => (p.id === producto.id ? { ...p, ...payload } : p))
       );
+      setOriginales((prev) => ({ ...prev, [producto.id]: payload }));
 
       Swal.fire({
         icon: "success",
         title: "Guardado",
-        text: `El producto "${producto.nombre}" se guardó correctamente.`,
+        text: `El producto "${payload.nombre}" se guardó correctamente.`,
         toast: true,
         position: "top-end",
         showConfirmButton: false,
@@ -82,31 +120,36 @@ function AdminStock() {
     }
   };
 
-  // ---------- AGREGAR UNO (sin recargar todo) ----------
+  // ---------- AGREGAR UNO ----------
   const agregarProducto = async () => {
     try {
-      const id = nanoid();
-      const payload = {
-        nombre: String(nuevoProducto.nombre || "").trim(),
-        precio: Number(nuevoProducto.precio) || 0,
-        stock: Number(nuevoProducto.stock) || 0,
-        stockMinimo: Number(nuevoProducto.stockMinimo) || 0,
-        esCombo: !!nuevoProducto.esCombo,
-        componentes: nuevoProducto.componentes || [],
-      };
+      const payload = normalizarPayload(nuevoProducto);
+      if (!payload.nombre) {
+        return Swal.fire({ icon: "warning", title: "Nombre requerido" });
+      }
 
+      const id = nanoid();
       await setDoc(doc(db, "provincias", provinciaId, "productos", id), payload);
 
-      // Lo sumamos localmente
       setProductos((prev) => [...prev, { id, ...payload }]);
+      setOriginales((prev) => ({ ...prev, [id]: payload }));
 
       setNuevoProducto({
         nombre: "",
         precio: "",
         stock: 0,
-        stockMinimo: 1,
+        stockMinimo: 10,
         esCombo: false,
         componentes: [],
+      });
+
+      Swal.fire({
+        icon: "success",
+        title: "Producto agregado",
+        toast: true,
+        position: "top-end",
+        timer: 1600,
+        showConfirmButton: false,
       });
     } catch (e) {
       console.error(e);
@@ -114,12 +157,25 @@ function AdminStock() {
     }
   };
 
-  // ---------- ELIMINAR UNO (sin recargar todo) ----------
+  // ---------- ELIMINAR UNO ----------
   const eliminarProducto = async (id) => {
     try {
       await deleteDoc(doc(db, "provincias", provinciaId, "productos", id));
-      // Quitar del estado local
       setProductos((prev) => prev.filter((p) => p.id !== id));
+      setOriginales((prev) => {
+        const c = { ...prev };
+        delete c[id];
+        return c;
+      });
+
+      Swal.fire({
+        icon: "success",
+        title: "Eliminado",
+        toast: true,
+        position: "top-end",
+        timer: 1400,
+        showConfirmButton: false,
+      });
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se pudo eliminar el producto", "error");
@@ -131,12 +187,10 @@ function AdminStock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provinciaId]);
 
-  // ======== Mapa id -> nombre para mostrar nombres en combos ========
+  // ======== Mapa id -> nombre para combos ========
   const idToNombre = useMemo(() => {
     const m = {};
-    for (const p of productos) {
-      m[p.id] = p.nombre || "(sin nombre)";
-    }
+    for (const p of productos) m[p.id] = p.nombre || "(sin nombre)";
     return m;
   }, [productos]);
 
@@ -145,6 +199,115 @@ function AdminStock() {
       (p.nombre || "").toLowerCase().includes((filtro || "").toLowerCase())
     )
     .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+
+  /* =============== EXPORTAR EXCEL (NUEVO) =============== */
+  const exportarExcel = () => {
+    try {
+      const ahora = new Date();
+      const fechaStr = `${ahora.getFullYear()}-${String(
+        ahora.getMonth() + 1
+      ).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+
+      // Cabecera
+      const header = [
+        "Nombre",
+        "Precio",
+        "Stock",
+        "Stock mínimo",
+        "¿Es combo?",
+        "Componentes (id×cant | nombre×cant)",
+      ];
+
+      // Filas
+      const filas = productosFiltrados.map((p) => {
+        const precio = Number(p.precio) || 0;
+        const stock = Number(p.stock) || 0;
+        const stockMin = Number(p.stockMinimo) || 0;
+        const esCombo =
+          !!p.esCombo ||
+          String(p.nombre || "").toLowerCase().includes("combo");
+
+        // stringify componentes: “id×cant (nombre)”
+        let compStr = "";
+        if (esCombo && Array.isArray(p.componentes) && p.componentes.length) {
+          compStr = p.componentes
+            .map((c) => {
+              const nombre = idToNombre[c.id] || "";
+              return nombre
+                ? `${nombre}×${c.cantidad} (id:${String(c.id).slice(0, 6)}…)`
+                : `id:${c.id}×${c.cantidad}`;
+            })
+            .join(" | ");
+        }
+
+        return [
+          String(p.nombre || ""),
+          precio,
+          stock,
+          stockMin,
+          esCombo ? "Sí" : "No",
+          compStr,
+        ];
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet([
+        [`Productos — Prov: ${provinciaId} — ${fechaStr}`],
+        [""],
+        header,
+        ...filas,
+      ]);
+
+      // Anchos de columnas amigables
+      ws["!cols"] = [
+        { wch: 40 }, // Nombre
+        { wch: 10 }, // Precio
+        { wch: 8 },  // Stock
+        { wch: 12 }, // Stock mínimo
+        { wch: 9 },  // ¿Es combo?
+        { wch: 60 }, // Componentes
+      ];
+
+      // Dar formato número a Precio y Stock/Min
+      const firstDataRow = 3; // 0-based (fila donde empieza data)
+      for (let r = firstDataRow; r < firstDataRow + filas.length; r++) {
+        // Precio = col 1
+        const precioRef = XLSX.utils.encode_cell({ r, c: 1 });
+        if (ws[precioRef]) {
+          ws[precioRef].t = "n";
+          ws[precioRef].z = "#,##0.00";
+        }
+        // Stock = col 2
+        const stockRef = XLSX.utils.encode_cell({ r, c: 2 });
+        if (ws[stockRef]) {
+          ws[stockRef].t = "n";
+          ws[stockRef].z = "#,##0";
+        }
+        // Stock mínimo = col 3
+        const stockMinRef = XLSX.utils.encode_cell({ r, c: 3 });
+        if (ws[stockMinRef]) {
+          ws[stockMinRef].t = "n";
+          ws[stockMinRef].z = "#,##0";
+        }
+      }
+
+      ws["!autofilter"] = {
+        ref: XLSX.utils.encode_range({
+          s: { r: 2, c: 0 },
+          e: { r: 2, c: header.length - 1 },
+        }),
+      };
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Productos");
+
+      const fileName = `productos_${provinciaId}_${fechaStr}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (e) {
+      console.error(e);
+      Swal.fire("❌ Error", "No se pudo exportar el Excel de productos.", "error");
+    }
+  };
+  /* ====================================================== */
 
   return (
     <div className="min-h-screen p-6 bg-base-100 text-base-content">
@@ -163,6 +326,10 @@ function AdminStock() {
             <button className="btn btn-outline btn-sm" onClick={cargarProductos}>
               Refrescar
             </button>
+            {/* ⬇️ NUEVO: Exportar Excel */}
+            <button className="btn btn-accent btn-sm" onClick={exportarExcel}>
+              📤 Exportar Excel
+            </button>
           </div>
         </div>
 
@@ -178,10 +345,7 @@ function AdminStock() {
                 className="w-full input input-bordered"
                 value={nuevoProducto.nombre}
                 onChange={(e) =>
-                  setNuevoProducto({
-                    ...nuevoProducto,
-                    nombre: e.target.value,
-                  })
+                  setNuevoProducto({ ...nuevoProducto, nombre: e.target.value })
                 }
               />
             </div>
@@ -194,10 +358,7 @@ function AdminStock() {
                 type="number"
                 value={nuevoProducto.precio}
                 onChange={(e) =>
-                  setNuevoProducto({
-                    ...nuevoProducto,
-                    precio: e.target.value,
-                  })
+                  setNuevoProducto({ ...nuevoProducto, precio: e.target.value })
                 }
               />
             </div>
@@ -210,10 +371,7 @@ function AdminStock() {
                 type="number"
                 value={nuevoProducto.stock}
                 onChange={(e) =>
-                  setNuevoProducto({
-                    ...nuevoProducto,
-                    stock: e.target.value,
-                  })
+                  setNuevoProducto({ ...nuevoProducto, stock: e.target.value })
                 }
               />
             </div>
@@ -226,10 +384,7 @@ function AdminStock() {
                 type="number"
                 value={nuevoProducto.stockMinimo}
                 onChange={(e) =>
-                  setNuevoProducto({
-                    ...nuevoProducto,
-                    stockMinimo: e.target.value,
-                  })
+                  setNuevoProducto({ ...nuevoProducto, stockMinimo: e.target.value })
                 }
               />
             </div>
@@ -242,31 +397,21 @@ function AdminStock() {
                 className="toggle toggle-primary"
                 checked={nuevoProducto.esCombo}
                 onChange={(e) =>
-                  setNuevoProducto({
-                    ...nuevoProducto,
-                    esCombo: e.target.checked,
-                  })
+                  setNuevoProducto({ ...nuevoProducto, esCombo: e.target.checked })
                 }
               />
             </div>
           </div>
 
-          {/* Componentes del combo (al agregar) */}
           {nuevoProducto.esCombo && (
             <div className="mt-6">
               <h4 className="mb-2 font-semibold">🧩 Componentes del combo</h4>
               {productos
                 .filter(
-                  (p) =>
-                    !String(p.nombre || "")
-                      .toLowerCase()
-                      .includes("combo")
+                  (p) => !String(p.nombre || "").toLowerCase().includes("combo")
                 )
                 .map((prodBase) => (
-                  <div
-                    key={prodBase.id}
-                    className="flex items-center gap-3 mb-2"
-                  >
+                  <div key={prodBase.id} className="flex items-center gap-3 mb-2">
                     <span className="w-full">{prodBase.nombre}</span>
                     <input
                       type="number"
@@ -390,7 +535,6 @@ function AdminStock() {
                   />
                 </div>
 
-                {/* Componentes si es combo (con NOMBRE + id recortado) */}
                 {esCombo &&
                   Array.isArray(prod.componentes) &&
                   prod.componentes.length > 0 && (
@@ -423,14 +567,29 @@ function AdminStock() {
 
                 <div className="flex justify-end gap-2 mt-4">
                   <button
-                    className="btn btn-warning btn-sm"
-                    onClick={() => actualizarProducto(prod)}
+                    className={`btn btn-warning btn-sm ${prod._busy ? "btn-disabled" : ""}`}
+                    onClick={async () => {
+                      setProductos((p) =>
+                        p.map((pr) => (pr.id === prod.id ? { ...pr, _busy: true } : pr))
+                      );
+                      await actualizarProducto(prod);
+                      setProductos((p) =>
+                        p.map((pr) => (pr.id === prod.id ? { ...pr, _busy: false } : pr))
+                      );
+                    }}
+                    disabled={!!prod._busy}
                   >
                     💾 Guardar
                   </button>
                   <button
-                    className="btn btn-error btn-sm"
-                    onClick={() => eliminarProducto(prod.id)}
+                    className={`btn btn-error btn-sm ${prod._busy ? "btn-disabled" : ""}`}
+                    onClick={async () => {
+                      setProductos((p) =>
+                        p.map((pr) => (pr.id === prod.id ? { ...pr, _busy: true } : pr))
+                      );
+                      await eliminarProducto(prod.id);
+                    }}
+                    disabled={!!prod._busy}
                   >
                     🗑️ Eliminar
                   </button>

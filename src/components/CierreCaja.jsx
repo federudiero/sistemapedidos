@@ -1,4 +1,4 @@
-// src/admin/CierreCaja.jsx
+// src/components/CierreCaja.jsx — versión optimizada (correcciones tipográficas y de sintaxis)
 import React, { useEffect, useState, useMemo } from "react";
 import {
   collection,
@@ -14,6 +14,7 @@ import {
   Timestamp,
   writeBatch,
   increment,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import DatePicker from "react-datepicker";
@@ -134,6 +135,9 @@ export default function CierreCaja() {
   const [gastos, setGastos] = useState({});
   const [resumenGlobal, setResumenGlobal] = useState(null);
 
+  const [busyByEmail, setBusyByEmail] = useState({});
+  const [busyGlobal, setBusyGlobal] = useState(false);
+
   const fechaStr = useMemo(
     () => format(fechaSeleccionada, "yyyy-MM-dd"),
     [fechaSeleccionada]
@@ -191,7 +195,7 @@ export default function CierreCaja() {
       setPedidos(pedidosDelDia);
       setRepartidores([...repartidorSet]);
 
-      // Traigo cierres individuales existentes de la fecha (por si recargan)
+      // Traer cierres individuales existentes
       const nuevos = {};
       for (const email of repartidorSet) {
         const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
@@ -260,8 +264,22 @@ export default function CierreCaja() {
   };
 
   // ====== Cierre individual ======
+  const normalizarCierreIndividual = (email, entregados, noEntregados, totales, g) => ({
+    fechaStr,
+    emailRepartidor: email,
+    pedidosEntregados: entregados,
+    pedidosNoEntregados: noEntregados,
+    efectivo: totales.efectivo,
+    transferencia: totales.transferencia,
+    transferencia10: totales.transferencia10,
+    gastos: g,
+    provinciaId,
+  });
+
   const cerrarCajaIndividual = async (email) => {
     if (!provinciaId || !colCierresRepartidor || !colResumenVentas) return;
+    if (busyByEmail[email]) return;
+    setBusyByEmail((p) => ({ ...p, [email]: true }));
 
     const pedidosRep = pedidos.filter((p) => p.repartidor === email);
     const entregados = pedidosRep.filter((p) => p.entregado);
@@ -272,18 +290,19 @@ export default function CierreCaja() {
 
     try {
       const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-      await setDoc(ref, {
-        fechaStr,
-        emailRepartidor: email,
-        pedidosEntregados: entregados,
-        pedidosNoEntregados: noEntregados,
-        efectivo: totales.efectivo,
-        transferencia: totales.transferencia,
-        transferencia10: totales.transferencia10,
-        gastos: g,
-        provinciaId,
-        timestamp: new Date(),
-      });
+      const snap = await getDoc(ref);
+      const nuevo = normalizarCierreIndividual(email, entregados, noEntregados, totales, g);
+
+      if (snap.exists()) {
+        const anterior = snap.data();
+        const igual = JSON.stringify(limpiarFirestoreData(anterior)) === JSON.stringify(limpiarFirestoreData(nuevo));
+        if (igual) {
+          await Swal.fire("Sin cambios", `La caja de ${email} ya estaba guardada igual.`, "info");
+          return;
+        }
+      }
+
+      await setDoc(ref, { ...nuevo, timestamp: new Date() });
 
       setCierres((prev) => ({
         ...prev,
@@ -294,174 +313,217 @@ export default function CierreCaja() {
     } catch (e) {
       console.error("No se pudo cerrar caja individual:", e);
       Swal.fire("Error", "No se pudo cerrar la caja (reglas o red).", "error");
+    } finally {
+      setBusyByEmail((p) => ({ ...p, [email]: false }));
     }
   };
 
   // ====== Cierre GLOBAL (por provincia y por día) ======
   const cerrarGlobal = async () => {
     if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas) return;
+    if (busyGlobal) return;
+    setBusyGlobal(true);
 
-    // A) Bloquear si falta cerrar alguien (verificación **en Firestore**)
-    const faltan = [];
-    for (const email of repartidores) {
-      const snap = await getDoc(doc(colCierresRepartidor, `${fechaStr}_${email}`));
-      if (!snap.exists()) faltan.push(email);
-    }
-    if (faltan.length) {
-      await Swal.fire("Faltan cierres individuales", `No podés cerrar global. Restan: ${faltan.join(", ")}`, "warning");
-      return;
-    }
-
-    const acumuladoPorPath = new Map(); // pathStr -> { ref, qty }
-    const resumenPorNombre = {};        // nombre visible -> cantidad
-
-    // Cache lecturas de productos
-    const cacheProducto = new Map();
-    const leerProducto = async (ref, pathStr) => {
-      if (cacheProducto.has(pathStr)) return cacheProducto.get(pathStr);
-      const snap = await getDoc(ref);
-      const data = snap.exists() ? { id: ref.id, ...snap.data() } : null;
-      cacheProducto.set(pathStr, data);
-      return data;
-    };
-
-    // B) Recorrer cierres individuales **de la fecha** y acumular SOLO vendidos
-    for (const email of repartidores) {
-      let cierre = cierres[email];
-      if (!cierre?.pedidosEntregados) {
-        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-        const snap = await getDoc(ref);
-        if (snap.exists()) cierre = snap.data();
+    try {
+      // A) Bloquear si falta cerrar alguien (verificación **en Firestore**)
+      const faltan = [];
+      for (const email of repartidores) {
+        const snap = await getDoc(doc(colCierresRepartidor, `${fechaStr}_${email}`));
+        if (!snap.exists()) faltan.push(email);
       }
-      const entregados = cierre?.pedidosEntregados || [];
+      if (faltan.length) {
+        await Swal.fire("Faltan cierres individuales", `No podés cerrar global. Restan: ${faltan.join(", ")}`, "warning");
+        return;
+      }
 
-      for (const pedido of entregados) {
-        const productos = pedido?.productos || [];
-        for (const item of productos) {
-          const cant = Number(item?.cantidad || 0);
-          if (!cant) continue;
+      // B) Guard transaccional: evita dos cierres en paralelo o repetidos
+      const cierreGlobalRef = doc(colCierres, `global_${fechaStr}`);
+      try {
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(cierreGlobalRef);
+          const d = snap.exists() ? snap.data() : null;
+          if (d?.inProgress || d?.stockDescontado) {
+            throw new Error("YA_CERRADO_O_PROGRESO");
+          }
+          tx.set(cierreGlobalRef, { fechaStr, provinciaId, inProgress: true, timestamp: new Date() }, { merge: true });
+        });
+      } catch (e) {
+        if (String(e.message).includes("YA_CERRADO_O_PROGRESO")) {
+          await Swal.fire("Ya cerrado/en progreso", "Otro cierre global está en curso o ya finalizó.", "info");
+          return;
+        }
+        throw e;
+      }
 
-          const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
-          if (!ref || !pathStr) continue;
+      // C) Recorrer cierres individuales **de la fecha** y acumular SOLO vendidos
+      const acumuladoPorPath = new Map(); // pathStr -> { ref, qty }
+      const resumenPorNombre = {};        // nombre visible -> cantidad
 
-          // lee producto (por si es combo y para nombre)
-          const data = await leerProducto(ref, pathStr);
-          if (!data) continue;
+      // Cache lecturas de productos
+      const cacheProducto = new Map();
+      const leerProducto = async (ref, pathStr) => {
+        if (cacheProducto.has(pathStr)) return cacheProducto.get(pathStr);
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? { id: ref.id, ...snap.data() } : null;
+        cacheProducto.set(pathStr, data);
+        return data;
+      };
 
-          // descuenta el propio producto
-          acumular(acumuladoPorPath, ref, pathStr, cant);
+      for (const email of repartidores) {
+        let cierre = cierres[email];
+        if (!cierre?.pedidosEntregados) {
+          const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+          const snap = await getDoc(ref);
+          if (snap.exists()) cierre = snap.data();
+        }
+        const entregados = cierre?.pedidosEntregados || [];
 
-          // resumen visible por nombre base
-          const nombreBase = data?.nombre || item?.nombre || "SIN_NOMBRE";
-          resumenPorNombre[nombreBase] = (resumenPorNombre[nombreBase] || 0) + cant;
+        for (const pedido of entregados) {
+          const productos = pedido?.productos || [];
+          for (const item of productos) {
+            const cant = Number(item?.cantidad || 0);
+            if (!cant) continue;
 
-          // si es combo, sumar componentes
-          if (data?.esCombo && Array.isArray(data?.componentes)) {
-            for (const comp of data.componentes) {
-              const compCant = cant * Number(comp?.cantidad || 0);
-              if (!compCant) continue;
-              const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
-              const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
-              await leerProducto(compRef, compPath);
-              acumular(acumuladoPorPath, compRef, compPath, compCant);
+            const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
+            if (!ref || !pathStr) continue;
+
+            // lee producto (por si es combo y para nombre)
+            const data = await leerProducto(ref, pathStr);
+            if (!data) continue;
+
+            // descuenta el propio producto
+            acumular(acumuladoPorPath, ref, pathStr, cant);
+
+            // resumen visible por nombre base
+            const nombreBase = data?.nombre || item?.nombre || "SIN_NOMBRE";
+            resumenPorNombre[nombreBase] = (resumenPorNombre[nombreBase] || 0) + cant;
+
+            // si es combo, sumar componentes
+            if (data?.esCombo && Array.isArray(data?.componentes)) {
+              for (const comp of data.componentes) {
+                const compCant = cant * Number(comp?.cantidad || 0);
+                if (!compCant) continue;
+                const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
+                const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
+                await leerProducto(compRef, compPath);
+                acumular(acumuladoPorPath, compRef, compPath, compCant);
+              }
             }
           }
         }
       }
-    }
 
-    // C) Totales por método
-    let totalEfectivo = 0, totalTransferencia = 0, totalTransferencia10 = 0;
-    for (const email of repartidores) {
-      let cierre = cierres[email];
-      if (!cierre?.pedidosEntregados) {
-        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-        const snap = await getDoc(ref);
-        if (snap.exists()) cierre = snap.data();
-      }
-      const entregados = cierre?.pedidosEntregados || [];
-      for (const p of entregados) {
-        const metodo = p?.metodoPago ?? "efectivo";
-        const monto = Number(p?.monto || 0);
-        if (metodo === "efectivo") totalEfectivo += monto;
-        else if (metodo === "transferencia") totalTransferencia += monto;
-        else if (metodo === "transferencia10") totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
-        else if (metodo === "mixto") {
-          const ef = Number(p?.pagoMixtoEfectivo || 0);
-          const tr = Number(p?.pagoMixtoTransferencia || 0);
-          const con10 = !!p?.pagoMixtoCon10;
-          totalEfectivo += ef;
-          if (con10) totalTransferencia10 += Math.round(tr * 1.1 * 100) / 100;
-          else totalTransferencia += tr;
+      // D) Totales por método
+      let totalEfectivo = 0, totalTransferencia = 0, totalTransferencia10 = 0;
+      for (const email of repartidores) {
+        let cierre = cierres[email];
+        if (!cierre?.pedidosEntregados) {
+          const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+          const snap = await getDoc(ref);
+          if (snap.exists()) cierre = snap.data();
+        }
+        const entregados = cierre?.pedidosEntregados || [];
+        for (const p of entregados) {
+          const metodo = p?.metodoPago ?? "efectivo";
+          const monto = Number(p?.monto || 0);
+          if (metodo === "efectivo") totalEfectivo += monto;
+          else if (metodo === "transferencia") totalTransferencia += monto;
+          else if (metodo === "transferencia10") totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
+          else if (metodo === "mixto") {
+            const ef = Number(p?.pagoMixtoEfectivo || 0);
+            const tr = Number(p?.pagoMixtoTransferencia || 0);
+            const con10 = !!p?.pagoMixtoCon10;
+            totalEfectivo += ef;
+            if (con10) totalTransferencia10 += Math.round(tr * 1.1 * 100) / 100;
+            else totalTransferencia += tr;
+          }
         }
       }
-    }
 
-    // D) Confirmación con conteo real de escrituras
-    const ops = Array.from(acumuladoPorPath.values());
-    const totalDocsAActualizar = ops.length;
-    const totalUnidades = ops.reduce((a, b) => a + (Number(b.qty) || 0), 0);
+      // E) Confirmación con conteo real de escrituras
+      const ops = Array.from(acumuladoPorPath.values());
+      const totalDocsAActualizar = ops.length;
+      const totalUnidades = ops.reduce((a, b) => a + (Number(b.qty) || 0), 0);
 
-    const ok = await Swal.fire({
-      icon: "warning",
-      title: "Confirmar cierre global",
-      html: `Se actualizarán <b>${totalDocsAActualizar}</b> productos (<b>${totalUnidades}</b> unidades). ¿Deseás continuar?`,
-      showCancelButton: true,
-      confirmButtonText: "Sí, descontar stock",
-      cancelButtonText: "Cancelar",
-    });
-    if (!ok.isConfirmed) return;
-
-    // E) Guardar resumen visible
-    await setDoc(doc(colResumenVentas, fechaStr), {
-      fechaStr,
-      totalPorProducto: resumenPorNombre,
-      totalEfectivo,
-      totalTransferencia,
-      totalTransferencia10,
-      provinciaId,
-      timestamp: new Date(),
-    });
-
-    // F) Evitar doble descuento
-    const cierreGlobalRef = doc(colCierres, `global_${fechaStr}`);
-    const cierreSnap = await getDoc(cierreGlobalRef);
-    if (cierreSnap.exists() && cierreSnap.data()?.stockDescontado) {
-      await Swal.fire("Ya cerrado", "El stock ya fue descontado en este cierre global.", "info");
-      return;
-    }
-
-    // G) Saneamos tipo de stock **solo** en los productos a tocar y descontamos en chunks
-    await sanearStocksSiNecesario(ops);
-
-    const grupos = chunk(ops, 450);
-    for (const grupo of grupos) {
-      const batch = writeBatch(db);
-      for (const { ref, qty } of grupo) {
-        const n = Number(qty || 0);
-        if (!n) continue;
-        batch.set(ref, { stock: increment(-n) }, { merge: true });
+      const ok = await Swal.fire({
+        icon: "warning",
+        title: "Confirmar cierre global",
+        html: `Se actualizarán <b>${totalDocsAActualizar}</b> productos (<b>${totalUnidades}</b> unidades). ¿Deseás continuar?`,
+        showCancelButton: true,
+        confirmButtonText: "Sí, descontar stock",
+        cancelButtonText: "Cancelar",
+      });
+      if (!ok.isConfirmed) {
+        // liberar inProgress
+        await setDoc(cierreGlobalRef, { inProgress: false }, { merge: true });
+        return;
       }
-      await batch.commit();
-      await new Promise((r) => setTimeout(r, 120)); // respiro pequeño
-    }
 
-    // H) Marcar cierre global + auditoría mínima
-    await setDoc(
-      cierreGlobalRef,
-      {
+      // F) Early exit: si no hay nada para descontar, sólo marcar cierre y escribir resumen
+      if (ops.length === 0) {
+        await setDoc(doc(colResumenVentas, fechaStr), {
+          fechaStr,
+          totalPorProducto: {},
+          totalEfectivo,
+          totalTransferencia,
+          totalTransferencia10,
+          provinciaId,
+          timestamp: new Date(),
+        });
+        await setDoc(cierreGlobalRef, { stockDescontado: true, inProgress: false }, { merge: true });
+        await Swal.fire("Cierre Global realizado", "No había stock para descontar.", "success");
+        return;
+      }
+
+      // G) Saneamos tipo de stock **solo** en los productos a tocar y descontamos en chunks
+      await sanearStocksSiNecesario(ops);
+
+      const grupos = chunk(ops, 450);
+      for (const grupo of grupos) {
+        const batch = writeBatch(db);
+        for (const { ref, qty } of grupo) {
+          const n = Number(qty || 0);
+          if (!n) continue;
+          batch.set(ref, { stock: increment(-n) }, { merge: true });
+        }
+        await batch.commit();
+        await new Promise((r) => setTimeout(r, 120)); // respiro pequeño
+      }
+
+      // H) Guardar resumen visible (solo si realmente ejecutamos el cierre)
+      await setDoc(doc(colResumenVentas, fechaStr), {
         fechaStr,
-        tipo: "global",
-        repartidores,
-        stockDescontado: true,
+        totalPorProducto: resumenPorNombre,
+        totalEfectivo,
+        totalTransferencia,
+        totalTransferencia10,
         provinciaId,
-        ejecutadoPor: (window?.__authEmail) || null, // opcional si tenés auth.global
         timestamp: new Date(),
-      },
-      { merge: true }
-    );
+      });
 
-    await Swal.fire("Cierre Global realizado", "Se descontó stock y se guardó el resumen.", "success");
+      // I) Marcar cierre global y liberar lock
+      await setDoc(
+        cierreGlobalRef,
+        {
+          fechaStr,
+          tipo: "global",
+          repartidores,
+          stockDescontado: true,
+          inProgress: false,
+          provinciaId,
+          ejecutadoPor: (window?.__authEmail) || null,
+          timestamp: new Date(),
+        },
+        { merge: true }
+      );
+
+      await Swal.fire("Cierre Global realizado", "Se descontó stock y se guardó el resumen.", "success");
+    } catch (e) {
+      console.error("Error en cierre global:", e);
+      Swal.fire("Error", "No se pudo ejecutar el cierre global.", "error");
+    } finally {
+      setBusyGlobal(false);
+    }
   };
 
   // ====== Exportar Excel ======
@@ -515,9 +577,7 @@ export default function CierreCaja() {
       await deleteDoc(ref);
 
       Swal.fire("Anulado", `Cierre de ${email} anulado.`, "success");
-      setCierres((prev) => {
-        const copia = { ...prev }; delete copia[email]; return copia;
-      });
+      setCierres((prev) => { const copia = { ...prev }; delete copia[email]; return copia; });
     } catch (e) {
       console.error("Error al anular cierre:", e);
       Swal.fire("Error", "No se pudo anular el cierre. Ver consola.", "error");
@@ -715,7 +775,7 @@ export default function CierreCaja() {
                     value={gastos[email]?.[tipo] || ""}
                     onChange={(e) => handleGastoChange(email, tipo, e.target.value)}
                     className="w-32 input input-sm input-bordered"
-                    disabled={yaCerrado}
+                    disabled={yaCerrado || busyByEmail[email]}
                   />
                 </div>
               ))}
@@ -727,8 +787,8 @@ export default function CierreCaja() {
             </div>
 
             {!yaCerrado && (
-              <button onClick={() => cerrarCajaIndividual(email)} className="mt-4 btn btn-success">
-                Cerrar caja de {email}
+              <button onClick={() => cerrarCajaIndividual(email)} className={`mt-4 btn btn-success ${busyByEmail[email] ? "btn-disabled" : ""}`} disabled={!!busyByEmail[email]}>
+                {busyByEmail[email] ? "⏳ Cerrando…" : `Cerrar caja de ${email}`}
               </button>
             )}
 
@@ -758,12 +818,12 @@ export default function CierreCaja() {
 
           {!resumenGlobal && (
             <button
-              className="btn btn-accent"
+              className={`btn btn-accent ${busyGlobal ? "btn-disabled" : ""}`}
               onClick={cerrarGlobal}
-              disabled={repartidores.length === 0}
+              disabled={repartidores.length === 0 || busyGlobal}
               title="Requiere que todos los repartidores hayan cerrado (se verifica en Firestore)."
             >
-              🔐 Cerrar caja global del día
+              {busyGlobal ? "⏳ Cerrando global…" : "🔐 Cerrar caja global del día"}
             </button>
           )}
 

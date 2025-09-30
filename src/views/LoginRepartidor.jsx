@@ -1,67 +1,103 @@
+// src/views/LoginRepartidor.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth, googleProvider, db } from "../firebase/firebase";
-import { signInWithPopup, signOut, signInWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "../firebase/firebase";
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { useProvincia } from "../hooks/useProvincia.js";
+import { useProvincia } from "../hooks/useProvincia";
 import { isSuperAdmin } from "../constants/superadmins";
 
-const toArray = (v) => Array.isArray(v) ? v : (v && typeof v === "object") ? Object.keys(v) : [];
+const toArray = (v) =>
+  Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : [];
 
 export default function LoginRepartidor() {
   const navigate = useNavigate();
   const { provinciaId, setProvincia } = useProvincia();
 
-  const [error, setError] = useState("");
-  const [loadingLogin, setLoadingLogin] = useState(false);
   const [emailForm, setEmailForm] = useState("");
   const [passForm, setPassForm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => { if (!provinciaId) navigate("/seleccionar-provincia", { replace: true }); }, [provinciaId, navigate]);
+  useEffect(() => {
+    if (!provinciaId) navigate("/seleccionar-provincia", { replace: true });
+  }, [provinciaId, navigate]);
 
   const esRepartidor = async (email) => {
     if (isSuperAdmin(email)) return true;
     const ref = doc(db, "provincias", provinciaId, "config", "usuarios");
     const snap = await getDoc(ref);
     const data = snap.exists() ? snap.data() : {};
-    const lista = toArray(data.repartidores).map((e) => String(e || "").toLowerCase());
+    const lista = toArray(data.repartidores).map((e) =>
+      String(e || "").toLowerCase()
+    );
     return lista.includes(email);
   };
 
+  const limpiarStorageOtrosRoles = () => {
+    localStorage.removeItem("adminAutenticado");
+    localStorage.removeItem("vendedorAutenticado");
+    localStorage.removeItem("emailVendedor");
+  };
+
   const loginEmailPass = async () => {
-    if (!provinciaId) return;
-    setError(""); setLoadingLogin(true);
+    if (!provinciaId || loading) return;
+    setError("");
+    setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, emailForm.trim(), passForm);
-
       const email = String(cred.user?.email || "").toLowerCase();
       const ok = await esRepartidor(email);
-      if (!ok) { await signOut(auth); return setError("❌ Este correo no está autorizado como repartidor en esta provincia."); }
+      if (!ok) {
+        await signOut(auth);
+        return setError("❌ Este correo no está autorizado como repartidor en esta provincia.");
+      }
+      limpiarStorageOtrosRoles();
       localStorage.setItem("repartidorAutenticado", "true");
       localStorage.setItem("emailRepartidor", email);
       navigate("/repartidor", { replace: true });
     } catch (e) {
-      console.error(e); setError("❌ Usuario/contraseña inválidos.");
-    } finally { setLoadingLogin(false); }
+      console.error(e);
+      setError("❌ Usuario/contraseña inválidos.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGoogleLogin = async () => {
-    if (!provinciaId || loadingLogin) return;
-    setError(""); setLoadingLogin(true);
+  const loginGoogle = async () => {
+    if (!provinciaId || loading) return;
+    setError("");
+    setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const email = String(result.user?.email || "").toLowerCase();
+      const provider = new GoogleAuthProvider();
+      const res = await signInWithPopup(auth, provider);
+      const email = String(res.user?.email || "").toLowerCase();
       const ok = await esRepartidor(email);
-      if (!ok) { await signOut(auth); return setError("❌ Este correo no está autorizado como repartidor en esta provincia."); }
+      if (!ok) {
+        await signOut(auth);
+        return setError("❌ Este correo no está autorizado como repartidor en esta provincia.");
+      }
+      limpiarStorageOtrosRoles();
       localStorage.setItem("repartidorAutenticado", "true");
       localStorage.setItem("emailRepartidor", email);
       navigate("/repartidor", { replace: true });
     } catch (e) {
-      console.error(e); setError("❌ Error al iniciar sesión con Google.");
-    } finally { setLoadingLogin(false); }
+      console.error(e);
+      setError("❌ Error al iniciar sesión con Google.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const cambiarProvincia = () => { setProvincia(""); navigate("/seleccionar-provincia"); };
+  const cambiarProvincia = () => {
+    setProvincia("");
+    navigate("/seleccionar-provincia");
+  };
 
   return (
     <div className="relative flex items-center justify-center min-h-screen px-4 bg-base-100 text-base-content">
@@ -69,28 +105,47 @@ export default function LoginRepartidor() {
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">🚚 Acceso de Repartidor</h2>
           <div className="flex items-center gap-2">
-            <span className="font-mono badge badge-primary">Prov: {provinciaId || "—"}</span>
-            <button className="btn btn-xs btn-outline" onClick={cambiarProvincia}>Cambiar provincia</button>
+            <span className="font-mono badge badge-primary">
+              Prov: {provinciaId || "—"}
+            </span>
+            <button className="btn btn-xs btn-outline" onClick={cambiarProvincia}>
+              Cambiar provincia
+            </button>
           </div>
         </div>
 
-        {/* Email + Pass */}
         <div className="space-y-2">
-          <input className="w-full input input-bordered" placeholder="email@dominio.com"
-                 value={emailForm} onChange={(e) => setEmailForm(e.target.value)} />
-          <input className="w-full input input-bordered" type="password" placeholder="Contraseña"
-                 value={passForm} onChange={(e) => setPassForm(e.target.value)} />
-          <button className="w-full btn btn-primary" onClick={loginEmailPass} disabled={loadingLogin}>Ingresar</button>
+          <input
+            className="w-full input input-bordered"
+            placeholder="email@dominio.com"
+            value={emailForm}
+            onChange={(e) => setEmailForm(e.target.value)}
+          />
+          <input
+            className="w-full input input-bordered"
+            type="password"
+            placeholder="Contraseña"
+            value={passForm}
+            onChange={(e) => setPassForm(e.target.value)}
+          />
+          <button className="w-full btn btn-primary" onClick={loginEmailPass} disabled={loading}>
+            Ingresar
+          </button>
         </div>
 
         <div className="divider">o</div>
 
-        <button className="w-full btn btn-outline text-base-content hover:bg-base-300"
-                onClick={handleGoogleLogin} disabled={!provinciaId || loadingLogin}>
-          🚀 Iniciar sesión con Google
+        <button
+          className="w-full btn btn-outline"
+          onClick={loginGoogle}
+          disabled={!provinciaId || loading}
+        >
+          Iniciar sesión con Google
         </button>
 
-        <button className="w-full btn btn-outline" onClick={() => navigate("/home")}>⬅ Volver a Home</button>
+        <button className="w-full btn btn-outline" onClick={() => navigate("/home")}>
+          ⬅ Volver a Home
+        </button>
 
         {error && <div className="mt-4 text-sm alert alert-error">{error}</div>}
       </div>

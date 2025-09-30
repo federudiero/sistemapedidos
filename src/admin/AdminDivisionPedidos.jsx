@@ -3,29 +3,40 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { db } from "../firebase/firebase";
 import {
-  collection, getDocs, query, where, onSnapshot,
-  Timestamp, updateDoc, doc, deleteField, getDoc
+  collection, getDocs, query, where,
+  Timestamp, updateDoc, doc, deleteField, getDoc, limit
 } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import { startOfDay, endOfDay, format } from "date-fns";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useNavigate } from "react-router-dom";
 import MapaPedidos from "../components/MapaPedidos";
 import AdminNavbar from "../components/AdminNavbar";
-import { useProvincia } from "../hooks/useProvincia"; // ⬅️ ahora viene del hook
+import { useProvincia } from "../hooks/useProvincia";
+
+const SUPER_ADMINS = [
+  "federudiero@gmail.com",
+  "franco.coronel.134@gmail.com",
+  "eliascalderon731@gmail.com",
+].map((e) => e.toLowerCase());
 
 function AdminDivisionPedidos() {
   const navigate = useNavigate();
   const { provinciaId } = useProvincia();
+  const auth = getAuth();
 
   const [filtro, setFiltro] = useState("");
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Nuevo: mapa de cierres por repartidor y flag de cierre global
+  // Cierres por repartidor y cierre global
   const [cierresIndividuales, setCierresIndividuales] = useState({});
   const [cierreGlobal, setCierreGlobal] = useState(false);
+
+  const [repartidores, setRepartidores] = useState([]); // [{email,label}]
+  const [soyAdminProv, setSoyAdminProv] = useState(false);
 
   // --- refs de colecciones por provincia ---
   const colPedidos = useMemo(
@@ -36,52 +47,63 @@ function AdminDivisionPedidos() {
     () => (provinciaId ? collection(db, "provincias", provinciaId, "cierres") : null),
     [provinciaId]
   );
-  const colUsuarios = useMemo(
-    () => (provinciaId ? collection(db, "provincias", provinciaId, "usuarios") : null),
-    [provinciaId]
-  );
 
-   // Repartidores (subcolección 'usuarios' o fallback a 'config/usuarios')
-  const [repartidores, setRepartidores] = useState([]);
+  // ==== 1) Autorización mínima por pantalla (no sólo localStorage)
   useEffect(() => {
-    if (!provinciaId) return;
-    let unsub;
+    const adminAuth = localStorage.getItem("adminAutenticado");
+    if (!adminAuth) navigate("/admin");
+  }, [navigate]);
+
+  // ==== 2) Cargar repartidores y chequear si el usuario es admin de la provincia
+  useEffect(() => {
+    let mounted = true;
     const run = async () => {
-      if (colUsuarios) {
-        const qReps = query(colUsuarios, where("activo", "==", true), where("roles.repartidor", "==", true));
-        unsub = onSnapshot(qReps, async snap => {
-          if (!snap.empty) {
-            const emails = snap.docs.map((d, i) => ({
-              email: d.data().email,
-              label: d.data().displayName || d.data().email.split("@")[0] || `R${i + 1}`,
-            }));
-            setRepartidores(emails);
-          } else {
-            // Fallback: doc con arrays en /config/usuarios
-            const cfgRef = doc(db, "provincias", provinciaId, "config", "usuarios");
-            const cfg = await getDoc(cfgRef);
-            const arr = cfg.exists() ? (cfg.data().repartidores || []) : [];
-            setRepartidores(arr.map((email, i) => ({
-              email,
-              label: email.split("@")[0] || `R${i + 1}`,
-            })));
-          }
-        });
-      } else {
-        // Solo config si no hay subcolección
+      if (!provinciaId) return;
+      try {
+        // Siempre desde config/usuarios
         const cfgRef = doc(db, "provincias", provinciaId, "config", "usuarios");
         const cfg = await getDoc(cfgRef);
-        const arr = cfg.exists() ? (cfg.data().repartidores || []) : [];
-        setRepartidores(arr.map((email, i) => ({
-          email,
-          label: email.split("@")[0] || `R${i + 1}`,
-        })));
+        const data = cfg.exists() ? cfg.data() : {};
+        const toArr = (v) => (Array.isArray(v) ? v : v ? Object.keys(v) : []);
+
+        // 📛 Mapa de nombres { email(lower): "Nombre" }
+        const nombresMapRaw = data.nombres || {};
+        const nombresMap = Object.fromEntries(
+          Object.entries(nombresMapRaw).map(([k, v]) => [
+            String(k || "").toLowerCase(),
+            String(v || ""),
+          ])
+        );
+
+        // Repartidores con label = nombre (o antes del @)
+        const reps = toArr(data.repartidores).map((email, i) => {
+          const em = String(email || "");
+          const emLower = em.toLowerCase();
+          const label = nombresMap[emLower] || em.split("@")[0] || `R${i + 1}`;
+          return { email: em, label };
+        });
+
+        const admins = toArr(data.admins).map((e) => String(e || "").toLowerCase());
+        const emailAuth = String(auth.currentUser?.email || "").toLowerCase();
+        const esAdminLocal = admins.includes(emailAuth) || SUPER_ADMINS.includes(emailAuth);
+
+        if (mounted) {
+          setRepartidores(reps);
+          setSoyAdminProv(esAdminLocal);
+        }
+      } catch (e) {
+        console.error("Error leyendo config/usuarios:", e);
+        if (mounted) {
+          setRepartidores([]);
+          setSoyAdminProv(false);
+        }
       }
     };
     run();
-    return () => unsub && unsub();
-  }, [provinciaId, colUsuarios]);
+    return () => { mounted = false; };
+  }, [provinciaId, auth]);
 
+  // ==== 3) Cargar pedidos del día (rango inclusivo, igual a tus otras pantallas)
   const cargarPedidosPorFecha = async (fecha) => {
     if (!colPedidos) return;
     setLoading(true);
@@ -89,35 +111,30 @@ function AdminDivisionPedidos() {
     const fin = Timestamp.fromDate(endOfDay(fecha));
     const qy = query(colPedidos, where("fecha", ">=", inicio), where("fecha", "<=", fin));
     const snapshot = await getDocs(qy);
-    const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const data = snapshot.docs.map((docu) => ({ id: docu.id, ...docu.data() }));
     setPedidos(data);
     setLoading(false);
   };
 
-  // Trae cierres y arma: { emailRepartidor: true } + detecta cierre global
+  // ==== 4) Traer cierres del día => { emailRepartidor: true } + cierre global
   useEffect(() => {
     const verificarCierres = async () => {
       if (!colCierres) return;
       const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
-      const snap = await getDocs(query(colCierres, where("fechaStr", "==", fechaStr)));
+      const snap = await getDocs(query(colCierres, where("fechaStr", "==", fechaStr), limit(50)));
 
       const map = {};
       let hayGlobal = false;
 
       snap.forEach((d) => {
         const data = d.data();
-        if (data?.tipo === "global" || d.id === `global_${fechaStr}`) {
-          hayGlobal = true;
-        }
-        if (data?.emailRepartidor) {
-          map[data.emailRepartidor] = true;
-        }
+        if (data?.tipo === "global" || d.id === `global_${fechaStr}`) hayGlobal = true;
+        if (data?.emailRepartidor) map[String(data.emailRepartidor).toLowerCase()] = true;
       });
 
       setCierresIndividuales(map);
       setCierreGlobal(hayGlobal);
     };
-
     verificarCierres();
   }, [fechaSeleccionada, colCierres]);
 
@@ -125,33 +142,65 @@ function AdminDivisionPedidos() {
     const adminAuth = localStorage.getItem("adminAutenticado");
     if (!adminAuth) navigate("/admin");
     else cargarPedidosPorFecha(fechaSeleccionada);
-  }, [fechaSeleccionada, navigate, provinciaId]); // ⬅️ recarga si cambia provincia
+  }, [fechaSeleccionada, navigate, provinciaId]); // recarga si cambia provincia
 
+  // ==== 5) Asignar / desasignar con guards alineados a reglas
   const handleAsignar = async (pedidoId, email, asignar = true) => {
     try {
       if (!provinciaId) return;
+
+      const emailAuth = String(auth.currentUser?.email || "").toLowerCase();
+      if (!soyAdminProv) {
+        alert(`No tenés permisos de administrador en la provincia ${provinciaId} con ${emailAuth}.`);
+        return;
+      }
+
       const pedidoRef = doc(db, "provincias", provinciaId, "pedidos", pedidoId);
+
+      // ↓↓↓ PRIMERO obtenemos el doc (antes de usar "snap")
+      const snap = await getDoc(pedidoRef);
+      const data = snap.exists() ? snap.data() : {};
+
+      console.log("👤 auth:", emailAuth, "provinciaId:", provinciaId);
+      console.log("🧾 doc.entregado:", data.entregado, "doc.asignadoA:", data.asignadoA);
+      console.log(
+        "➡️ updateDoc PATH:",
+        pedidoRef.path,
+        "update:",
+        asignar ? { asignadoA: [email] } : { asignadoA: [], ordenRuta: "<deleteField>" }
+      );
+
+      // Evitar chocar con la regla: si está entregado, no se puede actualizar
+      if (data.entregado === true) {
+        alert("Este pedido ya está marcado como ENTREGADO. No se puede modificar la asignación.");
+        return;
+      }
+
       const updateObj = asignar
         ? { asignadoA: [email] }
         : { asignadoA: [], ordenRuta: deleteField() };
 
+      console.log(updateObj);
       await updateDoc(pedidoRef, updateObj);
 
-      setPedidos((prev) =>
-        prev.map((p) =>
-          p.id === pedidoId
-            ? { ...p, ...updateObj }
-            : p
-        )
-      );
+      // Refrescar estado local
+      setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, ...updateObj } : p)));
     } catch (err) {
+      if (err?.code === "permission-denied") {
+        alert(
+          "Permiso denegado por reglas:\n" +
+          "• Asegurate de ser admin de esta provincia.\n" +
+          "• Verifica que el pedido NO esté entregado.\n" +
+          "• Si el día está cerrado, no se puede modificar."
+        );
+      }
       console.error("❌ Error al asignar/desasignar repartidor:", err);
     }
   };
 
   const pedidosFiltrados = pedidos.filter((p) =>
-    p.nombre?.toLowerCase().includes(filtro.toLowerCase()) ||
-    p.direccion?.toLowerCase().includes(filtro.toLowerCase())
+    (p.nombre || "").toLowerCase().includes(filtro.toLowerCase()) ||
+    (p.direccion || "").toLowerCase().includes(filtro.toLowerCase())
   );
 
   return (
@@ -166,7 +215,6 @@ function AdminDivisionPedidos() {
         <div className="font-mono badge badge-primary badge-lg">Prov: {provinciaId}</div>
       </div>
 
-      {/* ⚠️ Cartel si el día está cerrado globalmente */}
       {cierreGlobal && (
         <div className="p-4 mb-4 text-center text-warning-content bg-warning rounded-xl">
           ⚠️ El día está cerrado globalmente. No se pueden asignar ni modificar pedidos.
@@ -206,14 +254,15 @@ function AdminDivisionPedidos() {
                 <th>📌 Dirección</th>
                 <th>📝 Pedido</th>
                 {repartidores.map((r) => (
-                  <th key={r.email} className="text-center">{r.label}</th>
+                  <th key={r.email} className="text-center" title={r.email}>{r.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="bg-base-100">
               {pedidosFiltrados.map((p) => {
                 const asignadoActual = Array.isArray(p.asignadoA) ? p.asignadoA[0] : undefined;
-                const bloqueadoPorCierre = !!(asignadoActual && cierresIndividuales[asignadoActual]);
+                const bloqueadoPorCierre = !!(asignadoActual && cierresIndividuales[String(asignadoActual).toLowerCase()]);
+                const entregado = !!p.entregado;
 
                 return (
                   <tr key={p.id} className="border-t border-base-300">
@@ -221,12 +270,14 @@ function AdminDivisionPedidos() {
                     <td>{p.direccion}</td>
                     <td className="whitespace-pre-wrap">{p.pedido}</td>
                     {repartidores.map((r) => {
-                      const asignado = p.asignadoA?.includes(r.email) || false;
-                      const repartidorCerrado = !!cierresIndividuales[r.email];
+                      const asignado = Array.isArray(p.asignadoA)
+                        ? p.asignadoA.map((e) => String(e || "").toLowerCase()).includes(String(r.email).toLowerCase())
+                        : String(p.asignadoA || "").toLowerCase() === String(r.email).toLowerCase();
 
-                      // Deshabilita si: cierre global, el repartidor ya cerró,
-                      // o el pedido está asignado a un repartidor que ya cerró.
-                      const disabled = cierreGlobal || repartidorCerrado || bloqueadoPorCierre;
+                      const repartidorCerrado = !!cierresIndividuales[String(r.email).toLowerCase()];
+
+                      const disabled =
+                        !soyAdminProv || cierreGlobal || repartidorCerrado || bloqueadoPorCierre || entregado;
 
                       return (
                         <td key={r.email} className="text-center">
@@ -236,6 +287,14 @@ function AdminDivisionPedidos() {
                             checked={asignado}
                             onChange={(e) => handleAsignar(p.id, r.email, e.target.checked)}
                             disabled={disabled}
+                            title={
+                              !soyAdminProv ? "Solo administradores" :
+                              cierreGlobal ? "Día cerrado globalmente" :
+                              repartidorCerrado ? "Este repartidor ya cerró el día" :
+                              bloqueadoPorCierre ? "El repartidor asignado ya cerró" :
+                              entregado ? "Pedido entregado" :
+                              ""
+                            }
                           />
                         </td>
                       );
@@ -248,10 +307,10 @@ function AdminDivisionPedidos() {
         </div>
       )}
 
-      <MapaPedidos
-        pedidos={pedidos.filter(p => !Array.isArray(p.asignadoA) || p.asignadoA.length === 0)}
-        onAsignarRepartidor={handleAsignar}
-      />
+     <MapaPedidos
+       pedidos={pedidos.filter(p => !Array.isArray(p.asignadoA) || p.asignadoA.length === 0)}
+       onAsignarRepartidor={handleAsignar}
+     />
     </div>
   );
 }

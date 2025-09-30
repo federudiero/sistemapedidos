@@ -43,6 +43,8 @@ const AdminNavbar = () => {
             <li><Link to="/admin/dividir-pedidos">División de Pedidos</Link></li>
             <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
             <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
+            <li><Link to="/admin/LiquidacionesComisiones">LiquidacionesComisiones</Link></li>
+          
             <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
             <li><Link to="/admin/stock">Agregar Stock</Link></li>
             <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
@@ -61,6 +63,8 @@ const AdminNavbar = () => {
           <li><Link to="/admin/dividir-pedidos">División</Link></li>
           <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
           <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
+          <li><Link to="/admin/LiquidacionesComisiones">LiquidacionesComisiones</Link></li>
+          
           <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
           <li><Link to="/admin/stock">Agregar Stock</Link></li>
           <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
