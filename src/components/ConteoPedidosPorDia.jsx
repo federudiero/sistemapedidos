@@ -8,19 +8,17 @@ import {
   doc,
   query,
   where,
+  Timestamp,
 } from "firebase/firestore";
 import { format } from "date-fns";
 
 /**
- * ConteoPedidosPorDia
- * - Default: desglosa combos a unidades físicas (baldes, rodillos, enduido, etc.)
- * - Si no encuentra el combo en catálogo, usa reglas/patrones para desglosar.
- * - EXCLUYE envíos.
- *
- * Props:
- * - provinciaId: string (obligatorio)
- * - fecha?: Date (default hoy)
- * - desglosarCombos?: boolean (default true)
+ * ConteoPedidosPorDia — ID-first + lectura de pedidos por rango Timestamp (como AdminPedidos)
+ * - Trae los pedidos del día por rango de fecha (00:00:00 → 23:59:59).
+ * - Cuenta SIEMPRE por ID. Fallback solo si hay nombre EXACTO en catálogo.
+ * - Desglosa combos por componentes (IDs).
+ * - EXCLUYE envíos/servicios (producto simple o componente).
+ * - Muestra cantidad de pedidos del día.
  */
 export default function ConteoPedidosPorDia({
   provinciaId,
@@ -29,10 +27,14 @@ export default function ConteoPedidosPorDia({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [rows, setRows] = useState([]); // [{nombre, cantidad}]
+  const [rows, setRows] = useState([]); // [{ id, nombre, cantidad }]
   const [totalUnidades, setTotalUnidades] = useState(0);
 
-  // ---- NUEVO: métricas para auditoría de rodillos ----
+  const [pedidosCount, setPedidosCount] = useState(0);
+  const [observaciones, setObservaciones] = useState([]); // strings
+  const [enviosIgnorados, setEnviosIgnorados] = useState(0);
+
+  // Auditoría simple de rodillos
   const [rodillosEsperados, setRodillosEsperados] = useState(0);
   const [rodillosContados, setRodillosContados] = useState(0);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -50,7 +52,7 @@ export default function ConteoPedidosPorDia({
     [provinciaId]
   );
 
-  // ========= Helpers de normalización =========
+  // ---------- Normalización para display ----------
   const norm = (s) =>
     String(s || "")
       .normalize("NFD")
@@ -60,266 +62,266 @@ export default function ConteoPedidosPorDia({
       .replace(/\s+/g, " ")
       .trim();
 
-  const isEnvioName = (s) => /^envio\s*\d*/.test(norm(s));
-
-  // Canon para mostrar nombres limpios/consistentes
+  // Canon de nombres (solo para mostrar homogéneo)
   const canonMostrar = (nombreRaw) => {
     const n = norm(nombreRaw);
-
     if (n.includes("rodillo") && n.includes("semi") && n.includes("lana"))
       return "Rodillo Semi lana 22 cm";
-    if (n.startsWith("enduido"))
-      return "Enduido x 4lts";
-    if (n.startsWith("fijador"))
-      return "Fijador x 4lts";
+    if (n.startsWith("enduido")) return "Enduido x Xl";
+    if (n.startsWith("fijador")) return "Fijador x Xl";
+    if (n.includes("venda")) return "Venda";
     if (n.includes("membrana") && n.includes("liquida") && n.includes("20l"))
       return "Membrana líquida 20L";
-    // 🔧 fix: “X 20” → “20L”
-    if (n.includes("membrana") && n.includes("pasta") && (n.includes("20l") || n.includes("x 20")))
-      return "Membrana pasta 20L";
-    if (n.includes("venda"))
-      return "Venda";
-    // Látex blanco económico/premium 20L
     if (n.includes("latex") && n.includes("blanco") && n.includes("20l") && n.includes("economico"))
       return "LÁTEX BLANCO 20L Económico";
-    if (n.includes("latex") && n.includes("blanco") && n.includes("20l") && n.includes("premium"))
-      return "LÁTEX BLANCO 20L Premium";
-    if (n.includes("latex") && n.includes("color") && n.includes("10l") && n.includes("negro"))
-      return "LÁTEX COLOR Negro 10L";
-
     return String(nombreRaw || "").trim();
   };
 
-  // Parseo del string "pedido" cuando no hay productos[]
-  const parsePedidoText = (raw) => {
-    let s = String(raw || "");
-    if (!s.trim()) return [];
-    // quitar TOTAL y precios ($xxxxx)
-    s = s.replace(/total\s*:\s*\$?\s*[\d.]+(,\d+)?/gi, " ");
-    s = s.replace(/\(\s*\$?\s*[\d.]+(,\d+)?\s*\)/g, " ");
-    // split por | ; — – -   (evitamos cortar números negativos o "x-")
-    const parts = s.split(/[|;]+|[\u2013\u2014-](?=\s*[A-Za-z0-9])/g)
-      .map((x) => x.trim())
-      .filter(Boolean);
-
-    const items = [];
-    for (let seg of parts) {
-      if (!seg) continue;
-      const qtyMatch = seg.match(/(?:^|\s)(?:x|×)\s*(\d+)\s*$/i);
-      let name = seg.trim();
-      let qty = 1;
-      if (qtyMatch) {
-        qty = parseInt(qtyMatch[1], 10);
-        name = seg.slice(0, qtyMatch.index).trim();
+  // ---------- Detección de envíos/servicios (para EXCLUIR del conteo) ----------
+  const esEnvioOServicio = (prod, nombreFallback = "") => {
+    // 1) Flags en el catálogo (preferido)
+    if (prod) {
+      if (prod.noDescuentaStock === true) return true;
+      if (prod.esServicio === true) return true;
+      if (typeof prod.tipo === "string") {
+        const t = String(prod.tipo).toLowerCase();
+        if (t.includes("envio") || t.includes("envío") || t.includes("servicio") || t.includes("delivery") || t.includes("flete")) {
+          return true;
+        }
       }
-      if (!name || isEnvioName(name)) continue;
-      items.push({ nombre: name, cantidad: qty });
+      if (Array.isArray(prod.tags)) {
+        const tags = prod.tags.map((x) => String(x || "").toLowerCase());
+        if (tags.some((t) => ["envio", "envío", "delivery", "flete", "servicio"].some((k) => t.includes(k)))) {
+          return true;
+        }
+      }
     }
-    return items;
+    // 2) Último recurso por nombre (cuando no hay prod o no trae banderas)
+    const n = String(nombreFallback || prod?.nombre || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+    if (!n) return false;
+    if (/^envio(\d+)?$/i.test(n)) return true; // "envio", "envio1", "envio2"...
+    if (n.includes("envio") || n.includes("envío") || n.includes("delivery") || n.includes("flete")) return true;
+    return false;
   };
 
-  // ========= Catálogo (cargado una vez) =========
-  const [catalogo, setCatalogo] = useState([]); // [{id, nombre, esCombo, componentes: [{id, cantidad}], ...}]
-  const [catalogoIdx, setCatalogoIdx] = useState(new Map()); // norm(nombre) -> producto
+  // ---------- Catálogo (map por ID y por nombre exacto) ----------
+  const [catalogoById, setCatalogoById] = useState(new Map()); // id -> prod
+  const [catalogoByNombreExacto, setCatalogoByNombreExacto] = useState(new Map()); // nombre.trim() -> prod
 
   useEffect(() => {
     (async () => {
       try {
         const snap = await getDocs(colProductos);
-        const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const idx = new Map();
-        for (const p of arr) idx.set(norm(p.nombre), p);
-        setCatalogo(arr);
-        setCatalogoIdx(idx);
+        const byId = new Map();
+        const byName = new Map();
+        snap.docs.forEach((d) => {
+          const data = { id: d.id, ...d.data() };
+          byId.set(d.id, data);
+          const nombre = String(data.nombre || "").trim();
+          if (nombre) byName.set(nombre, data);
+        });
+        setCatalogoById(byId);
+        setCatalogoByNombreExacto(byName);
       } catch (e) {
         console.warn("No se pudo cargar catálogo de productos:", e);
       }
     })();
   }, [colProductos]);
 
-  // Resolver por catálogo flexible
-  const findProductoFlex = (nombreRaw) => {
-    if (!nombreRaw) return null;
-    const exact = catalogoIdx.get(norm(nombreRaw));
-    if (exact) return exact;
-
-    // fallback: buscar que incluya varias palabras
-    const tokens = norm(nombreRaw).split(" ").filter(Boolean);
-    let best = null;
-    let bestScore = 0;
-    for (const p of catalogo) {
-      const base = norm(p.nombre);
-      let score = 0;
-      for (const t of tokens) if (base.includes(t)) score++;
-      if (score > bestScore) {
-        best = p;
-        bestScore = score;
-      }
-    }
-    return bestScore >= 2 ? best : null; // evita falsos positivos
-  };
-
-  const fetchProductoById = async (id) => {
+  // Cache puntual para IDs no presentes al inicio
+  const fetchProductoByIdOnce = async (id) => {
     if (!id) return null;
+    if (catalogoById.has(id)) return catalogoById.get(id);
     const ref = doc(db, "provincias", provinciaId, "productos", id);
     const ds = await getDoc(ref);
-    return ds.exists() ? { id, ...ds.data() } : null;
+    if (!ds.exists()) return null;
+    const prod = { id, ...ds.data() };
+    setCatalogoById((prev) => {
+      const cp = new Map(prev);
+      cp.set(id, prod);
+      return cp;
+    });
+    const nombre = String(prod.nombre || "").trim();
+    if (nombre) {
+      setCatalogoByNombreExacto((prev) => {
+        const cp = new Map(prev);
+        if (!cp.has(nombre)) cp.set(nombre, prod);
+        return cp;
+      });
+    }
+    return prod;
   };
 
-  // ========= Reglas de desglose (backup si no hay match en catálogo) =========
-  const desglosePorReglas = (nombreCombo) => {
-    const n = norm(nombreCombo);
-    const r = [];
-    const push = (displayName, cant) => r.push({ nombre: displayName, cantidad: cant });
-
-    // Combos Látex 20L (económico/premium) con/sin fijador
-    if (n.includes("combo") && n.includes("latex") && n.includes("20l")) {
-      const esEco = n.includes("economico");
-      const esPrem = n.includes("premium");
-      const conFijador = n.includes("fijador");
-
-      if (esEco) push("LÁTEX BLANCO 20L Económico", 1);
-      else if (esPrem) push("LÁTEX BLANCO 20L Premium", 1);
-      else push("LÁTEX BLANCO 20L Económico", 1); // fallback
-
-      push("Rodillo Semi lana 22 cm", 1);
-      push("Enduido x 4lts", 1);
-      if (conFijador) push("Fijador x 4lts", 1);
-
-      return r;
-    }
-
-    // Combos Membrana 20L (líquida/pasta) + rodillo + venda
-    if (n.includes("combo") && n.includes("membrana") && n.includes("20l")) {
-      if (n.includes("pasta")) push("Membrana pasta 20L", 1);
-      else push("Membrana líquida 20L", 1);
-      push("Rodillo Semi lana 22 cm", 1);
-      push("Venda", 1);
-      return r;
-    }
-
-    return null; // no aplicó reglas
-  };
-
-  const RODILLO_NAME = "Rodillo Semi lana 22 cm";
-
-  // ========= Cálculo principal =========
+  // ---------- Cálculo principal ----------
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError("");
       try {
-        const fechaStr = ymd(fechaSel);
-        const qRef = query(colPedidos, where("fechaStr", "==", fechaStr));
-        const snap = await getDocs(qRef);
+        // Rango del día (como AdminPedidos) → por Timestamp
+        const start = new Date(fechaSel);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(fechaSel);
+        end.setHours(23, 59, 59, 999);
+        const qRef = query(
+          colPedidos,
+          where("fecha", ">=", Timestamp.fromDate(start)),
+          where("fecha", "<=", Timestamp.fromDate(end))
+        );
 
-        const countMap = {};
-        const add = (key, delta = 1) => {
-          if (!key) return;
-          const show = canonMostrar(key);
-          countMap[show] = (countMap[show] || 0) + (Number(delta) || 0);
+        const qs = await getDocs(qRef);
+        setPedidosCount(qs.size);
+
+        const countById = new Map(); // id -> { prod, cantidad }
+        let enviosIgn = 0;
+
+        const addByProd = (prod, delta) => {
+          if (!prod) return;
+          if (esEnvioOServicio(prod)) {
+            enviosIgn += Number(delta) || 0;
+            return; // ⛔ excluir envíos/servicios SIEMPRE
+          }
+          const prev = countById.get(prod.id) || { prod, cantidad: 0 };
+          prev.cantidad += Number(delta) || 0;
+          // mantener última versión de prod (por si vino de fetch)
+          prev.prod = prod;
+          countById.set(prod.id, prev);
         };
 
-        // Métricas de auditoría
-        let combosLatex = 0;
-        let combosMembrana = 0;
-        const dbg = []; // [{id, resumen, rodillos}]
+        const obs = [];
+        const RODILLO_NAME = "Rodillo Semi lana 22 cm";
+        let combosLatexEsperanRodillo = 0;
+        let combosMembranaEsperanRodillo = 0;
+        const dbg = [];
 
-        // 1) Recolectar items de los pedidos (productos[] o texto)
-        const pedidosItems = [];
-        snap.forEach((d) => {
+        for (const d of qs.docs) {
           const p = d.data();
-          let resumen = p.pedido || (Array.isArray(p.productos) ? p.productos.map(it => `${it?.nombre} x${it?.cantidad||1}`).join(" + ") : "");
-          if (Array.isArray(p.productos) && p.productos.length) {
-            for (const it of p.productos) {
-              const rawNombre = String(it?.nombre || "").trim();
-              const cant = Number(it?.cantidad || 0);
-              if (!rawNombre || cant <= 0) continue;
-              if (isEnvioName(rawNombre)) continue;
-              pedidosItems.push({ nombre: rawNombre, cantidad: cant, _id: d.id, _resumen: resumen });
-            }
-          } else if (p.pedido) {
-            const items = parsePedidoText(p.pedido);
-            for (const it of items) {
-              if (isEnvioName(it.nombre)) continue;
-              pedidosItems.push({ nombre: it.nombre, cantidad: it.cantidad, _id: d.id, _resumen: resumen });
-            }
-          }
-        });
+          const resumen =
+            p.pedido ||
+            (Array.isArray(p.productos)
+              ? p.productos
+                  .map((it) => `${it?.nombre || it?.productoId || "?"} x${it?.cantidad || 1}`)
+                  .join(" - ")
+              : "");
 
-        // 2) Sumar desglosando
-        for (const it of pedidosItems) {
-          const qty = Number(it.cantidad || 0);
-          if (!qty) continue;
-
-          // auditoría: detectar combos para rodillosEsperados
-          const n = norm(it.nombre);
-          const esComboLatex = n.includes("combo") && n.includes("latex") && n.includes("20l");
-          const esComboMembrana = n.includes("combo") && n.includes("membrana") && n.includes("20l");
-          if (esComboLatex) combosLatex += qty;
-          if (esComboMembrana) combosMembrana += qty;
-
-          if (!desglosarCombos) {
-            add(it.nombre, qty);
+          if (!Array.isArray(p.productos) || p.productos.length === 0) {
+            // No hay array productos -> no contamos nada (evitamos heurística por texto)
+            if (p.pedido) obs.push(`Pedido ${d.id}: detalles en texto ignorados (sin IDs).`);
             continue;
           }
 
-          // Intentar catálogo flexible
-          const prod = findProductoFlex(it.nombre);
-          let rodillosEstePedido = 0;
+          // Por cada ítem del pedido
+          for (const it of p.productos) {
+            const qty = Number(it?.cantidad || 0);
+            if (!qty) continue;
 
-          if (prod?.esCombo && Array.isArray(prod.componentes)) {
-            for (const comp of prod.componentes) {
-              const compCant = qty * Number(comp?.cantidad || 0);
-              if (!compCant) continue;
-              const compProd = await fetchProductoById(comp.id);
-              const compNombre = compProd?.nombre || `Producto ${comp.id}`;
-              add(compNombre, compCant);
-              if (canonMostrar(compNombre) === RODILLO_NAME) rodillosEstePedido += compCant;
+            // Resolver ID: 1) productoId/id 2) productoRefPath 3) exact name en catálogo
+            let id = it?.productoId || it?.id || null;
+            if (!id && it?.productoRefPath) {
+              const segs = String(it.productoRefPath).split("/").filter(Boolean);
+              id = segs[segs.length - 1] || null;
             }
-            dbg.push({ id: it._id, resumen: it._resumen, rodillos: rodillosEstePedido });
-            continue;
-          }
-
-          // Si no es combo o no fue encontrado: intentar reglas por patrón
-          const reglas = desglosePorReglas(it.nombre);
-          if (reglas && reglas.length) {
-            for (const r of reglas) {
-              add(r.nombre, r.cantidad * qty);
-              if (canonMostrar(r.nombre) === RODILLO_NAME) rodillosEstePedido += r.cantidad * qty;
+            let prod = null;
+            if (id) {
+              prod = catalogoById.get(id) || (await fetchProductoByIdOnce(id));
+              if (!prod) {
+                obs.push(`Pedido ${d.id}: ID ${id} no encontrado en catálogo.`);
+                continue;
+              }
+            } else {
+              // Fallback SOLO por NOMBRE EXACTO (sin fuzzy)
+              const nombreExacto = String(it?.nombre || "").trim();
+              if (!nombreExacto) {
+                obs.push(`Pedido ${d.id}: ítem sin ID ni nombre (ignorado).`);
+                continue;
+              }
+              const prodByName = catalogoByNombreExacto.get(nombreExacto) || null;
+              if (!prodByName) {
+                obs.push(`Pedido ${d.id}: "${nombreExacto}" sin ID y sin match exacto en catálogo (ignorado).`);
+                continue;
+              }
+              prod = prodByName;
             }
-            dbg.push({ id: it._id, resumen: it._resumen, rodillos: rodillosEstePedido });
-            continue;
-          }
 
-          // Fallback: producto simple
-          const nombre = prod?.nombre || it.nombre;
-          add(nombre, qty);
-          if (canonMostrar(nombre) === RODILLO_NAME) {
-            rodillosEstePedido += qty;
+            // Si el propio producto es envío/servicio, NO se cuenta
+            if (esEnvioOServicio(prod, it?.nombre)) {
+              enviosIgn += qty;
+              continue;
+            }
+
+            const baseName = norm(prod.nombre || "");
+            const esComboLatex = prod.esCombo && baseName.includes("latex") && baseName.includes("20l");
+            const esComboMembrana = prod.esCombo && baseName.includes("membrana") && baseName.includes("20l");
+            if (esComboLatex) combosLatexEsperanRodillo += qty;
+            if (esComboMembrana) combosMembranaEsperanRodillo += qty;
+
+            let rodillosEstePedido = 0;
+
+            if (desglosarCombos && prod.esCombo && Array.isArray(prod.componentes)) {
+              // Desglosar por componentes (IDs)
+              for (const comp of prod.componentes) {
+                const compCant = qty * Number(comp?.cantidad || 0);
+                if (!compCant) continue;
+                if (!comp?.id) {
+                  obs.push(`Pedido ${d.id}: combo ${prod.id} con componente sin id (ignorado).`);
+                  continue;
+                }
+                const compProd = catalogoById.get(comp.id) || (await fetchProductoByIdOnce(comp.id));
+                if (!compProd) {
+                  obs.push(`Pedido ${d.id}: combo ${prod.id} componente ${comp.id} no encontrado (ignorado).`);
+                  continue;
+                }
+                // Excluir envíos/servicios como componentes
+                if (esEnvioOServicio(compProd)) {
+                  enviosIgn += compCant;
+                  continue;
+                }
+                addByProd(compProd, compCant);
+                if (canonMostrar(compProd.nombre) === RODILLO_NAME) rodillosEstePedido += compCant;
+              }
+            } else {
+              // Producto simple por ID
+              addByProd(prod, qty);
+              if (canonMostrar(prod.nombre) === RODILLO_NAME) rodillosEstePedido += qty;
+            }
+
+            if (rodillosEstePedido > 0) {
+              dbg.push({ id: d.id, resumen: resumen, rodillos: rodillosEstePedido });
+            }
           }
-          if (rodillosEstePedido > 0) dbg.push({ id: it._id, resumen: it._resumen, rodillos: rodillosEstePedido });
         }
 
-        // 3) A listado ordenado
-        const listado = Object.keys(countMap)
-          .map((nombre) => ({ nombre, cantidad: countMap[nombre] }))
-          .filter((r) => !/^envio\s*\d*/i.test((r.nombre || "").trim()))
+        // Armar listado final (ordenado por nombre display)
+        const listado = Array.from(countById.values())
+          .map(({ prod, cantidad }) => ({
+            id: prod.id,
+            nombre: canonMostrar(prod.nombre || prod.id),
+            cantidad,
+          }))
           .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
 
         setRows(listado);
         setTotalUnidades(listado.reduce((acc, r) => acc + (r.cantidad || 0), 0));
 
-        // ---- auditoría de rodillos ----
-        const contados = listado.find((r) => r.nombre === RODILLO_NAME)?.cantidad || 0;
+        const contados = listado.find((r) => r.nombre === "Rodillo Semi lana 22 cm")?.cantidad || 0;
         setRodillosContados(contados);
-        setRodillosEsperados(combosLatex + combosMembrana);
+        setRodillosEsperados(combosLatexEsperanRodillo + combosMembranaEsperanRodillo);
+
         setDebugRodillosPorPedido(dbg);
+        setObservaciones(obs);
+        setEnviosIgnorados(enviosIgn);
       } catch (e) {
         console.error("ConteoPedidosPorDia → error:", e);
-        setError("No se pudo calcular el conteo del día. Revisá reglas/índices.");
+        setError("No se pudo calcular el conteo del día. Revisá datos/IDs.");
         setRows([]);
         setTotalUnidades(0);
+        setPedidosCount(0);
+        setObservaciones([]);
+        setEnviosIgnorados(0);
         setRodillosContados(0);
         setRodillosEsperados(0);
         setDebugRodillosPorPedido([]);
@@ -327,7 +329,7 @@ export default function ConteoPedidosPorDia({
         setLoading(false);
       }
     })();
-  }, [colPedidos, colProductos, fechaSel, desglosarCombos, provinciaId, catalogoIdx]);
+  }, [colPedidos, colProductos, fechaSel, desglosarCombos, provinciaId, catalogoById, catalogoByNombreExacto]);
 
   const diffRodillos = rodillosContados - rodillosEsperados;
 
@@ -344,23 +346,38 @@ export default function ConteoPedidosPorDia({
         <div className="badge badge-lg badge-secondary">
           Total de unidades: {totalUnidades}
         </div>
-        <div className="badge badge-outline">Modo: combos desglosados</div>
+        <div className="badge badge-outline">Pedidos del día: {pedidosCount}</div>
+        <div className="badge badge-outline">Modo: ID-first (combos desglosados)</div>
+        <div className="badge badge-outline">Envíos ignorados: {enviosIgnorados}</div>
         {diffRodillos !== 0 && (
-          <div className="badge badge-warning badge-outline">
-            ⚠︎ Rodillos: contados {rodillosContados} / esperados {rodillosEsperados} ({diffRodillos > 0 ? "+" : ""}{diffRodillos})
-          </div>
-        )}
-        {diffRodillos !== 0 && (
-          <button
-            className="btn btn-xs btn-outline"
-            onClick={() => setDebugOpen((v) => !v)}
-          >
-            {debugOpen ? "Ocultar debug" : "Ver detalle rodillos"}
-          </button>
+          <>
+            <div className="badge badge-warning badge-outline">
+              ⚠︎ Rodillos: contados {rodillosContados} / esperados {rodillosEsperados} ({diffRodillos > 0 ? "+" : ""}{diffRodillos})
+            </div>
+            <button className="btn btn-xs btn-outline" onClick={() => setDebugOpen((v) => !v)}>
+              {debugOpen ? "Ocultar debug" : "Ver detalle rodillos"}
+            </button>
+          </>
         )}
       </div>
 
       {error && <div className="mt-3 alert alert-error">{error}</div>}
+
+      {/* Observaciones (ítems sin ID, componentes faltantes, etc.) */}
+      {observaciones.length > 0 && (
+        <div className="p-3 mt-3 text-sm border rounded-lg bg-base-200 border-base-300">
+          <div className="mb-1 font-semibold">⚠ Observaciones</div>
+          <ul className="pl-6 list-disc">
+            {observaciones.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+          <div className="mt-1 text-xs opacity-70">
+            Sugerencia: guardá <code>productoId</code> o <code>productoRefPath</code> en cada item de <code>pedido.productos[]</code>.
+            Si no hay ID, intento match <b>exacto</b> por nombre contra catálogo; si no existe, lo ignoro para evitar conteos erróneos.
+          </div>
+        </div>
+      )}
 
       {debugOpen && diffRodillos !== 0 && (
         <div className="p-3 mt-3 border rounded-lg bg-base-200 border-base-300">
@@ -378,9 +395,6 @@ export default function ConteoPedidosPorDia({
               ))
             )}
           </ul>
-          <div className="mt-2 text-xs opacity-70">
-            Tip: si un pedido aparece con 2 rodillos, revisá el combo en <code>/productos</code> (cantidad de componente) o el parseo del texto.
-          </div>
         </div>
       )}
 
@@ -400,8 +414,8 @@ export default function ConteoPedidosPorDia({
                 </td>
               </tr>
             ) : (
-              rows.map((r, i) => (
-                <tr key={r.nombre + "_" + i}>
+              rows.map((r) => (
+                <tr key={r.id}>
                   <td>{r.nombre}</td>
                   <td className="text-right">{r.cantidad}</td>
                 </tr>

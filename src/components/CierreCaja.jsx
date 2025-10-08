@@ -1,4 +1,4 @@
-// src/components/CierreCaja.jsx — versión optimizada (correcciones tipográficas y de sintaxis)
+// src/pages/CierreCaja.jsx
 import React, { useEffect, useState, useMemo } from "react";
 import {
   collection,
@@ -318,6 +318,151 @@ export default function CierreCaja() {
     }
   };
 
+  // ====== 🔎 AUDITORÍA DE DESCUENTO (dry-run, no escribe nada) ======
+  const auditarDescuentoDelDia = async () => {
+    if (!provinciaId || !colCierresRepartidor || !colProductos) return;
+
+    const acumuladoPorPath = new Map(); // path -> {ref, qty}
+    const problemas = [];              // strings
+    const detalle = [];                // [{pedidoId, item, afectaciones:[{id,nombre,qty,tipo}]}]
+
+    // cache de producto por path
+    const cacheProducto = new Map();
+    const leerProducto = async (ref, pathStr) => {
+      const key = pathStr || ref.path;
+      if (cacheProducto.has(key)) return cacheProducto.get(key);
+      const snap = await getDoc(ref);
+      const data = snap.exists() ? { id: ref.id, ...snap.data() } : null;
+      cacheProducto.set(key, data);
+      return data;
+    };
+
+    // Recorro los cierres individuales del día (igual que en el cierre real)
+    for (const email of repartidores) {
+      let cierre = cierres[email];
+      if (!cierre?.pedidosEntregados) {
+        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+        const snap = await getDoc(ref);
+        if (snap.exists()) cierre = snap.data();
+      }
+      const entregados = cierre?.pedidosEntregados || [];
+
+      for (const pedido of entregados) {
+        const productos = pedido?.productos || [];
+        for (const item of productos) {
+          const cant = Number(item?.cantidad || 0);
+          if (!cant) continue;
+
+          const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
+          if (!ref || !pathStr) {
+            problemas.push(`Pedido ${pedido?.id || "?"}: item sin ID/ruta resoluble → "${item?.nombre || "SIN_NOMBRE"}"`);
+            continue;
+          }
+
+          const data = await leerProducto(ref, pathStr);
+          if (!data) {
+            problemas.push(`Producto inexistente: ${pathStr}`);
+            continue;
+          }
+
+          const fila = {
+            pedidoId: pedido?.id || "—",
+            item: data?.nombre || item?.nombre || "SIN_NOMBRE",
+            afectaciones: [],
+          };
+
+          // 🔄 REGLA NUEVA: NO descontar stock del "padre" si es combo; solo componentes
+          if (data?.esCombo && Array.isArray(data?.componentes)) {
+            // Informo que el PADRE se ignora
+            fila.afectaciones.push({ id: ref.id, nombre: data?.nombre || "—", qty: 0, tipo: "PADRE_IGNORADO" });
+
+            // Descuento únicamente los componentes = cantidad * multiplicador del componente
+            for (const comp of data.componentes) {
+              const compCant = cant * Number(comp?.cantidad || 0);
+              if (!compCant) continue;
+              if (!comp?.id) {
+                problemas.push(`Combo ${ref.id} tiene componente sin ID`);
+                continue;
+              }
+              const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
+              const compData = await leerProducto(compRef, `provincias/${provinciaId}/productos/${comp.id}`);
+              if (!compData) {
+                problemas.push(`Componente inexistente: ${compRef.path}`);
+                continue;
+              }
+              acumular(acumuladoPorPath, compRef, compRef.path, compCant);
+              fila.afectaciones.push({ id: compRef.id, nombre: compData?.nombre || "—", qty: compCant, tipo: "COMP" });
+            }
+          } else {
+            // Producto simple: sí descuenta su propio stock
+            acumular(acumuladoPorPath, ref, pathStr, cant);
+            fila.afectaciones.push({ id: ref.id, nombre: data?.nombre || "—", qty: cant, tipo: "SIMPLE" });
+          }
+
+          detalle.push(fila);
+        }
+      }
+    }
+
+    // Salida “resumen por producto”
+    const ops = Array.from(acumuladoPorPath.entries()).map(([path, { ref, qty }]) => {
+      const p = cacheProducto.get(path);
+      return { path, id: ref.id, nombre: p?.nombre || "—", cantidad: qty };
+    }).sort((a,b) => (a.nombre || "").localeCompare(b.nombre || ""));
+
+    // Log completo a consola para depurar
+    console.group("AUDITORÍA Cierre (dry-run)");
+    console.table(ops);
+    console.log("Detalle por pedido:", detalle);
+    if (problemas.length) console.warn("Problemas:", problemas);
+    console.groupEnd();
+
+    // Muestra amigable en modal
+    const top = ops.slice(0, 50);
+    const htmlTabla = `
+      <div style="max-height:50vh;overflow:auto;border:1px solid var(--fallback-bc, #ddd);border-radius:8px;">
+        <table style="width:100%;font-family:monospace;font-size:12px;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">Producto</th>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">ID</th>
+              <th style="text-align:right;padding:6px;border-bottom:1px solid #ddd;">Cantidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${top.map(r => `
+              <tr>
+                <td style="padding:6px;border-bottom:1px solid #eee;">${r.nombre}</td>
+                <td style="padding:6px;border-bottom:1px solid #eee;">${r.id}</td>
+                <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;">${r.cantidad}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;opacity:.75">
+        <div>Regla aplicada: <b>combos NO descuentan stock del combo</b>; solo de sus <b>componentes</b>.</div>
+        ${ops.length > 50 ? `Mostrando 50 de ${ops.length} filas. Ver <b>console.table</b> para el listado completo.` : ""}
+        ${problemas.length ? `<br/><span style="color:#b45309">⚠ ${problemas.length} observación(es). Abrí la consola para ver detalles.</span>` : ""}
+      </div>
+    `;
+
+    const totalDocs = ops.length;
+    const totalUnidades = ops.reduce((a,b)=> a + (Number(b.cantidad)||0), 0);
+
+    await Swal.fire({
+      icon: problemas.length ? "warning" : "info",
+      title: "Previsualización de descuento (dry-run)",
+      html: `
+        <div style="text-align:left">
+          <div style="margin-bottom:6px">Fecha: <b>${fechaStr}</b> — Prov: <b>${provinciaId}</b></div>
+          <div style="margin-bottom:6px">Docs a actualizar: <b>${totalDocs}</b> — Unidades totales: <b>${totalUnidades}</b></div>
+          ${htmlTabla}
+        </div>
+      `,
+      confirmButtonText: "Entendido",
+    });
+  };
+
   // ====== Cierre GLOBAL (por provincia y por día) ======
   const cerrarGlobal = async () => {
     if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas) return;
@@ -357,7 +502,7 @@ export default function CierreCaja() {
 
       // C) Recorrer cierres individuales **de la fecha** y acumular SOLO vendidos
       const acumuladoPorPath = new Map(); // pathStr -> { ref, qty }
-      const resumenPorNombre = {};        // nombre visible -> cantidad
+      const resumenPorNombre = {};        // nombre visible -> cantidad (para tabla de “vendidos”)
 
       // Cache lecturas de productos
       const cacheProducto = new Map();
@@ -391,14 +536,11 @@ export default function CierreCaja() {
             const data = await leerProducto(ref, pathStr);
             if (!data) continue;
 
-            // descuenta el propio producto
-            acumular(acumuladoPorPath, ref, pathStr, cant);
-
-            // resumen visible por nombre base
+            // Para el RESUMEN visible, seguimos contando el nombre del ítem vendido (combo o simple)
             const nombreBase = data?.nombre || item?.nombre || "SIN_NOMBRE";
             resumenPorNombre[nombreBase] = (resumenPorNombre[nombreBase] || 0) + cant;
 
-            // si es combo, sumar componentes
+            // 🔄 REGLA NUEVA: si es combo => NO descontar el combo; SÍ sus componentes
             if (data?.esCombo && Array.isArray(data?.componentes)) {
               for (const comp of data.componentes) {
                 const compCant = cant * Number(comp?.cantidad || 0);
@@ -408,6 +550,9 @@ export default function CierreCaja() {
                 await leerProducto(compRef, compPath);
                 acumular(acumuladoPorPath, compRef, compPath, compCant);
               }
+            } else {
+              // Producto simple: descontar su propio stock
+              acumular(acumuladoPorPath, ref, pathStr, cant);
             }
           }
         }
@@ -448,7 +593,7 @@ export default function CierreCaja() {
       const ok = await Swal.fire({
         icon: "warning",
         title: "Confirmar cierre global",
-        html: `Se actualizarán <b>${totalDocsAActualizar}</b> productos (<b>${totalUnidades}</b> unidades). ¿Deseás continuar?`,
+        html: `Se actualizarán <b>${totalDocsAActualizar}</b> productos (<b>${totalUnidades}</b> unidades).<br/>Regla aplicada: combos no descuentan; solo componentes.<br/>¿Deseás continuar?`,
         showCancelButton: true,
         confirmButtonText: "Sí, descontar stock",
         cancelButtonText: "Cancelar",
@@ -463,7 +608,7 @@ export default function CierreCaja() {
       if (ops.length === 0) {
         await setDoc(doc(colResumenVentas, fechaStr), {
           fechaStr,
-          totalPorProducto: {},
+          totalPorProducto: resumenPorNombre,
           totalEfectivo,
           totalTransferencia,
           totalTransferencia10,
@@ -517,7 +662,7 @@ export default function CierreCaja() {
         { merge: true }
       );
 
-      await Swal.fire("Cierre Global realizado", "Se descontó stock y se guardó el resumen.", "success");
+      await Swal.fire("Cierre Global realizado", "Se descontó stock (solo componentes de combos) y se guardó el resumen.", "success");
     } catch (e) {
       console.error("Error en cierre global:", e);
       Swal.fire("Error", "No se pudo ejecutar el cierre global.", "error");
@@ -606,7 +751,8 @@ export default function CierreCaja() {
       const yaDesconto = cierreSnap.exists() && !!cierreSnap.data()?.stockDescontado;
 
       if (yaDesconto) {
-        // Recalcular cantidades y RESTAURAR stock (increment +qty)
+        // 🔄 REGLA NUEVA: Recalcular cantidades y RESTAURAR solo lo que se descontó:
+        // productos simples y componentes de combos (NO el combo padre).
         const acumulado = new Map();
 
         for (const email of repartidores) {
@@ -627,11 +773,11 @@ export default function CierreCaja() {
               const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
               if (!ref || !pathStr) continue;
 
-              acumular(acumulado, ref, pathStr, cant);
-
               const prodSnap = await getDoc(ref);
-              if (prodSnap.exists() && prodSnap.data()?.esCombo) {
-                const comps = prodSnap.data().componentes || [];
+              const isCombo = prodSnap.exists() && !!prodSnap.data()?.esCombo;
+
+              if (isCombo) {
+                const comps = (prodSnap.data().componentes || []);
                 for (const comp of comps) {
                   const compCant = cant * Number(comp?.cantidad || 0);
                   if (!compCant) continue;
@@ -639,6 +785,9 @@ export default function CierreCaja() {
                   const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
                   acumular(acumulado, compRef, compPath, compCant);
                 }
+              } else {
+                // Producto simple: se había descontado él mismo, por lo tanto se restaura él mismo
+                acumular(acumulado, ref, pathStr, cant);
               }
             }
           }
@@ -814,6 +963,16 @@ export default function CierreCaja() {
         <div className="flex flex-wrap gap-4 mt-4">
           <button className="btn btn-primary" onClick={exportarExcel} disabled={repartidores.length === 0}>
             📤 Exportar resumen a Excel
+          </button>
+
+          {/* 🔎 Botón de previsualización (no escribe) */}
+          <button
+            className="btn btn-outline"
+            onClick={auditarDescuentoDelDia}
+            disabled={repartidores.length === 0 || busyGlobal}
+            title="Muestra qué productos (solo unitarios y componentes de combos) se descontarían hoy, sin escribir en Firestore."
+          >
+            🔎 Previsualizar descuento (dry-run)
           </button>
 
           {!resumenGlobal && (

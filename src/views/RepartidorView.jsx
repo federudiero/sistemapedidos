@@ -12,11 +12,10 @@ import Swal from "sweetalert2";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-
-
 import MapaRutaRepartidor from "../components/MapaRutaRepartidor";
 import BotonIniciarViaje from "../components/BotonIniciarViaje";
 import { useProvincia } from "../hooks/useProvincia.js";
+import { baseDireccion } from "../constants/provincias";
 
 /* ===== colecciones / docs ===== */
 const colPedidos = (prov) => collection(db, "provincias", prov, "pedidos");
@@ -25,7 +24,6 @@ const docCierreRepartidor = (prov, fechaStr, email) =>
 const docUsuarios = (prov) => doc(db, "provincias", prov, "config", "usuarios");
 
 /* ===== helpers UI ===== */
-// helpers UI =====
 const toWhatsAppAR = (raw) => {
   let d = String(raw || "").replace(/\D+/g, "");
   if (!d) return "";
@@ -51,7 +49,6 @@ const toWhatsAppAR = (raw) => {
   else if (d.startsWith("11") && has15After(2)) { had15 = true; areaLen = 2; } // AMBA
 
   if (had15) {
-    // quitar el '15' real inmediatamente después del área
     d = d.slice(0, areaLen) + d.slice(areaLen + 2);
   }
 
@@ -69,8 +66,39 @@ const toWhatsAppAR = (raw) => {
   return "54" + national; // listo para usar en ?phone=
 };
 
+// NUEVO: helpers para normalizar direcciones y construir el link coherente
+const sanitizeDireccion = (s) => {
+  let x = String(s || "").normalize("NFKC").trim().replace(/\s+/g, " ");
+  const from = "ÁÉÍÓÚÜÑáéíóúüñ", to = "AEIOUUNaeiouun";
+  return x.replace(/[ÁÉÍÓÚÜÑáéíóúüñ]/g, ch => to[from.indexOf(ch)] || ch);
+};
 
-// NUEVO: formato legible para mostrar (+54 9 XXX XXXX-XXXX)
+const ensureARContext = (addr, base) => {
+  const s = String(addr || "");
+  if (/argentina/i.test(s)) return s;
+  const parts = String(base || "").split(",").map(t => t.trim());
+  return `${s}, ${parts.slice(-3).join(", ")}`;
+};
+
+// ✅ Reemplazar esta función en RepartidorView.jsx
+const buildMapsLink = (p, base) => {
+  // 1) Si tenemos placeId, abrir como búsqueda (pin)
+  if (p?.placeId) {
+    return `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(p.placeId)}`;
+  }
+
+  // 2) Si hay coordenadas, abrir búsqueda por lat,lng (pin), NO /dir
+  if (p?.coordenadas && typeof p.coordenadas.lat === "number" && typeof p.coordenadas.lng === "number") {
+    const { lat, lng } = p.coordenadas;
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  }
+
+  // 3) Si sólo hay texto de dirección, abrir búsqueda por texto (pin)
+  const q = sanitizeDireccion(ensureARContext(p?.direccion || "", base));
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+};
+
+// formato legible para mostrar (+54 9 XXX XXXX-XXXX)
 const formatPhoneARDisplay = (raw) => {
   let d = String(raw || "").replace(/\D/g, "");
   if (!d) return "";
@@ -317,7 +345,6 @@ function RepartidorView() {
     try {
       const ref = doc(db, "provincias", provinciaId, "pedidos", pedidoId);
       if (metodoPagoNuevo === "mixto") {
-        // No forces write con valores por defecto si ya estaba en mixto
         if (prev.metodoPago !== "mixto") {
           await updateDoc(ref, {
             metodoPago: "mixto",
@@ -350,46 +377,46 @@ function RepartidorView() {
   };
 
   const guardarPagoMixto = async (pedido) => {
-  if (!puedePagos) {
-    Swal.fire("Permisos", "No tenés permiso para editar pagos.", "info");
-    return;
-  }
-  const monto = Number(pedido.monto || 0);
-  const ef = Number(pedido.pagoMixtoEfectivo || 0);
-  const tr = Number(pedido.pagoMixtoTransferencia || 0);
+    if (!puedePagos) {
+      Swal.fire("Permisos", "No tenés permiso para editar pagos.", "info");
+      return;
+    }
+    const monto = Number(pedido.monto || 0);
+    const ef = Number(pedido.pagoMixtoEfectivo || 0);
+    const tr = Number(pedido.pagoMixtoTransferencia || 0);
 
-  if (ef < 0 || tr < 0) {
-    Swal.fire("⚠️ Atención", "Los importes no pueden ser negativos.", "info");
-    return;
-  }
-  if (ef + tr !== monto) {
-    const diff = monto - (ef + tr);
-    Swal.fire(
-      "Monto inválido",
-      diff > 0
-        ? `Faltan $${diff.toFixed(0)} para llegar a $${monto.toFixed(0)}.`
-        : `Te pasaste por $${(-diff).toFixed(0)} sobre $${monto.toFixed(0)}.`,
-      "warning"
-    );
-    return;
-  }
+    if (ef < 0 || tr < 0) {
+      Swal.fire("⚠️ Atención", "Los importes no pueden ser negativos.", "info");
+      return;
+    }
+    if (ef + tr !== monto) {
+      const diff = monto - (ef + tr);
+      Swal.fire(
+        "Monto inválido",
+        diff > 0
+          ? `Faltan $${diff.toFixed(0)} para llegar a $${monto.toFixed(0)}.`
+          : `Te pasaste por $${(-diff).toFixed(0)} sobre $${monto.toFixed(0)}.`,
+        "warning"
+      );
+      return;
+    }
 
-  try {
-    await updateDoc(doc(db, "provincias", provinciaId, "pedidos", pedido.id), {
-      metodoPago: "mixto",
-      pagoMixtoEfectivo: ef,
-      pagoMixtoTransferencia: tr,
-      pagoMixtoCon10: !!pedido.pagoMixtoCon10,
-    });
-    Swal.fire("✅ Guardado", "Pago mixto actualizado.", "success");
-  } catch (e) {
-    const msg =
-      e?.code === "permission-denied"
-        ? "No tenés permiso (reglas)."
-        : "No se pudo actualizar el pago mixto.";
-    Swal.fire("Error", msg, "error");
-  }
-};
+    try {
+      await updateDoc(doc(db, "provincias", provinciaId, "pedidos", pedido.id), {
+        metodoPago: "mixto",
+        pagoMixtoEfectivo: ef,
+        pagoMixtoTransferencia: tr,
+        pagoMixtoCon10: !!pedido.pagoMixtoCon10,
+      });
+      Swal.fire("✅ Guardado", "Pago mixto actualizado.", "success");
+    } catch (e) {
+      const msg =
+        e?.code === "permission-denied"
+          ? "No tenés permiso (reglas)."
+          : "No se pudo actualizar el pago mixto.";
+      Swal.fire("Error", msg, "error");
+    }
+  };
 
   /* ===== totales ===== */
   const { efectivo, transferencia10, transferencia0, total } = useMemo(() => {
@@ -437,6 +464,13 @@ function RepartidorView() {
       setBloqueado(false);
     }
   };
+
+  // Contexto base coherente con los mapas (ciudad, provincia, país)
+  const BASE_DIRECCION = baseDireccion(provinciaId);
+  const baseContext = useMemo(() => {
+    const parts = String(BASE_DIRECCION || "").split(",").map(t => t.trim());
+    return parts.slice(-3).join(", ");
+  }, [BASE_DIRECCION]);
 
   /* ===== UI ===== */
   return (
@@ -537,9 +571,7 @@ function RepartidorView() {
                 <p className="mt-1">
                   <strong>📍 Dirección:</strong> {p.direccion}
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      p.direccion || ""
-                    )}`}
+                    href={buildMapsLink(p, baseContext)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ml-2 link link-accent"
@@ -549,6 +581,26 @@ function RepartidorView() {
                 </p>
 
                 <p className="mt-1"><strong>📦 Pedido:</strong> {p.pedido}</p>
+
+                {/* ↔️ Entre calles */}
+                {p?.entreCalles?.trim() && (
+                  <p className="mt-1"><strong>↔️ Entre calles:</strong> {p.entreCalles}</p>
+                )}
+
+                {/* 📝 Observación (cubre variantes) */}
+                {(() => {
+                  const obs =
+                    p?.observacion ||
+                    p?.["observación"] ||
+                    p?.observaciones ||
+                    p?.nota ||
+                    p?.notas ||
+                    "";
+                  return obs.trim()
+                    ? <p className="mt-1"><strong>📝 Observación:</strong> {obs}</p>
+                    : null;
+                })()}
+
                 <p className="mt-1"><strong>💵 Monto:</strong> ${monto || 0}</p>
 
                 <div className="mt-2">
@@ -699,7 +751,6 @@ function RepartidorView() {
       </div>
 
       <MapaRutaRepartidor pedidos={pedidos} />
-      
     </div>
   );
 }
