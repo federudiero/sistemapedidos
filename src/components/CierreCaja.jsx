@@ -585,6 +585,23 @@ export default function CierreCaja() {
         }
       }
 
+      // 🔹 NUEVO: Total de gastos globales (suma de los cierres individuales)
+      let totalGastos = 0;
+      for (const email of repartidores) {
+        let cierre = cierres[email];
+        if (!cierre?.gastos) {
+          const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+          const snap = await getDoc(ref);
+          if (snap.exists()) cierre = snap.data();
+        }
+        const g = cierre?.gastos || {};
+        totalGastos +=
+          (Number(g.repartidor) || 0) +
+          (Number(g.acompanante) || 0) +
+          (Number(g.combustible) || 0) +
+          (Number(g.extra) || 0);
+      }
+
       // E) Confirmación con conteo real de escrituras
       const ops = Array.from(acumuladoPorPath.values());
       const totalDocsAActualizar = ops.length;
@@ -606,12 +623,17 @@ export default function CierreCaja() {
 
       // F) Early exit: si no hay nada para descontar, sólo marcar cierre y escribir resumen
       if (ops.length === 0) {
+        const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
+        const totalNeto = totalBruto - totalGastos;
+
         await setDoc(doc(colResumenVentas, fechaStr), {
           fechaStr,
           totalPorProducto: resumenPorNombre,
           totalEfectivo,
           totalTransferencia,
           totalTransferencia10,
+          totalGastos,           // NUEVO
+          totalNeto,             // NUEVO
           provinciaId,
           timestamp: new Date(),
         });
@@ -636,12 +658,17 @@ export default function CierreCaja() {
       }
 
       // H) Guardar resumen visible (solo si realmente ejecutamos el cierre)
+      const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
+      const totalNeto = totalBruto - totalGastos;
+
       await setDoc(doc(colResumenVentas, fechaStr), {
         fechaStr,
         totalPorProducto: resumenPorNombre,
         totalEfectivo,
         totalTransferencia,
         totalTransferencia10,
+        totalGastos,           // NUEVO
+        totalNeto,             // NUEVO
         provinciaId,
         timestamp: new Date(),
       });
@@ -1031,11 +1058,16 @@ export default function CierreCaja() {
             <div className="p-4 shadow-inner bg-base-100 rounded-xl">
               <h4 className="mb-2 text-lg font-bold">🧾 Total Recaudado Neto</h4>
               <p className="text-xl font-bold text-primary">
-                {[
-                  resumenGlobal.totalEfectivo || 0,
-                  resumenGlobal.totalTransferencia || 0,
-                  resumenGlobal.totalTransferencia10 || 0,
-                ].reduce((a, b) => a + b, 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
+                {(() => {
+                  const bruto =
+                    (resumenGlobal.totalEfectivo || 0) +
+                    (resumenGlobal.totalTransferencia || 0) +
+                    (resumenGlobal.totalTransferencia10 || 0);
+                  const neto = typeof resumenGlobal.totalNeto === "number"
+                    ? resumenGlobal.totalNeto
+                    : (bruto - (resumenGlobal.totalGastos || 0));
+                  return neto.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+                })()}
               </p>
             </div>
 
