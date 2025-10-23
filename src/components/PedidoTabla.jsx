@@ -1,8 +1,13 @@
 // src/components/PedidoTabla.jsx
-import React from "react";
+import React, { useMemo, useState } from "react";
 import Swal from "sweetalert2";
 
+const normalizar = (s = "") =>
+  String(s).toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
 const PedidoTabla = ({ pedidos, onEditar, onEliminar, bloqueado, currentUserEmail }) => {
+  const [q, setQ] = useState("");
+
   const copiarPedidoCompleto = (pedido) => {
     const textoCompleto = `
 👤 Nombre: ${pedido.nombre}
@@ -33,7 +38,6 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
     [p.telefono, p.telefonoAlt].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
   const handleEliminar = async (p) => {
-    // Confirmación previa
     const res = await Swal.fire({
       title: "¿Eliminar pedido?",
       text: `${p.nombre} – ${p.direccion}`,
@@ -44,14 +48,32 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
       confirmButtonColor: "#ef4444",
     });
     if (!res.isConfirmed) return;
-
-    // Llamamos al handler del padre y dejamos que el padre muestre el toast de éxito/fracaso.
     try {
       await onEliminar?.(p.id);
-    } catch {
-      // El padre ya muestra el error si corresponde.
-    }
+    } catch (e){console.error(e)}
   };
+
+  // 🔎 Filtro local (no pega a Firestore)
+  const filtrados = useMemo(() => {
+    if (!q.trim()) return pedidos;
+    const nq = normalizar(q);
+    return pedidos.filter((p) => {
+      const campos = [
+        p?.nombre,
+        p?.direccion,
+        p?.entreCalles,
+        p?.partido,
+        p?.pedido,
+        p?.vendedorEmail,
+        p?.telefono,
+        p?.telefonoAlt,
+      ]
+        .filter(Boolean)
+        .map(normalizar)
+        .join(" | ");
+      return campos.includes(nq);
+    });
+  }, [q, pedidos]);
 
   return (
     <div className="container px-4 py-4 mx-auto">
@@ -61,16 +83,28 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
         </div>
       )}
 
-      {pedidos.length === 0 ? (
-        <p className="mt-4 text-center text-gray-400">No hay pedidos cargados.</p>
+      {/* 🔎 Buscador */}
+      <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre, dirección, teléfono, ciudad, detalle o vendedor…"
+          className="w-full input input-bordered"
+        />
+        <div className="text-sm opacity-70 md:ml-4">
+          {q ? `Mostrando ${filtrados.length} de ${pedidos.length}` : `Total: ${pedidos.length}`}
+        </div>
+      </div>
+
+      {filtrados.length === 0 ? (
+        <p className="mt-4 text-center text-gray-400">No se encontraron pedidos con ese criterio.</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {pedidos.map((p, i) => {
+          {filtrados.map((p, i) => {
             const isOwner =
               String(p.vendedorEmail || "").trim().toLowerCase() ===
               String(currentUserEmail || "").trim().toLowerCase();
 
-            // Separar detalle / total si viene en el formato " | TOTAL: $..."
             const [detalle, total] = String(p.pedido || "").split(" | TOTAL: $");
 
             return (
@@ -124,14 +158,10 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
                   </ul>
                 </div>
 
-                {/* Entregado */}
                 {p.entregado && (
-                  <div className="mb-2 text-sm text-success">
-                    ✅ Entregado: edición deshabilitada
-                  </div>
+                  <div className="mb-2 text-sm text-success">✅ Entregado: edición deshabilitada</div>
                 )}
 
-                {/* Botones solo si NO hay cierre, NO está entregado y SOS el dueño */}
                 {!(bloqueado || p.entregado || !isOwner) && (
                   <div className="justify-end px-4 pb-4 card-actions">
                     <button className="btn btn-sm btn-warning" onClick={() => onEditar?.(p)}>

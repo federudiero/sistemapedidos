@@ -60,6 +60,18 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
 
   const [pacRefresh, setPacRefresh] = useState(0);
 
+  // 👉 Helper: sumar/restar cantidad con mínimo 1
+  const cambiarCantidad = (nombreProd, delta) => {
+    if (bloqueado) return;
+    setProductosSeleccionados((prev) =>
+      prev.map((p) =>
+        p.nombre === nombreProd
+          ? { ...p, cantidad: Math.max(1, (parseInt(p.cantidad, 10) || 1) + delta) }
+          : p
+      )
+    );
+  };
+
   useEffect(() => {
     if (!isLoaded || !mapReady || !mapRef.current) return;
 
@@ -457,7 +469,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
             />
 
             <div
-              className="overflow-y-auto overscroll-contain max-h-[55vh] sm:max-h-[60vh] md:max-h-[540px]"
+              className="overflow-y-auto overflow-x-hidden overscroll-contain max-h-[55vh] sm:max-h-[60vh] md:max-h-[540px] pr-1"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {productosFirestore
@@ -467,8 +479,8 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                   const cantidad = seleccionado?.cantidad || 0;
 
                   return (
-                    <div key={idx} className="flex items-center justify-between py-2 border-b border-base-200">
-                      <div className="flex items-center gap-2">
+                    <div key={idx} className="flex items-center justify-between gap-3 py-2 border-b border-base-200">
+                      <div className="flex items-center flex-1 min-w-0 gap-2">
                         <input
                           type="checkbox"
                           checked={!!seleccionado}
@@ -489,19 +501,43 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                       </div>
 
                       {!!seleccionado && (
-                        <input
-                          type="number"
-                          min="1"
-                          value={cantidad}
-                          onChange={(e) => {
-                            const cant = parseInt(e.target.value, 10);
-                            setProductosSeleccionados((prev) =>
-                              prev.map((p) => (p.nombre === prod.nombre ? { ...p, cantidad: cant } : p))
-                            );
-                          }}
-                          className="w-20 input input-sm input-bordered"
-                          disabled={bloqueado}
-                        />
+                        <div className="join shrink-0">
+                          <button
+                            type="button"
+                            className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
+                            onClick={() => cambiarCantidad(prod.nombre, -1)}
+                            disabled={bloqueado || cantidad <= 1}
+                            title="Restar"
+                          >
+                            −
+                          </button>
+
+                          <input
+                            type="number"
+                            min="1"
+                            value={cantidad}
+                            onChange={(e) => {
+                              const cant = Math.max(1, parseInt(e.target.value || "1", 10));
+                              setProductosSeleccionados((prev) =>
+                                prev.map((p) => (p.nombre === prod.nombre ? { ...p, cantidad: cant } : p))
+                              );
+                            }}
+                            className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
+                            disabled={bloqueado}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                          />
+
+                          <button
+                            type="button"
+                            className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
+                            onClick={() => cambiarCantidad(prod.nombre, +1)}
+                            disabled={bloqueado}
+                            title="Sumar"
+                          >
+                            +
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -523,7 +559,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               <div className="card-body">
                 <h2 className="text-lg font-bold text-error">🔁 Devoluciones</h2>
 
-                <div className="overflow-y-auto max-h-64">
+                <div className="pr-1 overflow-x-hidden overflow-y-auto max-h-64">
                   {productosFirestore.map((prod, idx) => {
                     const nombreDevolucion = `Devolución de ${prod.nombre}`;
                     const seleccionado = productosSeleccionados.find((p) => p.nombre === nombreDevolucion);
@@ -531,8 +567,8 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                     const estaSeleccionado = !!seleccionado;
 
                     return (
-                      <div key={idx} className="flex items-center justify-between py-2 border-b border-error/30">
-                        <div className="flex items-center gap-2">
+                      <div key={idx} className="flex items-center justify-between gap-3 py-2 border-b border-error/30">
+                        <div className="flex items-center flex-1 min-w-0 gap-2">
                           <input
                             type="checkbox"
                             checked={estaSeleccionado}
@@ -558,19 +594,41 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                         </div>
 
                         {estaSeleccionado && (
-                          <input
-                            type="number"
-                            min="1"
-                            value={cantidad}
-                            onChange={(e) => {
-                              const cant = parseInt(e.target.value, 10);
-                              setProductosSeleccionados((prev) =>
-                                prev.map((p) => (p.nombre === nombreDevolucion ? { ...p, cantidad: cant } : p))
-                              );
-                            }}
-                            className="w-20 input input-sm input-bordered"
-                            disabled={bloqueado}
-                          />
+                          <div className="join shrink-0">
+                            <button
+                              type="button"
+                              className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
+                              onClick={() => cambiarCantidad(nombreDevolucion, -1)}
+                              disabled={bloqueado || cantidad <= 1}
+                              title="Restar"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={cantidad}
+                              onChange={(e) => {
+                                const cant = Math.max(1, parseInt(e.target.value || "1", 10));
+                                setProductosSeleccionados((prev) =>
+                                  prev.map((p) =>
+                                    p.nombre === nombreDevolucion ? { ...p, cantidad: cant } : p
+                                  )
+                                );
+                              }}
+                              className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
+                              disabled={bloqueado}
+                            />
+                            <button
+                              type="button"
+                              className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
+                              onClick={() => cambiarCantidad(nombreDevolucion, +1)}
+                              disabled={bloqueado}
+                              title="Sumar"
+                            >
+                              +
+                            </button>
+                          </div>
                         )}
                       </div>
                     );

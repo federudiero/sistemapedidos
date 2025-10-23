@@ -1,50 +1,46 @@
-// src/components/ConteoPedidosPorDia.jsx
+// src/components/CargaDelDiaRepartidor.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { db } from "../firebase/firebase";
 import {
-  collection,
-  getDocs,
-  getDoc,
-  doc,
-  query,
-  where,
-  Timestamp,
+  collection, getDocs, getDoc, doc, query, where, Timestamp,
 } from "firebase/firestore";
-import { format } from "date-fns";
+import { format, startOfDay, addDays } from "date-fns";
 
-export default function ConteoPedidosPorDia({
+/**
+ * Panel "Qué cargar hoy" para el repartidor.
+ * - Filtra SOLO pedidos asignados al emailRepartidor en la fecha dada.
+ * - Cuenta por ID de producto.
+ * - Desglosa combos (componentes multiplicados por cantidad).
+ * - Excluye envíos/servicios (noDescuentaStock, tipo/tags "envio"/"flete"/"servicio").
+ */
+export default function CargaDelDiaRepartidor({
   provinciaId,
-  fecha,
-  desglosarCombos = true,
+  fecha,                 // Date
+  emailRepartidor,       // string (lowercase)
+  desglosarCombos = true // bool
 }) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [rows, setRows] = useState([]); // [{ id, nombre, cantidad }]
+  const [rows, setRows] = useState([]);         // [{ id, nombre, cantidad }]
   const [totalUnidades, setTotalUnidades] = useState(0);
-
   const [pedidosCount, setPedidosCount] = useState(0);
   const [observaciones, setObservaciones] = useState([]); // strings
   const [enviosIgnorados, setEnviosIgnorados] = useState(0);
+  const [error, setError] = useState("");
 
-  // Auditoría simple de rodillos (opcional)
-  const [rodillosEsperados, setRodillosEsperados] = useState(0);
-  const [rodillosContados, setRodillosContados] = useState(0);
-  const [debugOpen, setDebugOpen] = useState(false);
-  const [debugRodillosPorPedido, setDebugRodillosPorPedido] = useState([]); // [{id, resumen, rodillos}]
-
-  const fechaSel = useMemo(() => fecha || new Date(), [fecha]);
-  const ymd = (d) => format(d, "yyyy-MM-dd");
-
-  const colPedidos = useMemo(
-    () => collection(db, "provincias", provinciaId, "pedidos"),
-    [provinciaId]
-  );
+  // Catálogo
   const colProductos = useMemo(
     () => collection(db, "provincias", provinciaId, "productos"),
     [provinciaId]
   );
+  const colPedidos = useMemo(
+    () => collection(db, "provincias", provinciaId, "pedidos"),
+    [provinciaId]
+  );
 
-  // ---- utils
+  const fechaSel = useMemo(() => fecha || new Date(), [fecha]);
+  const ymd = (d) => format(d, "yyyy-MM-dd");
+
+  // --- utils
   const norm = (s) =>
     String(s || "")
       .normalize("NFD")
@@ -54,25 +50,19 @@ export default function ConteoPedidosPorDia({
       .replace(/\s+/g, " ")
       .trim();
 
-  const esRodillo = (nombre) => {
-    const n = norm(nombre);
-    return n.includes("rodillo") && n.includes("semi") && n.includes("lana") && n.includes("22");
-  };
-
-  // Detecta envíos/servicios para EXCLUIR del conteo
   const esEnvioOServicio = (prod, nombreFallback = "") => {
     if (prod) {
       if (prod.noDescuentaStock === true) return true;
       if (prod.esServicio === true) return true;
       if (typeof prod.tipo === "string") {
-        const t = String(prod.tipo).toLowerCase();
+        const t = prod.tipo.toLowerCase();
         if (t.includes("envio") || t.includes("envío") || t.includes("servicio") || t.includes("delivery") || t.includes("flete")) {
           return true;
         }
       }
       if (Array.isArray(prod.tags)) {
         const tags = prod.tags.map((x) => String(x || "").toLowerCase());
-        if (tags.some((t) => ["envio", "envío", "delivery", "flete", "servicio"].some((k) => t.includes(k)))) {
+        if (tags.some((t) => ["envio","envío","delivery","flete","servicio"].some((k) => t.includes(k)))) {
           return true;
         }
       }
@@ -84,7 +74,7 @@ export default function ConteoPedidosPorDia({
     return false;
   };
 
-  // ---- Catálogo en memoria
+  // Catálogo en memoria
   const [catalogoById, setCatalogoById] = useState(new Map());
   const [catalogoByNombreExacto, setCatalogoByNombreExacto] = useState(new Map());
 
@@ -108,7 +98,6 @@ export default function ConteoPedidosPorDia({
     })();
   }, [colProductos]);
 
-  // Cache puntual para IDs no presentes al inicio
   const fetchProductoByIdOnce = async (id) => {
     if (!id) return null;
     if (catalogoById.has(id)) return catalogoById.get(id);
@@ -132,68 +121,75 @@ export default function ConteoPedidosPorDia({
     return prod;
   };
 
-  // ---- Cálculo principal
+  // --- cálculo principal
   useEffect(() => {
     (async () => {
+      if (!provinciaId || !emailRepartidor) return;
       setLoading(true);
       setError("");
-      try {
-        // Rango del día (00:00 → 23:59)
-        const start = new Date(fechaSel);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(fechaSel);
-        end.setHours(23, 59, 59, 999);
 
-        const qRef = query(
+      try {
+        // Día exacto [00:00, siguiente 00:00)
+        const start = startOfDay(fechaSel);
+        const endExcl = startOfDay(addDays(fechaSel, 1));
+
+        // Dos estrategias de asignación (match con RepartidorView)
+        const q1 = query(
           colPedidos,
+          where("asignadoA", "array-contains", emailRepartidor),
           where("fecha", ">=", Timestamp.fromDate(start)),
-          where("fecha", "<=", Timestamp.fromDate(end))
+          where("fecha", "<", Timestamp.fromDate(endExcl))
         );
 
-        const qs = await getDocs(qRef);
-        setPedidosCount(qs.size);
+        const q2 = query(
+          colPedidos,
+          where("asignadoA", "==", emailRepartidor),
+          where("fecha", ">=", Timestamp.fromDate(start)),
+          where("fecha", "<", Timestamp.fromDate(endExcl))
+        );
+
+        // Ejecutar y mergear resultados (evitar duplicados por id)
+        const [s1, s2] = await Promise.allSettled([getDocs(q1), getDocs(q2)]);
+        const docs = new Map();
+        if (s1.status === "fulfilled") {
+          s1.value.docs.forEach((d) => docs.set(d.id, d));
+        }
+        if (s2.status === "fulfilled") {
+          s2.value.docs.forEach((d) => docs.set(d.id, d));
+        }
+
+        setPedidosCount(docs.size);
 
         const countById = new Map(); // id -> { prod, cantidad }
+        const obs = [];
         let enviosIgn = 0;
 
         const addByProd = (prod, delta) => {
           if (!prod) return;
           if (esEnvioOServicio(prod)) {
-            enviosIgn += Number(delta) || 0;
-            return; // excluir envíos
+            enviosIgn += Number(delta) || 0; // excluir
+            return;
           }
           const prev = countById.get(prod.id) || { prod, cantidad: 0 };
           prev.cantidad += Number(delta) || 0;
-          prev.prod = prod; // mantener última versión
+          prev.prod = prod;
           countById.set(prod.id, prev);
         };
 
-        const obs = [];
-        let combosLatexEsperanRodillo = 0;
-        let combosMembranaEsperanRodillo = 0;
-        const dbg = [];
-
-        for (const d of qs.docs) {
+        for (const d of docs.values()) {
           const p = d.data();
-          const resumen =
-            p.pedido ||
-            (Array.isArray(p.productos)
-              ? p.productos
-                  .map((it) => `${it?.nombre || it?.productoId || "?"} x${it?.cantidad || 1}`)
-                  .join(" - ")
-              : "");
 
+          // Normalización de items: esperamos p.productos = [{productoId|id|productoRefPath|nombre, cantidad}]
           if (!Array.isArray(p.productos) || p.productos.length === 0) {
-            if (p.pedido) obs.push(`Pedido ${d.id}: detalles en texto ignorados (sin IDs).`);
+            // si solo hay texto libre en p.pedido, lo ignoramos para no contaminar el conteo
             continue;
           }
-
-          let rodillosEstePedido = 0;
 
           for (const it of p.productos) {
             const qty = Number(it?.cantidad || 0);
             if (!qty) continue;
 
+            // Resolver ID
             let id = it?.productoId || it?.id || null;
             if (!id && it?.productoRefPath) {
               const segs = String(it.productoRefPath).split("/").filter(Boolean);
@@ -208,10 +204,10 @@ export default function ConteoPedidosPorDia({
                 continue;
               }
             } else {
-              // Fallback SOLO por nombre EXACTO
+              // fallback por NOMBRE EXACTO
               const nombreExacto = String(it?.nombre || "").trim();
               if (!nombreExacto) {
-                obs.push(`Pedido ${d.id}: ítem sin ID ni nombre (ignorado).`);
+                obs.push(`Pedido ${d.id}: item sin ID ni nombre (ignorado).`);
                 continue;
               }
               const prodByName = catalogoByNombreExacto.get(nombreExacto) || null;
@@ -222,21 +218,15 @@ export default function ConteoPedidosPorDia({
               prod = prodByName;
             }
 
-            // Si el propio producto es envío/servicio, no se cuenta
+            // Excluir envíos/servicios
             if (esEnvioOServicio(prod, it?.nombre)) {
               enviosIgn += qty;
               continue;
             }
 
-            const baseName = norm(prod.nombre || "");
             const esCombo = !!prod.esCombo && Array.isArray(prod.componentes);
-            const esComboLatex = esCombo && baseName.includes("latex") && baseName.includes("20l");
-            const esComboMembrana = esCombo && baseName.includes("membrana") && baseName.includes("20l");
-            if (esComboLatex) combosLatexEsperanRodillo += qty;
-            if (esComboMembrana) combosMembranaEsperanRodillo += qty;
-
             if (desglosarCombos && esCombo) {
-              // Desglosar componentes (por ID), excluyendo envíos/servicios
+              // Desglosar componentes por ID (excluyendo envíos)
               for (const comp of prod.componentes) {
                 const compCant = qty * Number(comp?.cantidad || 0);
                 if (!compCant) continue;
@@ -254,21 +244,14 @@ export default function ConteoPedidosPorDia({
                   continue;
                 }
                 addByProd(compProd, compCant);
-                if (esRodillo(compProd.nombre)) rodillosEstePedido += compCant;
               }
             } else {
               // Producto simple
               addByProd(prod, qty);
-              if (esRodillo(prod.nombre)) rodillosEstePedido += qty;
             }
-          }
-
-          if (rodillosEstePedido > 0) {
-            dbg.push({ id: d.id, resumen, rodillos: rodillosEstePedido });
           }
         }
 
-        // Listado final: mostramos el nombre EXACTO del catálogo (sin “canonizar”)
         const listado = Array.from(countById.values())
           .map(({ prod, cantidad }) => ({
             id: prod.id,
@@ -279,115 +262,62 @@ export default function ConteoPedidosPorDia({
 
         setRows(listado);
         setTotalUnidades(listado.reduce((acc, r) => acc + (r.cantidad || 0), 0));
-
-        const contados = listado
-          .filter((r) => esRodillo(r.nombre))
-          .reduce((acc, r) => acc + r.cantidad, 0);
-
-        setRodillosContados(contados);
-        setRodillosEsperados(combosLatexEsperanRodillo + combosMembranaEsperanRodillo);
-
-        setDebugRodillosPorPedido(dbg);
         setObservaciones(obs);
         setEnviosIgnorados(enviosIgn);
       } catch (e) {
-        console.error("ConteoPedidosPorDia → error:", e);
-        setError("No se pudo calcular el conteo del día. Revisá datos/IDs.");
+        console.error("CargaDelDiaRepartidor → error:", e);
+        setError("No se pudo calcular la carga del día. Revisá datos/IDs.");
         setRows([]);
         setTotalUnidades(0);
         setPedidosCount(0);
         setObservaciones([]);
         setEnviosIgnorados(0);
-        setRodillosContados(0);
-        setRodillosEsperados(0);
-        setDebugRodillosPorPedido([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [colPedidos, colProductos, fechaSel, desglosarCombos, provinciaId, catalogoById, catalogoByNombreExacto]);
-
-  const diffRodillos = rodillosContados - rodillosEsperados;
+  }, [colPedidos, colProductos, provinciaId, fechaSel, emailRepartidor, desglosarCombos, catalogoById, catalogoByNombreExacto]);
 
   return (
-    <div className="p-4 mx-4 mb-10 border rounded-xl bg-base-100 border-base-300">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-lg font-semibold">
-          📊 Conteo del día — Prov: <span className="font-mono">{provinciaId}</span>
-        </h3>
-        <div className="text-sm opacity-80">Fecha: {ymd(fechaSel)}</div>
+    <div className="p-4 mt-6 rounded-xl border bg-base-100 border-base-300">
+      <div className="flex gap-2 justify-between items-center">
+        <h3 className="text-lg font-semibold">🧰 Qué cargar hoy</h3>
+        <div className="text-sm opacity-70">
+          {ymd(fechaSel)} · Pedidos asignados: {pedidosCount}
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 mt-3">
-        <div className="badge badge-lg badge-secondary">
-          Total de unidades: {totalUnidades}
-        </div>
-        <div className="badge badge-outline">Pedidos del día: {pedidosCount}</div>
+      <div className="flex flex-wrap gap-3 items-center mt-2">
+        <div className="badge badge-lg badge-secondary">Total de unidades: {totalUnidades}</div>
         <div className="badge badge-outline">Modo: ID-first (combos desglosados)</div>
         <div className="badge badge-outline">Envíos ignorados: {enviosIgnorados}</div>
-        {diffRodillos !== 0 && (
-          <>
-            <div className="badge badge-warning badge-outline">
-              ⚠︎ Rodillos: contados {rodillosContados} / esperados {rodillosEsperados} ({diffRodillos > 0 ? "+" : ""}{diffRodillos})
-            </div>
-            <button className="btn btn-xs btn-outline" onClick={() => setDebugOpen((v) => !v)}>
-              {debugOpen ? "Ocultar debug" : "Ver detalle rodillos"}
-            </button>
-          </>
-        )}
       </div>
 
       {error && <div className="mt-3 alert alert-error">{error}</div>}
 
       {observaciones.length > 0 && (
-        <div className="p-3 mt-3 text-sm border rounded-lg bg-base-200 border-base-300">
+        <div className="p-3 mt-3 text-sm rounded-lg border bg-base-200 border-base-300">
           <div className="mb-1 font-semibold">⚠ Observaciones</div>
           <ul className="pl-6 list-disc">
-            {observaciones.map((t, i) => (
-              <li key={i}>{t}</li>
-            ))}
+            {observaciones.map((t, i) => <li key={i}>{t}</li>)}
           </ul>
           <div className="mt-1 text-xs opacity-70">
-            Sugerencia: guardá <code>productoId</code> o <code>productoRefPath</code> en cada item de <code>pedido.productos[]</code>.
-            Si no hay ID, intento match <b>exacto</b> por nombre contra catálogo; si no existe, lo ignoro para evitar conteos erróneos.
+            Sugerencia: Guardá <code>productoId</code> o <code>productoRefPath</code> en cada item.
           </div>
         </div>
       )}
 
-      {debugOpen && diffRodillos !== 0 && (
-        <div className="p-3 mt-3 border rounded-lg bg-base-200 border-base-300">
-          <div className="mb-2 font-semibold">Detalle por pedido (rodillos sumados)</div>
-          <ul className="pl-6 text-sm list-disc">
-            {debugRodillosPorPedido.length === 0 ? (
-              <li>No se registraron rodillos por pedido.</li>
-            ) : (
-              debugRodillosPorPedido.map((d, i) => (
-                <li key={d.id + "_" + i}>
-                  <span className="font-mono">{d.id}</span> —{" "}
-                  <span className="opacity-80">{(d.resumen || "").slice(0, 140)}</span>{" "}
-                  → <b>{d.rodillos}</b>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
-
-      <div className="mt-4 overflow-x-auto">
+      <div className="overflow-x-auto mt-4">
         <table className="table table-zebra">
           <thead>
             <tr>
               <th className="min-w-64">Producto</th>
-              <th className="text-right w-28">Cantidad</th>
+              <th className="w-28 text-right">Cantidad</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && !loading ? (
-              <tr>
-                <td colSpan={2} className="opacity-70">
-                  No hay productos para esa fecha.
-                </td>
-              </tr>
+              <tr><td colSpan={2} className="opacity-70">No hay productos para cargar.</td></tr>
             ) : (
               rows.map((r) => (
                 <tr key={r.id}>

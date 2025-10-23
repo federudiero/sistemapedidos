@@ -13,7 +13,7 @@ export const PROVINCIAS = [
   { id: "JUJ", nombre: "Jujuy",        base: "San Salvador de Jujuy, Jujuy" },
   { id: "LP",  nombre: "La Pampa",     base: "Santa Rosa, La Pampa" },
   { id: "LR",  nombre: "La Rioja",     base: "La Rioja, La Rioja" },
-  { id: "MZA", nombre: "Mendoza",      base: "Av. San Martín 500, Mendoza" },
+  { id: "MZA", nombre: "Mendoza",      base: "25 de Mayo, M5525 Rodeo de la Cruz, Mendoza" , baseName: "EXPRESO DIEMAR",  baseLink: "https://maps.app.goo.gl/Sc1pZbuzcYUZuptL8?g_st=aw" },
   { id: "MIS", nombre: "Misiones",     base: "Posadas, Misiones" },
   { id: "NEU", nombre: "Neuquén",      base: "Neuquén Capital, Neuquén" },
   { id: "RN",  nombre: "Río Negro",    base: "General Roca, Río Negro" },

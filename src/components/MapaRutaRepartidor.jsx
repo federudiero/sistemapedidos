@@ -1,10 +1,11 @@
-// src/components/MapaRutaRepartidor.jsx — números en pines, suprime letras por defecto
+// src/components/MapaRutaRepartidor.jsx — números en pines + editor en InfoWindow
 import React, { useEffect, useMemo, useState } from "react";
 import {
   GoogleMap,
   useJsApiLoader,
   DirectionsRenderer,
   Marker,
+  InfoWindow, // 👈 NUEVO
 } from "@react-google-maps/api";
 import { baseDireccion } from "../constants/provincias";
 import { useProvincia } from "../hooks/useProvincia.js";
@@ -17,19 +18,19 @@ const options = {
   mapTypeControl: false,
 };
 
-// ===== Helpers de dirección (mismos criterios que en AdminHojaRuta) =====
+// ===== Helpers de dirección =====
 const sanitizeDireccion = (s) => {
   let x = String(s || "").normalize("NFKC").trim();
   x = x.replace(/\s+/g, " ");
   const from = "ÁÉÍÓÚÜÑáéíóúüñ";
   const to   = "AEIOUUNaeiouun";
-  x = x.replace(/[ÁÉÍÓÚÜÑáéíóúüñ]/g, ch => to[from.indexOf(ch)] || ch);
+  x = x.replace(/[ÁÉÍÓÚÜÑáéíóúüñ]/g, (ch) => to[from.indexOf(ch)] || ch);
   return x;
 };
 const ensureARContext = (addr, base) => {
   const s = String(addr || "");
   if (/argentina/i.test(s)) return s;
-  const parts = String(base || "").split(",").map(t => t.trim());
+  const parts = String(base || "").split(",").map((t) => t.trim());
   const ctx = parts.slice(-3).join(", "); // "Ciudad, Provincia, Argentina"
   return `${s}, ${ctx}`;
 };
@@ -43,13 +44,13 @@ const chunkArray = (arr, size) => {
   return out;
 };
 
-export default function MapaRutaRepartidor({ pedidos = [] }) {
+export default function MapaRutaRepartidor({ pedidos = [], onReindex }) {
   const { provinciaId } = useProvincia();
   const BASE_DIRECCION = baseDireccion(provinciaId);
 
   // Base context: "Ciudad, Provincia, Argentina"
   const baseContext = useMemo(() => {
-    const parts = String(BASE_DIRECCION || "").split(",").map(t => t.trim());
+    const parts = String(BASE_DIRECCION || "").split(",").map((t) => t.trim());
     return parts.slice(-3).join(", ");
   }, [BASE_DIRECCION]);
 
@@ -58,6 +59,10 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
   const [chunkPedidos, setChunkPedidos] = useState([]);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+
+  // 👇 Estado del “modal” (InfoWindow) de edición
+  const [editor, setEditor] = useState(null);
+  // editor = { index: number (0-based), pedidoId: string, position: LatLngLiteral, value: number }
 
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
@@ -83,8 +88,7 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
   // Normalizamos cada "location" para Directions
   const locations = useMemo(() => {
     return pedidosValidos.map((p) => {
-      if (p.placeId)
-        return { location: { placeId: p.placeId }, stopover: true };
+      if (p.placeId) return { location: { placeId: p.placeId }, stopover: true };
       if (
         p.coordenadas &&
         typeof p.coordenadas.lat === "number" &&
@@ -95,9 +99,7 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
           stopover: true,
         };
       }
-      const addr = sanitizeDireccion(
-        ensureARContext(p.direccion || "", baseContext)
-      );
+      const addr = sanitizeDireccion(ensureARContext(p.direccion || "", baseContext));
       return { location: addr, stopover: true };
     });
   }, [pedidosValidos, baseContext]);
@@ -148,7 +150,7 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
           const isFirst = i === 0;
           const isLast = i === locChunks.length - 1;
 
-          // Origen encadenado: 1º tramo -> BASE; siguientes -> última parada del tramo previo
+          // Origen encadenado
           const origin = isFirst
             ? sanitizeDireccion(ensureARContext(BASE_DIRECCION, baseContext))
             : previousLastLoc || sanitizeDireccion(ensureARContext(BASE_DIRECCION, baseContext));
@@ -156,17 +158,15 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
           // Última parada del chunk actual
           const lastOfChunk = chunkLocs[chunkLocs.length - 1]?.location;
 
-          // Destino: intermedios -> última del chunk; último -> BASE
+          // Destino (último tramo vuelve a base)
           const destination = isLast
             ? sanitizeDireccion(ensureARContext(BASE_DIRECCION, baseContext))
             : lastOfChunk;
 
-          // Waypoints: intermedios -> todas menos la última; último -> TODAS
+          // Waypoints: intermedios = todas menos la última; último = TODAS
           let innerWaypoints = isLast ? chunkLocs : chunkLocs.slice(0, -1);
 
-          // Cap de seguridad
-          if (innerWaypoints.length > MAX_WAYPOINTS)
-            innerWaypoints.length = MAX_WAYPOINTS;
+          if (innerWaypoints.length > MAX_WAYPOINTS) innerWaypoints.length = MAX_WAYPOINTS;
 
           const res = await new Promise((resolve, reject) => {
             service.route(
@@ -177,6 +177,7 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
                 travelMode: window.google.maps.TravelMode.DRIVING,
                 optimizeWaypoints: OPTIMIZE_PER_CHUNK,
                 region: "AR",
+                provideRouteAlternatives: false,
               },
               (result, status) => {
                 if (status === "OK") resolve(result);
@@ -210,7 +211,7 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
     })();
   }, [isLoaded, center, BASE_DIRECCION, locations, baseContext, pedidosValidos]);
 
-  // === Marcadores NUMÉRICOS calculados desde los legs de cada tramo ===
+  // === Marcadores NUMÉRICOS desde legs de cada tramo ===
   const numberedMarkers = useMemo(() => {
     const pins = [];
     let idx = 0; // contador global 1..N
@@ -218,15 +219,13 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
       const route = seg?.routes?.[0];
       const legs = route?.legs || [];
       const isLastSeg = si === segments.length - 1;
-
-      // En el último tramo NO numeramos el depósito (último leg termina en la base)
-      const limit = isLastSeg ? Math.max(0, legs.length - 1) : legs.length;
+      const limit = isLastSeg ? Math.max(0, legs.length - 1) : legs.length; // no numerar la vuelta a base
 
       for (let j = 0; j < limit; j++) {
         const leg = legs[j];
         if (leg?.end_location) {
           pins.push({
-            position: leg.end_location,
+            position: { lat: leg.end_location.lat(), lng: leg.end_location.lng() },
             label: String(++idx),
             title: `Parada ${idx}`,
           });
@@ -236,6 +235,35 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
     return pins;
   }, [segments]);
 
+  // Mapeo número (#1..#N) -> pedido.id según el orden visible
+  const markerIndexToPedidoId = useMemo(() => {
+    return pedidosValidos.map((p) => p.id);
+  }, [pedidosValidos]);
+
+  // ===== Handlers del editor (InfoWindow) =====
+  const openEditor = (markerIdx) => {
+    const pedidoId = markerIndexToPedidoId[markerIdx];
+    const position = numberedMarkers[markerIdx]?.position;
+    setEditor({
+      index: markerIdx,
+      pedidoId,
+      position,
+      value: markerIdx + 1, // default visible
+    });
+  };
+
+  const closeEditor = () => setEditor(null);
+
+  const saveEditor = () => {
+    if (!editor || !onReindex) return;
+    const total = pedidosValidos.length;
+    let to = parseInt(editor.value, 10);
+    if (Number.isNaN(to)) return;
+    to = Math.max(1, Math.min(total, to)) - 1; // 1..N -> 0..N-1
+    if (to !== editor.index) onReindex(editor.pedidoId, to);
+    closeEditor();
+  };
+
   if (!isLoaded) return <p>Cargando mapa…</p>;
   if (!center) return <p>Localizando depósito…</p>;
 
@@ -244,23 +272,18 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
       {msg && <div className="mb-2 text-sm badge badge-outline">{msg}</div>}
       {error && <div className="mb-2 text-error">{error}</div>}
 
-      <GoogleMap
-        mapContainerStyle={mapContainerStyle}
-        center={center}
-        zoom={12}
-        options={options}
-      >
+      <GoogleMap mapContainerStyle={mapContainerStyle} center={center} zoom={12} options={options}>
         {/* Depósito */}
         <Marker position={center} label="D" title="Depósito" />
 
-        {/* Render de todos los tramos con colores; suprime marcadores por defecto */}
+        {/* Rutas por tramo (sin marcadores A,B,C) */}
         {segments.map((seg, i) => (
           <DirectionsRenderer
             key={i}
             directions={seg}
             options={{
               preserveViewport: true,
-              suppressMarkers: true, // 👈 evita letras A,B,C,...
+              suppressMarkers: true,
               polylineOptions: {
                 strokeWeight: 5,
                 strokeOpacity: 0.9,
@@ -270,31 +293,63 @@ export default function MapaRutaRepartidor({ pedidos = [] }) {
           />
         ))}
 
-        {/* Pines numerados 1..N */}
+        {/* Pines numerados 1..N (click = abrir editor) */}
         {numberedMarkers.map((m, i) => (
-          <Marker key={`pin-${i}`} position={m.position} label={m.label} title={m.title} />
+          <Marker
+            key={`pin-${i}`}
+            position={m.position}
+            label={m.label}
+            title={`${m.title} — click para editar`}
+            onClick={() => openEditor(i)}
+          />
         ))}
 
-        {/* Fallback: si no hubo Directions, mostrar pines por coordenadas (ya numerados) */}
-        {segments.length === 0 &&
-          pedidosValidos
-            .filter(
-              (p) =>
-                p?.coordenadas &&
-                typeof p.coordenadas.lat === "number" &&
-                typeof p.coordenadas.lng === "number"
-            )
-            .map((p, idx) => (
-              <Marker key={p.id || idx} label={`${idx + 1}`} position={p.coordenadas} />
-            ))}
+        {/* InfoWindow “modalito” para editar el # */}
+        {editor && editor.position && (
+  <InfoWindow
+    position={editor.position}
+    onCloseClick={closeEditor}
+    options={{ maxWidth: 240 }}
+  >
+    <div className="p-2 space-y-2 text-sm rounded-lg shadow-md bg-base-200">
+      <div className="font-semibold text-base-content/90">Editar posición</div>
+
+      <div className="flex gap-2 items-center">
+        <span className="opacity-70">Actual:</span>
+        <span className="font-mono badge badge-success badge-sm">#{editor.index + 1}</span>
+      </div>
+
+      <label className="w-full form-control">
+        <span className="text-xs label-text">Nueva posición</span>
+        <input
+          type="number"
+          min={1}
+          max={pedidosValidos.length}
+          value={editor.value}
+          onChange={(e) => setEditor((prev) => ({ ...prev, value: e.target.value }))}
+          className="w-24 text-center input input-sm input-bordered bg-base-100"
+        />
+      </label>
+
+      <div className="flex gap-2 justify-end pt-1">
+        <button className="btn btn-xs btn-ghost" onClick={closeEditor}>
+          ✖ Cancelar
+        </button>
+        <button className="flex gap-1 items-center btn btn-xs btn-primary" onClick={saveEditor}>
+          <span>💾</span> Guardar
+        </button>
+      </div>
+    </div>
+  </InfoWindow>
+)}
       </GoogleMap>
 
       {/* Listado por tramo debajo del mapa */}
       {chunkPedidos.length > 0 && (
         <div className="mt-4">
           {chunkPedidos.map((chunk, i) => (
-            <div key={i} className="p-3 mb-3 border rounded-lg border-base-300 bg-base-100">
-              <div className="flex items-center gap-2 mb-2">
+            <div key={i} className="p-3 mb-3 rounded-lg border border-base-300 bg-base-100">
+              <div className="flex gap-2 items-center mb-2">
                 <div
                   className="w-3 h-3 rounded"
                   style={{ backgroundColor: COLOR_PALETTE[i % COLOR_PALETTE.length] }}

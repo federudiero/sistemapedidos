@@ -41,9 +41,10 @@ import AdminNavbar from "../components/AdminNavbar";
 import MapaRutaRepartidor from "../components/MapaRutaRepartidor";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { baseDireccion } from "../constants/provincias";
+import { useJsApiLoader } from "@react-google-maps/api";
 
 /* ---------- Ítem ordenable (UI) ---------- */
-function SortablePedido({ pedido }) {
+function SortablePedido({ pedido, index }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: pedido.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -54,14 +55,20 @@ function SortablePedido({ pedido }) {
       {...attributes}
       {...listeners}
       style={style}
-      className="p-3 mb-2 border rounded shadow cursor-move bg-base-100 border-base-300"
+      className="flex gap-3 items-start p-3 mb-2 rounded border shadow cursor-move bg-base-100 border-base-300"
     >
-      <p><strong>🧍 Cliente:</strong> {pedido.nombre}</p>
-      <p><strong>📍 Dirección:</strong> {pedido.direccion}</p>
-      <p><strong>🧾 Pedido:</strong> {pedido.pedido}</p>
+      {/* NUEVO: badge con número de orden visible */}
+      <div className="mt-1 font-mono badge badge-primary badge-lg">#{index + 1}</div>
+
+      <div className="flex-1">
+        <p><strong>🧍 Cliente:</strong> {pedido.nombre}</p>
+        <p><strong>📍 Dirección:</strong> {pedido.direccion}</p>
+        <p><strong>🧾 Pedido:</strong> {pedido.pedido}</p>
+      </div>
     </li>
   );
 }
+
 
 /* ========= Geocodificación robusta y agnóstica de provincia ========= */
 const sanitizeDireccion = (s) => {
@@ -169,6 +176,8 @@ const buildWaypoints = async (pedidos, baseContext, bounds, baseCity) => {
   return { waypoints, errores };
 };
 
+const GOOGLE_LIBS = ["places"];
+
 export default function AdminHojaRuta() {
   const { provinciaId } = useProvincia();
   const BASE_DIRECCION = baseDireccion(provinciaId);
@@ -183,6 +192,13 @@ export default function AdminHojaRuta() {
     });
     return () => unsub();
   }, []);
+
+
+  const { isLoaded: isMapsLoaded } = useJsApiLoader({
+    id: "google-map-script",
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries: GOOGLE_LIBS,
+  });
 
   // ===== Repartidores desde /config/usuarios =====
   const [repEmails, setRepEmails] = useState([]);
@@ -330,6 +346,54 @@ export default function AdminHojaRuta() {
     setPedidosPorRepartidor((prev) => ({ ...prev, [email]: reordered }));
   };
 
+// Reordenar desde MAPA + guardar automáticamente en Firestore (solo difs)
+const handleReindex = async (email, pedidoId, toIndex) => {
+  const items = [...(pedidosPorRepartidor[email] || [])];
+  const from = items.findIndex((p) => p.id === pedidoId);
+  if (from < 0) return;
+
+  const max = Math.max(0, items.length - 1);
+  const to = Math.max(0, Math.min(max, Number(toIndex)));
+
+  if (from === to) return;
+
+  // 1) Reordenar en memoria (UI inmediata)
+  const [m] = items.splice(from, 1);
+  items.splice(to, 0, m);
+  setPedidosPorRepartidor((prev) => ({ ...prev, [email]: items }));
+
+  // 2) Guardar automáticamente SOLO difs (misma lógica del botón)
+  //    Bloqueamos por repartidor para evitar carrera con el botón de Guardar/Optimizar
+  if (busyByEmail[email]) return;
+  setBusy(email, true);
+  try {
+    const { escritos, omitidos } = await persistirOrdenSoloDifs(email, items);
+
+    // Refrescar ordenRuta en el estado local para que quede consistente con DB
+    setPedidosPorRepartidor((prev) => ({
+      ...prev,
+      [email]: (prev[email] || []).map((p, i) => ({ ...p, ordenRuta: i })),
+    }));
+
+    if (escritos > 0) {
+      // aviso chico; si preferís que sea silencioso, podés quitarlo
+      Swal.fire("✅ Orden guardado", `Se actualizaron ${escritos} pedido(s).`, "success");
+    }
+  } catch (err) {
+    console.error(err);
+    // Si estás logueado como Repartidor, las reglas bloquean ordenRuta (PERMISSION_DENIED)
+    Swal.fire(
+      "❌ Sin permisos",
+      "No se pudo guardar el orden. Probá con un usuario *Admin* o *Vendedor*.",
+      "error"
+    );
+  } finally {
+    setBusy(email, false);
+  }
+};
+
+
+
   // === Escribir SOLO difs, en batch ===
   const persistirOrdenSoloDifs = async (email, listaPedidos) => {
     const pedidos = listaPedidos || [];
@@ -385,6 +449,7 @@ export default function AdminHojaRuta() {
     let alive = true;
     (async () => {
       try {
+        if (!isMapsLoaded || !BASE_DIRECCION) return;
         const res = await geocodeToLatLng(BASE_DIRECCION, baseContext, null, null);
         if (!alive) return;
         setBaseLoc(res.geometry.location);
@@ -396,7 +461,7 @@ export default function AdminHojaRuta() {
       }
     })();
     return () => { alive = false; };
-  }, [BASE_DIRECCION, baseContext]);
+  },[BASE_DIRECCION, baseContext, isMapsLoaded]);
 
   // Ejecuta una optimización de un segmento y devuelve los pedidos del segmento en orden
   const optimizarSegmento = async (service, { origin, destination, pedidos, baseContext, bounds, baseCity }) => {
@@ -466,6 +531,15 @@ export default function AdminHojaRuta() {
       Swal.fire("⏳ Cargando base", "Esperá un segundo que ubico la base…", "info");
       return;
     }
+
+     if (!isMapsLoaded) {
+    Swal.fire("⏳ Cargando Google Maps", "Aguarda un instante…", "info");
+    return;
+  }
+  if (!baseLoc || !baseBounds) {
+    Swal.fire("⏳ Cargando base", "Esperá un segundo que ubico la base…", "info");
+    return;
+  }
     setBusy(email, true);
 
     try {
@@ -563,6 +637,100 @@ export default function AdminHojaRuta() {
       setBusy(email, false);
     }
   };
+
+// Igual que optimizarRuta, pero invierte el resultado antes de persistir
+const optimizarRutaAlReves = async (email) => {
+  if (busyByEmail[email]) return;
+
+  if (!baseLoc || !baseBounds) {
+    Swal.fire("⏳ Cargando base", "Esperá un segundo que ubico la base…", "info");
+    return;
+  }
+
+  setBusy(email, true);
+  try {
+    const pedidos = pedidosPorRepartidor[email] || [];
+    if (pedidos.length <= 2) { setBusy(email, false); return; }
+
+    const service = new window.google.maps.DirectionsService();
+
+    let nuevosPedidos = [];
+    const MAX_WAYPOINTS = 25;
+
+    if (pedidos.length <= MAX_WAYPOINTS) {
+      // optimizo el tramo completo, luego invierto
+      const optim = await optimizarSegmento(service, {
+        origin: baseLoc,
+        destination: baseLoc,
+        pedidos,
+        baseContext,
+        bounds: baseBounds,
+        baseCity
+      });
+      nuevosPedidos = optim;
+    } else {
+      // por chunks encadenados (misma lógica que tu optimizarRuta normal)
+      const chunks = chunkArray(pedidos, MAX_WAYPOINTS);
+      const last1 = chunks[0][chunks[0].length - 1]?.direccion;
+
+      let acumulado = await optimizarSegmento(service, {
+        origin: baseLoc,
+        destination: last1,
+        pedidos: chunks[0].slice(0, -1),
+        baseContext,
+        bounds: baseBounds,
+        baseCity
+      });
+      nuevosPedidos.push(...acumulado);
+
+      for (let i = 1; i < chunks.length; i++) {
+        const origen = acumulado[acumulado.length - 1]?.direccion || BASE_DIRECCION;
+        const esUltimo = i === chunks.length - 1;
+        const lastAddr = chunks[i][chunks[i].length - 1]?.direccion;
+        const destination = esUltimo ? baseLoc : lastAddr;
+        const pedidosWaypoints = esUltimo ? chunks[i] : chunks[i].slice(0, -1);
+
+        const optim = await optimizarSegmento(service, {
+          origin: origen,
+          destination,
+          pedidos: pedidosWaypoints,
+          baseContext,
+          bounds: baseBounds,
+          baseCity
+        });
+        acumulado = optim;
+        nuevosPedidos.push(...optim);
+      }
+    }
+
+    // 🔁 acá está la diferencia: invertimos el orden
+    nuevosPedidos.reverse();
+
+    setPedidosPorRepartidor((prev) => ({ ...prev, [email]: nuevosPedidos }));
+
+    // guardamos SOLO difs, igual que en tu botón
+    const { escritos, omitidos } = await persistirOrdenSoloDifs(email, nuevosPedidos);
+    if (escritos === 0) {
+      Swal.fire("Sin cambios", `El orden ya coincide (invertido) para ${email}.`, "info");
+    } else {
+      Swal.fire("✅ Ruta invertida", `Se escribieron ${escritos} cambios (omitidos ${omitidos}).`, "success");
+    }
+
+    // reflejo local de ordenRuta
+    setPedidosPorRepartidor((prev) => ({
+      ...prev,
+      [email]: (prev[email] || []).map((p, i) => ({ ...p, ordenRuta: i })),
+    }));
+  } catch (err) {
+    console.error(err);
+    Swal.fire("❌ Error", "No se pudo calcular la ruta invertida", "error");
+  } finally {
+    setBusy(email, false);
+  }
+};
+
+
+
 
   // =========================
   // Exportar a Excel (TABLA) — estilos exactos A:G
@@ -809,8 +977,8 @@ export default function AdminHojaRuta() {
       </div>
       <div className="h-16" />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
+        <div className="flex gap-3 items-center">
           <h2 className="text-2xl font-bold">🗺️ Hoja de Ruta por Repartidor</h2>
           <div className="font-mono badge badge-primary badge-lg">
             Prov: {provinciaId}
@@ -857,31 +1025,56 @@ export default function AdminHojaRuta() {
         ) : (
           Object.keys(pedidosPorRepartidor).map((email, idx) => {
             const r = { email, label: `R${idx + 1}` };
-            const disabled = cierreYaProcesado || busyByEmail[email];
+           // dentro del map, antes de los botones
+const e = email; // o r.email si preferís
+// Requiere Google Maps cargado + base geocodificada
+const canOptimize = isMapsLoaded && !!baseLoc && !!baseBounds;
+
+// Guardar NO depende del estado del mapa
+const disabledGuardar =
+  cierreYaProcesado || !!busyByEmail[e] || loadingUsuarios || !authReady;
+
+// Optimizar (y “Invertir circuito”) SÍ dependen del mapa/base
+const disabledOptimizar =
+  cierreYaProcesado || !!busyByEmail[e] || !canOptimize;
             return (
               <div
                 key={r.email}
-                className="p-4 mb-8 border shadow-md rounded-xl border-base-300 bg-base-200"
+                className="p-4 mb-8 rounded-xl border shadow-md border-base-300 bg-base-200"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
                   <h3 className="text-lg font-semibold text-primary">
                     🛵 {r.label} — {r.email}
                   </h3>
                   <div className="flex gap-2">
-                    <button
-                      className={`btn btn-sm btn-primary ${busyByEmail[email] ? "btn-disabled" : ""}`}
-                      onClick={() => guardarOrden(r.email)}
-                      disabled={disabled}
-                    >
-                      {busyByEmail[email] ? "⏳ Guardando…" : "💾 Guardar orden"}
-                    </button>
-                    <button
-                      className={`btn btn-sm btn-accent ${busyByEmail[email] ? "btn-disabled" : ""}`}
-                      onClick={() => optimizarRuta(r.email)}
-                      disabled={disabled}
-                    >
-                      {busyByEmail[email] ? "⏳ Optimizando…" : "🧠 Optimizar ruta"}
-                    </button>
+                     <button
+    className={`btn btn-sm btn-primary ${busyByEmail[e] ? "btn-disabled" : ""}`}
+    onClick={() => guardarOrden(e)}
+    disabled={disabledGuardar}
+  >
+    {busyByEmail[e] ? "⏳ Guardando…" : "💾 Guardar orden"}
+  </button>
+
+  <button
+    className={`btn btn-sm btn-accent ${busyByEmail[e] ? "btn-disabled" : ""}`}
+    onClick={() => optimizarRuta(e)}
+    disabled={disabledOptimizar}
+  >
+    {busyByEmail[e]
+      ? "⏳ Optimizando…"
+      : !canOptimize
+        ? "⏳ Preparando mapa…"
+        : "🧠 Optimizar ruta"}
+  </button>
+
+  <button
+    className={`btn btn-sm btn-secondary ${busyByEmail[e] ? "btn-disabled" : ""}`}
+    onClick={() => optimizarRutaAlReves(e)}
+    disabled={disabledOptimizar}
+    title="Calcular el circuito optimizado pero recorriéndolo al revés"
+  >
+    🔁 Invertir circuito
+  </button>    
                   </div>
                 </div>
 
@@ -895,14 +1088,18 @@ export default function AdminHojaRuta() {
                     strategy={verticalListSortingStrategy}
                   >
                     <ul className="mt-2">
-                      {(pedidosPorRepartidor[r.email] || []).map((pedido) => (
-                        <SortablePedido key={pedido.id} pedido={pedido} />
-                      ))}
-                    </ul>
+  {(pedidosPorRepartidor[r.email] || []).map((pedido, idx) => (
+    <SortablePedido key={pedido.id} pedido={pedido} index={idx} />
+  ))}
+</ul>
 
                     {pedidosPorRepartidor[r.email]?.length > 0 && (
-                      <MapaRutaRepartidor pedidos={pedidosPorRepartidor[r.email]} />
-                    )}
+  <MapaRutaRepartidor
+    pedidos={pedidosPorRepartidor[r.email]}
+    // NUEVO: callback para reordenar desde el mapa
+    onReindex={(pedidoId, toIndex) => handleReindex(r.email, pedidoId, toIndex)}
+  />
+)}
                   </SortableContext>
                 </DndContext>
               </div>
