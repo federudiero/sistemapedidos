@@ -171,42 +171,59 @@ export default function CierreCaja() {
 
   // ====== Carga pedidos del día y lista de repartidores del día ======
   useEffect(() => {
-    if (!provinciaId || !colPedidos || !colCierresRepartidor) return;
+  if (!provinciaId || !colPedidos || !colCierresRepartidor) return;
 
-    const cargarPedidosYRepartidores = async () => {
-      const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
-      const fin = Timestamp.fromDate(endOfDay(fechaSeleccionada));
+  const cargarPedidosYRepartidores = async () => {
+    const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
+    const fin    = Timestamp.fromDate(endOfDay(fechaSeleccionada));
 
-      const qPedidos = query(colPedidos, where("fecha", ">=", inicio), where("fecha", "<=", fin));
-      const snap = await getDocs(qPedidos);
+    // 1) Pedidos del día + set de repartidores
+    const qPedidos = query(colPedidos, where("fecha", ">=", inicio), where("fecha", "<=", fin));
+    const snap = await getDocs(qPedidos);
 
-      const pedidosDelDia = [];
-      const repartidorSet = new Set();
+    const pedidosDelDia = [];
+    const repartidorSet = new Set();
 
-      snap.forEach((d) => {
-        const data = d.data();
-        const repartidor = Array.isArray(data.asignadoA) ? data.asignadoA[0] : data.repartidor;
-        if (typeof repartidor === "string" && repartidor.trim() !== "") {
-          repartidorSet.add(repartidor);
-          pedidosDelDia.push({ id: d.id, ...data, repartidor });
-        }
-      });
-
-      setPedidos(pedidosDelDia);
-      setRepartidores([...repartidorSet]);
-
-      // Traer cierres individuales existentes
-      const nuevos = {};
-      for (const email of repartidorSet) {
-        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-        const ds = await getDoc(ref);
-        if (ds.exists()) nuevos[email] = ds.data();
+    snap.forEach((d) => {
+      const data = d.data();
+      const repartidor = Array.isArray(data.asignadoA) ? data.asignadoA[0] : data.repartidor;
+      if (typeof repartidor === "string" && repartidor.trim() !== "") {
+        repartidorSet.add(repartidor);
+        pedidosDelDia.push({ id: d.id, ...data, repartidor });
       }
-      setCierres(nuevos);
-    };
+    });
 
-    cargarPedidosYRepartidores();
-  }, [provinciaId, fechaSeleccionada, colPedidos, colCierresRepartidor, fechaStr]);
+    setPedidos(pedidosDelDia);
+    const repartidoresArr = [...repartidorSet];
+    setRepartidores(repartidoresArr);
+
+    // 2) Traer cierres individuales existentes del día
+    const nuevos = {};
+    for (const email of repartidoresArr) {
+      const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+      const ds  = await getDoc(ref);
+      if (ds.exists()) nuevos[email] = ds.data();
+    }
+    setCierres(nuevos);
+
+    // 3) 🔁 NUEVO: precargar estado `gastos` con lo guardado en cierres
+    //    (así la tarjeta por repartidor muestra el neto correcto sin tipear)
+    const precargados = {};
+    for (const [email, data] of Object.entries(nuevos)) {
+      const g = data?.gastos || {};
+      precargados[email] = {
+        repartidor:  Number(g.repartidor   ?? 0),
+        acompanante: Number(g.acompanante ?? 0),
+        combustible: Number(g.combustible ?? 0),
+        extra:       Number(g.extra       ?? 0),
+      };
+    }
+    setGastos(precargados);
+  };
+
+  cargarPedidosYRepartidores();
+}, [provinciaId, fechaSeleccionada, colPedidos, colCierresRepartidor, fechaStr]);
+
 
   // ====== Resumen global en vivo (incluye flag de stockDescontado) ======
   useEffect(() => {
@@ -939,6 +956,17 @@ export default function CierreCaja() {
               <p>💵 Efectivo: ${totales.efectivo.toFixed(0)}</p>
               <p>💳 Transferencia: ${totales.transferencia.toFixed(0)}</p>
               <p>💳 Transferencia (+10%): ${totales.transferencia10.toFixed(0)}</p>
+              {(() => {
+    const g = gastos[email] || {};
+    const subtotalGastos = (g.repartidor || 0) + (g.acompanante || 0) + (g.combustible || 0) + (g.extra || 0);
+    const netoPreview = calcularCajaNeta(totales, g);
+    return (
+      <div className="mt-2 text-sm">
+        <div className="opacity-80">🧾 Gastos cargados (incluye ⛽ combustible): ${subtotalGastos.toFixed(0)}</div>
+        <div className="font-semibold">= Neto estimado: ${netoPreview.toFixed(0)}</div>
+      </div>
+    );
+  })()}
             </div>
 
             <div className="mt-4">
@@ -1053,6 +1081,11 @@ export default function CierreCaja() {
               <p>💵 Efectivo: ${resumenGlobal.totalEfectivo || 0}</p>
               <p>💳 Transferencia: ${resumenGlobal.totalTransferencia || 0}</p>
               <p>💳 Transferencia (10%): ${resumenGlobal.totalTransferencia10 || 0}</p>
+
+               <div className="pt-2 mt-2 text-sm border-t border-base-300">
+    <span>🧾 Gastos del día (incluye ⛽ combustible): </span>
+    <strong>${(resumenGlobal.totalGastos || 0).toLocaleString("es-AR")}</strong>
+  </div>
             </div>
 
             <div className="p-4 shadow-inner bg-base-100 rounded-xl">

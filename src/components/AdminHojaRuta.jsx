@@ -55,7 +55,7 @@ function SortablePedido({ pedido, index }) {
       {...attributes}
       {...listeners}
       style={style}
-      className="flex gap-3 items-start p-3 mb-2 rounded border shadow cursor-move bg-base-100 border-base-300"
+      className="flex items-start gap-3 p-3 mb-2 border rounded shadow cursor-move bg-base-100 border-base-300"
     >
       {/* NUEVO: badge con número de orden visible */}
       <div className="mt-1 font-mono badge badge-primary badge-lg">#{index + 1}</div>
@@ -367,7 +367,7 @@ const handleReindex = async (email, pedidoId, toIndex) => {
   if (busyByEmail[email]) return;
   setBusy(email, true);
   try {
-    const { escritos, omitidos } = await persistirOrdenSoloDifs(email, items);
+    const { escritos } = await persistirOrdenSoloDifs(email, items);
 
     // Refrescar ordenRuta en el estado local para que quede consistente con DB
     setPedidosPorRepartidor((prev) => ({
@@ -977,8 +977,8 @@ const optimizarRutaAlReves = async (email) => {
       </div>
       <div className="h-16" />
 
-      <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
-        <div className="flex gap-3 items-center">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
           <h2 className="text-2xl font-bold">🗺️ Hoja de Ruta por Repartidor</h2>
           <div className="font-mono badge badge-primary badge-lg">
             Prov: {provinciaId}
@@ -1040,9 +1040,9 @@ const disabledOptimizar =
             return (
               <div
                 key={r.email}
-                className="p-4 mb-8 rounded-xl border shadow-md border-base-300 bg-base-200"
+                className="p-4 mb-8 border shadow-md rounded-xl border-base-300 bg-base-200"
               >
-                <div className="flex flex-wrap gap-2 justify-between items-center mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <h3 className="text-lg font-semibold text-primary">
                     🛵 {r.label} — {r.email}
                   </h3>
