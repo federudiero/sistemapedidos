@@ -23,7 +23,7 @@ import AdminNavbar from "../components/AdminNavbar";
 import { format } from "date-fns";
 import SeguimientoRepartidoresAdmin from "../components/SeguimientoRepartidoresAdmin";
 import { useProvincia } from "../hooks/useProvincia.js";
-import ConteoPedidosPorDia from "../components/ConteoPedidosPorDia.jsx";
+import ConteoPedidosPorDia from "../components/ConteoPedidosPorDiaPorRepartidor.jsx";
 
 function AdminPedidos() {
   const navigate = useNavigate();
