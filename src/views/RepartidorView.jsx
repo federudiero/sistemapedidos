@@ -475,10 +475,10 @@ function RepartidorView() {
 
   /* ===== UI ===== */
   return (
-    <div className="px-4 py-6 mx-auto max-w-4xl">
-      <div className="flex justify-between items-center mb-4">
+    <div className="max-w-4xl px-4 py-6 mx-auto">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">🚚 Mi Hoja de Ruta</h2>
-        <div className="flex gap-2 items-center">
+        <div className="flex items-center gap-2">
           <span className="font-mono badge badge-primary">Prov: {provinciaId}</span>
           {emailRepartidor && (
             <span className="text-sm opacity-70">Repartidor: {emailRepartidor}</span>
@@ -540,7 +540,7 @@ function RepartidorView() {
             return (
               <li
                 key={p.id}
-                className="p-4 rounded-lg border shadow bg-base-200 border-base-300"
+                className="p-4 border rounded-lg shadow bg-base-200 border-base-300"
               >
                 <p className="mb-1 text-sm opacity-60">🛣️ Pedido #{idx + 1}</p>
 
@@ -633,7 +633,7 @@ function RepartidorView() {
                 {/* Pago Mixto */}
                 {p.metodoPago === "mixto" && (
                   <div className="p-3 mt-3 rounded-lg bg-base-300">
-                    <div className="grid gap-3 items-end md:grid-cols-3">
+                    <div className="grid items-end gap-3 md:grid-cols-3">
                       <div>
                         <label className="block mb-1 text-sm">💵 Efectivo parcial</label>
                         <input
@@ -664,7 +664,7 @@ function RepartidorView() {
                           disabled={bloqueado}
                         />
                       </div>
-                      <label className="flex gap-2 items-center">
+                      <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           className="toggle toggle-sm"
@@ -753,10 +753,11 @@ function RepartidorView() {
 
       <MapaRutaRepartidor pedidos={pedidos} />
 
-      <CargaDelDiaRepartidor
+    <CargaDelDiaRepartidor
   provinciaId={provinciaId}
   fecha={fechaSeleccionada}
   emailRepartidor={emailRepartidor}
+  pedidos={pedidos}      // 👈 ahora le pasamos el array completo
 />
     </div>
   );

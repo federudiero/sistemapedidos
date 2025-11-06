@@ -4,6 +4,7 @@
 // - Filtra pedidos por provinciaId === provincia actual (si el pedido trae provinciaId)
 // - Escribe el nombre correcto de la provincia en la columna y en el nombre del archivo
 // - AGREGA hoja "ResumenProductos" con los productos agrupados y suma de cantidades
+// - Muestra el usuario del vendedor (antes del @) en la columna VENDEDOR
 
 import React from "react";
 import * as XLSX from "xlsx";
@@ -17,6 +18,13 @@ const PROV_NOMBRE = {
   // Agregá más códigos si usás otras provincias
 };
 
+// helper: parte ANTES del @
+const emailUsername = (v) => {
+  const s = String(v || "");
+  const at = s.indexOf("@");
+  return at > 0 ? s.slice(0, at) : s;
+};
+
 const ExportarExcel = ({ pedidos = [] }) => {
   const { provinciaId } = useProvincia();
   const provinciaNombre = PROV_NOMBRE[provinciaId] || provinciaId || "";
@@ -27,7 +35,7 @@ const ExportarExcel = ({ pedidos = [] }) => {
       ? pedidos.filter((p) => p.provinciaId === provinciaId)
       : pedidos;
 
-    // ===== Hoja 1: "Pedidos" (misma estructura que ya tenías) =====
+    // ===== Hoja 1: "Pedidos" (misma estructura) =====
     const wsData = pedidosProv.map((p) => {
       const productosDetalle = Array.isArray(p.productos)
         ? p.productos.map((prod) => `${prod.nombre} x${prod.cantidad}`).join(", ")
@@ -35,12 +43,12 @@ const ExportarExcel = ({ pedidos = [] }) => {
 
       return [
         p.nombre || "",
-        provinciaNombre, // ← provincia correcta
+        provinciaNombre, // provincia correcta
         p.partido || "",
         "", // ORDEN (vacío como en tu versión)
         p.direccion || "",
         String(p.telefono || ""),
-        p.vendedorEmail || "",
+        emailUsername(p.vendedorEmail || p.vendedor || p.seller || ""), // <<< usuario del vendedor
         p.pedido || "",
         p.entreCalles || "",
         productosDetalle,
@@ -55,7 +63,7 @@ const ExportarExcel = ({ pedidos = [] }) => {
         "ORDEN",
         "CALLE Y ALTURA",
         "TELEFONO",
-        "VENDEDOR",
+        "VENDEDOR (usuario)",   // <<< actualizado
         "PEDIDO",
         "OBSERVACION",
         "PRODUCTOS (detalle array)",
@@ -65,7 +73,6 @@ const ExportarExcel = ({ pedidos = [] }) => {
     const wsPedidos = XLSX.utils.aoa_to_sheet([...encabezados, ...wsData]);
 
     // ===== Hoja 2: "ResumenProductos" (agrupado por nombre, sumando cantidades) =====
-    // Recorro todos los productos de los pedidos y acumulo cantidades por nombre
     const contador = {};
     for (const p of pedidosProv) {
       const lista = Array.isArray(p?.productos) ? p.productos : [];
@@ -77,28 +84,28 @@ const ExportarExcel = ({ pedidos = [] }) => {
       }
     }
 
-    // Armo el array para la hoja de resumen
     const resumenArray = Object.entries(contador)
-      .sort((a, b) => a[0].localeCompare(b[0])) // ordenar alfabéticamente por producto
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([nombre, cantidad]) => ({
         Producto: nombre,
         "Cantidad total": cantidad,
       }));
 
-    // Si querés una fila TOTAL al final, la agregamos (opcional)
     const totalItems = resumenArray.reduce((acc, r) => acc + (Number(r["Cantidad total"]) || 0), 0);
     if (resumenArray.length > 0) {
       resumenArray.push({ Producto: "TOTAL Ítems", "Cantidad total": totalItems });
     }
 
-    const wsResumen = XLSX.utils.json_to_sheet(resumenArray.length ? resumenArray : [{ Producto: "—", "Cantidad total": 0 }]);
+    const wsResumen = XLSX.utils.json_to_sheet(
+      resumenArray.length ? resumenArray : [{ Producto: "—", "Cantidad total": 0 }]
+    );
 
     // ===== Libro y descarga =====
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsPedidos, "Pedidos");
     XLSX.utils.book_append_sheet(wb, wsResumen, "ResumenProductos");
 
-    // Fecha para el nombre del archivo (mantengo tu criterio)
+    // Fecha para el nombre del archivo
     const baseFecha =
       pedidosProv.length > 0 && pedidosProv[0].fecha?.toDate
         ? pedidosProv[0].fecha.toDate()

@@ -8,16 +8,16 @@ import { format, startOfDay, addDays } from "date-fns";
 
 /**
  * Panel "Qué cargar hoy" para el repartidor.
- * - Filtra SOLO pedidos asignados al emailRepartidor en la fecha dada.
- * - Cuenta por ID de producto.
- * - Desglosa combos (componentes multiplicados por cantidad).
- * - Excluye envíos/servicios (noDescuentaStock, tipo/tags "envio"/"flete"/"servicio").
+ * - Si el padre (RepartidorView) pasa `pedidos`, NO hace queries (usa esa fuente).
+ * - Si no, trae pedidos del día por rango [00:00, 00:00 sig] y soporta asignadoA como array o string.
+ * - Cuenta por ID de producto; desglosa combos; excluye envíos/servicios.
  */
 export default function CargaDelDiaRepartidor({
   provinciaId,
   fecha,                 // Date
   emailRepartidor,       // string (lowercase)
-  desglosarCombos = true // bool
+  pedidos: pedidosProp = null, // 👈 si viene, no consulta Firestore
+  desglosarCombos = true
 }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);         // [{ id, nombre, cantidad }]
@@ -77,6 +77,7 @@ export default function CargaDelDiaRepartidor({
   // Catálogo en memoria
   const [catalogoById, setCatalogoById] = useState(new Map());
   const [catalogoByNombreExacto, setCatalogoByNombreExacto] = useState(new Map());
+  const [catalogoOk, setCatalogoOk] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -92,8 +93,10 @@ export default function CargaDelDiaRepartidor({
         });
         setCatalogoById(byId);
         setCatalogoByNombreExacto(byName);
+        setCatalogoOk(true);
       } catch (e) {
         console.warn("No se pudo cargar catálogo de productos:", e);
+        setCatalogoOk(false);
       }
     })();
   }, [colProductos]);
@@ -101,24 +104,28 @@ export default function CargaDelDiaRepartidor({
   const fetchProductoByIdOnce = async (id) => {
     if (!id) return null;
     if (catalogoById.has(id)) return catalogoById.get(id);
-    const ref = doc(db, "provincias", provinciaId, "productos", id);
-    const ds = await getDoc(ref);
-    if (!ds.exists()) return null;
-    const prod = { id, ...ds.data() };
-    setCatalogoById((prev) => {
-      const cp = new Map(prev);
-      cp.set(id, prod);
-      return cp;
-    });
-    const nombre = String(prod.nombre || "").trim();
-    if (nombre) {
-      setCatalogoByNombreExacto((prev) => {
+    try {
+      const ref = doc(db, "provincias", provinciaId, "productos", id);
+      const ds = await getDoc(ref);
+      if (!ds.exists()) return null;
+      const prod = { id, ...ds.data() };
+      setCatalogoById((prev) => {
         const cp = new Map(prev);
-        if (!cp.has(nombre)) cp.set(nombre, prod);
+        cp.set(id, prod);
         return cp;
       });
+      const nombre = String(prod.nombre || "").trim();
+      if (nombre) {
+        setCatalogoByNombreExacto((prev) => {
+          const cp = new Map(prev);
+          if (!cp.has(nombre)) cp.set(nombre, prod);
+          return cp;
+        });
+      }
+      return prod;
+    } catch {
+      return null;
     }
-    return prod;
   };
 
   // --- cálculo principal
@@ -129,40 +136,59 @@ export default function CargaDelDiaRepartidor({
       setError("");
 
       try {
-        // Día exacto [00:00, siguiente 00:00)
-        const start = startOfDay(fechaSel);
-        const endExcl = startOfDay(addDays(fechaSel, 1));
+        // 1) Conseguimos los pedidos fuente
+        let pedidosFuente = [];
+        if (Array.isArray(pedidosProp)) {
+          pedidosFuente = pedidosProp;
+        } else {
+          // Día exacto [00:00, siguiente 00:00)
+          const start = startOfDay(fechaSel);
+          const endExcl = startOfDay(addDays(fechaSel, 1));
 
-        // Dos estrategias de asignación (match con RepartidorView)
-        const q1 = query(
-          colPedidos,
-          where("asignadoA", "array-contains", emailRepartidor),
-          where("fecha", ">=", Timestamp.fromDate(start)),
-          where("fecha", "<", Timestamp.fromDate(endExcl))
-        );
-
-        const q2 = query(
-          colPedidos,
-          where("asignadoA", "==", emailRepartidor),
-          where("fecha", ">=", Timestamp.fromDate(start)),
-          where("fecha", "<", Timestamp.fromDate(endExcl))
-        );
-
-        // Ejecutar y mergear resultados (evitar duplicados por id)
-        const [s1, s2] = await Promise.allSettled([getDocs(q1), getDocs(q2)]);
-        const docs = new Map();
-        if (s1.status === "fulfilled") {
-          s1.value.docs.forEach((d) => docs.set(d.id, d));
+          // Dos estrategias (array-contains y ==) para asignadoA
+          const q1 = query(
+            colPedidos,
+            where("asignadoA", "array-contains", emailRepartidor),
+            where("fecha", ">=", Timestamp.fromDate(start)),
+            where("fecha", "<", Timestamp.fromDate(endExcl))
+          );
+          const q2 = query(
+            colPedidos,
+            where("asignadoA", "==", emailRepartidor),
+            where("fecha", ">=", Timestamp.fromDate(start)),
+            where("fecha", "<", Timestamp.fromDate(endExcl))
+          );
+          const [s1, s2] = await Promise.allSettled([getDocs(q1), getDocs(q2)]);
+          const docs = new Map();
+          if (s1.status === "fulfilled") s1.value.docs.forEach((d) => docs.set(d.id, d));
+          if (s2.status === "fulfilled") s2.value.docs.forEach((d) => docs.set(d.id, d));
+          pedidosFuente = Array.from(docs.values()).map((d) => ({ id: d.id, ...d.data() }));
         }
-        if (s2.status === "fulfilled") {
-          s2.value.docs.forEach((d) => docs.set(d.id, d));
+
+        // 2) Filtrar los del repartidor (soportar asignadoA array o string o campo repartidor)
+        const wanted = norm(emailRepartidor);
+        const pedidosRepartidor = pedidosFuente.filter((p) => {
+          if (Array.isArray(p.asignadoA)) return p.asignadoA.map(norm).includes(wanted);
+          if (typeof p.asignadoA === "string") return norm(p.asignadoA) === wanted;
+          if (typeof p.repartidor === "string") return norm(p.repartidor) === wanted;
+          return false;
+        });
+
+        setPedidosCount(pedidosRepartidor.length);
+
+        if (!pedidosRepartidor.length) {
+          setRows([]);
+          setTotalUnidades(0);
+          setEnviosIgnorados(0);
+          setObservaciones([`No hay pedidos asignados para ${emailRepartidor}`]);
+          setLoading(false);
+          return;
         }
 
-        setPedidosCount(docs.size);
-
+        // 3) Agregación
+        let enviosIgn = 0;
         const countById = new Map(); // id -> { prod, cantidad }
         const obs = [];
-        let enviosIgn = 0;
 
         const addByProd = (prod, delta) => {
           if (!prod) return;
@@ -176,20 +202,14 @@ export default function CargaDelDiaRepartidor({
           countById.set(prod.id, prev);
         };
 
-        for (const d of docs.values()) {
-          const p = d.data();
-
-          // Normalización de items: esperamos p.productos = [{productoId|id|productoRefPath|nombre, cantidad}]
-          if (!Array.isArray(p.productos) || p.productos.length === 0) {
-            // si solo hay texto libre en p.pedido, lo ignoramos para no contaminar el conteo
-            continue;
-          }
+        for (const p of pedidosRepartidor) {
+          if (!Array.isArray(p.productos) || !p.productos.length) continue;
 
           for (const it of p.productos) {
             const qty = Number(it?.cantidad || 0);
             if (!qty) continue;
 
-            // Resolver ID
+            // Resolver ID del item
             let id = it?.productoId || it?.id || null;
             if (!id && it?.productoRefPath) {
               const segs = String(it.productoRefPath).split("/").filter(Boolean);
@@ -200,22 +220,21 @@ export default function CargaDelDiaRepartidor({
             if (id) {
               prod = catalogoById.get(id) || (await fetchProductoByIdOnce(id));
               if (!prod) {
-                obs.push(`Pedido ${d.id}: ID ${id} no encontrado en catálogo.`);
+                obs.push(`Pedido ${p.id}: ID ${id} no encontrado en catálogo.`);
                 continue;
               }
             } else {
-              // fallback por NOMBRE EXACTO
+              // fallback por nombre exacto si hay catálogo
               const nombreExacto = String(it?.nombre || "").trim();
               if (!nombreExacto) {
-                obs.push(`Pedido ${d.id}: item sin ID ni nombre (ignorado).`);
+                obs.push(`Pedido ${p.id}: item sin ID ni nombre (ignorado).`);
                 continue;
               }
-              const prodByName = catalogoByNombreExacto.get(nombreExacto) || null;
-              if (!prodByName) {
-                obs.push(`Pedido ${d.id}: "${nombreExacto}" sin ID y sin match exacto en catálogo (ignorado).`);
+              prod = catalogoOk ? (catalogoByNombreExacto.get(nombreExacto) || null) : null;
+              if (!prod) {
+                obs.push(`Pedido ${p.id}: "${nombreExacto}" sin ID y sin match exacto en catálogo (ignorado).`);
                 continue;
               }
-              prod = prodByName;
             }
 
             // Excluir envíos/servicios
@@ -224,19 +243,19 @@ export default function CargaDelDiaRepartidor({
               continue;
             }
 
+            // Desglose de combos
             const esCombo = !!prod.esCombo && Array.isArray(prod.componentes);
             if (desglosarCombos && esCombo) {
-              // Desglosar componentes por ID (excluyendo envíos)
               for (const comp of prod.componentes) {
                 const compCant = qty * Number(comp?.cantidad || 0);
                 if (!compCant) continue;
                 if (!comp?.id) {
-                  obs.push(`Pedido ${d.id}: combo ${prod.id} con componente sin id (ignorado).`);
+                  obs.push(`Pedido ${p.id}: combo ${prod.id} con componente sin id (ignorado).`);
                   continue;
                 }
                 const compProd = catalogoById.get(comp.id) || (await fetchProductoByIdOnce(comp.id));
                 if (!compProd) {
-                  obs.push(`Pedido ${d.id}: combo ${prod.id} componente ${comp.id} no encontrado (ignorado).`);
+                  obs.push(`Pedido ${p.id}: combo ${prod.id} componente ${comp.id} no encontrado (ignorado).`);
                   continue;
                 }
                 if (esEnvioOServicio(compProd)) {
@@ -246,7 +265,6 @@ export default function CargaDelDiaRepartidor({
                 addByProd(compProd, compCant);
               }
             } else {
-              // Producto simple
               addByProd(prod, qty);
             }
           }
@@ -276,43 +294,57 @@ export default function CargaDelDiaRepartidor({
         setLoading(false);
       }
     })();
-  }, [colPedidos, colProductos, provinciaId, fechaSel, emailRepartidor, desglosarCombos, catalogoById, catalogoByNombreExacto]);
+  }, [
+    colPedidos,
+    colProductos,
+    provinciaId,
+    fechaSel,
+    emailRepartidor,
+    pedidosProp,        // 👈 recalcular si cambian los pedidos del padre
+    desglosarCombos,
+    catalogoById,
+    catalogoByNombreExacto
+  ]);
 
   return (
-    <div className="p-4 mt-6 rounded-xl border bg-base-100 border-base-300">
-      <div className="flex gap-2 justify-between items-center">
+    <div className="p-4 mt-6 border rounded-xl bg-base-100 border-base-300">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="text-lg font-semibold">🧰 Qué cargar hoy</h3>
         <div className="text-sm opacity-70">
           {ymd(fechaSel)} · Pedidos asignados: {pedidosCount}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 items-center mt-2">
+      <div className="flex flex-wrap items-center gap-3 mt-2">
         <div className="badge badge-lg badge-secondary">Total de unidades: {totalUnidades}</div>
-        <div className="badge badge-outline">Modo: ID-first (combos desglosados)</div>
         <div className="badge badge-outline">Envíos ignorados: {enviosIgnorados}</div>
+        {!catalogoOk && (
+          <div className="badge badge-warning" title="Se calculó sin catálogo; los combos se desglosan sólo si se pudo resolver el producto.">
+            Modo sin catálogo
+          </div>
+        )}
       </div>
 
       {error && <div className="mt-3 alert alert-error">{error}</div>}
 
       {observaciones.length > 0 && (
-        <div className="p-3 mt-3 text-sm rounded-lg border bg-base-200 border-base-300">
+        <div className="p-3 mt-3 text-sm border rounded-lg bg-base-200 border-base-300">
           <div className="mb-1 font-semibold">⚠ Observaciones</div>
           <ul className="pl-6 list-disc">
             {observaciones.map((t, i) => <li key={i}>{t}</li>)}
           </ul>
           <div className="mt-1 text-xs opacity-70">
-            Sugerencia: Guardá <code>productoId</code> o <code>productoRefPath</code> en cada item.
+            Sugerencia: guardá también <code>productoId</code> o <code>productoRefPath</code> en cada item.
           </div>
         </div>
       )}
 
-      <div className="overflow-x-auto mt-4">
+      <div className="mt-4 overflow-x-auto">
         <table className="table table-zebra">
           <thead>
             <tr>
               <th className="min-w-64">Producto</th>
-              <th className="w-28 text-right">Cantidad</th>
+              <th className="text-right w-28">Cantidad</th>
             </tr>
           </thead>
           <tbody>

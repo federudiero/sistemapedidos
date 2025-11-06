@@ -1,3 +1,4 @@
+// src/components/PedidoForm.jsx
 import React, { useRef, useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import { format } from "date-fns";
@@ -224,6 +225,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     cargarProductos();
   }, [provinciaId]);
 
+  // Si estás editando, reconstruimos productosSeleccionados trayendo los IDs reales del catálogo (por nombre)
   useEffect(() => {
     if (pedidoAEditar && productosFirestore.length > 0) {
       setNombre(pedidoAEditar.nombre || "");
@@ -237,8 +239,12 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
 
       const nuevosProductos = (pedidoAEditar.productos || [])
         .map((pedidoProd) => {
+          // Intentamos recuperar por nombre; si coincide, trae id real del catálogo
           const productoOriginal = productosFirestore.find((p) => p.nombre === pedidoProd.nombre);
-          return productoOriginal ? { ...productoOriginal, cantidad: pedidoProd.cantidad } : null;
+          // si no existe (p.ej. devolución) devolvemos el mismo item sin id
+          return productoOriginal
+            ? { ...productoOriginal, cantidad: pedidoProd.cantidad, precio: productoOriginal.precio }
+            : { ...pedidoProd, cantidad: pedidoProd.cantidad, precio: pedidoProd.precio };
         })
         .filter(Boolean);
 
@@ -314,7 +320,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       entreCalles,
       pedido: pedidoFinal,
       coordenadas,
+      // 👉 Guardamos SIEMPRE productoId (doc.id), si existe. Ítems especiales (devoluciones) quedan con null.
       productos: productosSeleccionados.map((p) => ({
+        productoId: p.id ?? p.productoId ?? null,
         nombre: p.nombre,
         cantidad: p.cantidad,
         precio: p.precio,
@@ -486,6 +494,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                           checked={!!seleccionado}
                           onChange={(e) => {
                             if (e.target.checked) {
+                              // guardamos también el doc.id del catálogo en el seleccionado
                               setProductosSeleccionados((prev) => [...prev, { ...prod, cantidad: 1 }]);
                             } else {
                               setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== prod.nombre));
@@ -574,9 +583,10 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                             checked={estaSeleccionado}
                             onChange={(e) => {
                               if (e.target.checked) {
+                                // ítem especial de devolución → sin ID de catálogo
                                 setProductosSeleccionados((prev) => [
                                   ...prev,
-                                  { nombre: nombreDevolucion, precio: -Math.abs(prod.precio || 0), cantidad: 1 },
+                                  { nombre: nombreDevolucion, precio: -Math.abs(prod.precio || 0), cantidad: 1, productoId: null },
                                 ]);
                               } else {
                                 setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== nombreDevolucion));

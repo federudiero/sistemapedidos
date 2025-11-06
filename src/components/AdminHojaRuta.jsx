@@ -176,6 +176,10 @@ const buildWaypoints = async (pedidos, baseContext, bounds, baseCity) => {
   return { waypoints, errores };
 };
 
+
+
+
+
 const GOOGLE_LIBS = ["places"];
 
 export default function AdminHojaRuta() {
@@ -732,240 +736,241 @@ const optimizarRutaAlReves = async (email) => {
 
 
 
-  // =========================
-  // Exportar a Excel (TABLA) — estilos exactos A:G
-  // =========================
+// =========================
+// Exportar a Excel (TABLA) — estilos exactos A:G
+// =========================
 
-  // envolver cadenas largas (~max chars sin cortar palabras)
-  const softWrap = (str, max = 54) => {
-    const s = String(str || "").trim();
-    if (!s) return "";
-    const words = s.split(/\s+/);
-    let line = "";
-    const lines = [];
-    for (const w of words) {
-      if ((line + " " + w).trim().length > max) {
-        lines.push(line.trim());
-        line = w;
-      } else {
-        line += (line ? " " : "") + w;
-      }
+// envolver cadenas largas (~max chars sin cortar palabras)
+const softWrap = (str, max = 54) => {
+  const s = String(str || "").trim();
+  if (!s) return "";
+  const words = s.split(/\s+/);
+  let line = "";
+  const lines = [];
+  for (const w of words) {
+    if ((line + " " + w).trim().length > max) {
+      lines.push(line.trim());
+      line = w;
+    } else {
+      line += (line ? " " : "") + w;
     }
-    if (line) lines.push(line.trim());
-    return lines.join("\n");
+  }
+  if (line) lines.push(line.trim());
+  return lines.join("\n");
+};
+
+// usuario de email (antes del "@"); si no es email, devuelve igual
+const emailUsername = (v) => {
+  const s = String(v || "");
+  const at = s.indexOf("@");
+  return at > 0 ? s.slice(0, at) : s;
+};
+
+const INVALID_SHEET_CHARS = /[:/\\?*[\]]/g;
+const safeSheetName = (name) =>
+  (String(name || "").replace(INVALID_SHEET_CHARS, "-").trim().slice(0, 31)) ||
+  "Sheet";
+
+// Config de impresión — A4 apaisado, 1 página de ancho
+const applyPrintSetup = (ws, orientation = "landscape") => {
+  ws["!pageSetup"] = {
+    orientation,
+    paperSize: 9,    // A4
+    fitToWidth: 1,   // 1 página de ancho
+    fitToHeight: 0,  // alto libre
   };
+  ws["!margins"] = { left: 0.2, right: 0.2, top: 0.3, bottom: 0.3, header: 0.2, footer: 0.2 };
+};
 
-  // usuario de email (sin dominio); si no es email, devuelve igual
-  const emailUsername = (v) => {
-    const s = String(v || "");
-    const at = s.indexOf("@");
-    return at > 0 ? s.slice(0, at) : s;
-  };
+const setHyperlink = (ws, r, c, url, tooltip = "") => {
+  if (!url) return;
+  const ref = XLSX.utils.encode_cell({ r, c });
+  ws[ref] = ws[ref] || { t: "s", v: "Abrir" };
+  ws[ref].l = { Target: url, Tooltip: tooltip };
+};
 
-  const INVALID_SHEET_CHARS = /[:/\\?*[\]]/g;
-  const safeSheetName = (name) =>
-    (String(name || "").replace(INVALID_SHEET_CHARS, "-").trim().slice(0, 31)) ||
-    "Sheet";
-
-  // Config de impresión — A4 apaisado, 1 página de ancho
-  const applyPrintSetup = (ws, orientation = "landscape") => {
-    ws["!pageSetup"] = {
-      orientation,
-      paperSize: 9,    // A4
-      fitToWidth: 1,   // 1 página de ancho
-      fitToHeight: 0,  // alto libre
-    };
-    ws["!margins"] = { left: 0.2, right: 0.2, top: 0.3, bottom: 0.3, header: 0.2, footer: 0.2 };
-  };
-
-  const setHyperlink = (ws, r, c, url, tooltip = "") => {
-    if (!url) return;
-    const ref = XLSX.utils.encode_cell({ r, c });
-    ws[ref] = ws[ref] || { t: "s", v: "Abrir" };
-    ws[ref].l = { Target: url, Tooltip: tooltip };
-  };
-
-  // ayuda para aplicar estilo a rango
-  const applyCellStyleRange = (ws, r0, r1, c0, c1, style) => {
-    for (let r = r0; r <= r1; r++) {
-      for (let c = c0; c <= c1; c++) {
-        const ref = XLSX.utils.encode_cell({ r, c });
-        if (!ws[ref]) continue;
-        ws[ref].s = {
-          ...(ws[ref].s || {}),
-          font: { ...(ws[ref].s?.font || {}), ...(style.font || {}) },
-          alignment: { ...(ws[ref].s?.alignment || {}), ...(style.alignment || {}) },
-          numFmt: style.numFmt || ws[ref].z || ws[ref].numFmt,
-        };
-      }
-    }
-  };
-
-  // Forma final de cada pedido para Excel (con wraps)
-  const mapPedidoFull = (p, i) => {
-    const telefono = p.telefono ?? p.telefono1 ?? p.telefonoAlt ?? p.celular ?? p.tel ?? "";
-    const vendedor = emailUsername(
-      p.vendedor ?? p.vend ?? p.vendedorNombre ?? p.vendedorEmail ?? p.seller ?? ""
-    );
-    const importeNum = Number(p.importe ?? p.monto ?? p.total ?? 0) || 0;
-
-    return {
-      orden: i + 1,
-      nombre: p.nombre || "",
-      direccion: softWrap(p.direccion || "", 54),
-      telefono,
-      vendedor,
-      pedido: softWrap(p.pedido || "", 54),
-      importeNum,
-    };
-  };
-
-  // FIX: limitar waypoints a 25 en el link
-  const buildRouteUrl = (base, direcciones) => {
-    const origin = encodeURIComponent(String(base || ""));
-    const dest = origin;
-    const safeDirs = (direcciones || []).filter(Boolean).map((d) => String(d));
-    const limited = safeDirs.slice(0, MAX_WAYPOINTS);
-    const wps = limited.map((d) => encodeURIComponent(d)).join("|");
-
-    const parts = [
-      "https://www.google.com/maps/dir/?api=1",
-      `origin=${origin}`,
-      `destination=${dest}`,
-      "travelmode=driving",
-    ];
-    if (wps) parts.push(`waypoints=${wps}`);
-    return parts.join("&");
-  };
-
-  const exportarExcel = () => {
-    try {
-      const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
-      const wb = XLSX.utils.book_new();
-
-      // ---- Resumen rápido
-      const resumenRows = [
-        [`Hoja de Ruta — Prov: ${provinciaId} — Fecha: ${fechaStr}`],
-        [""],
-        ["Repartidor", "Cantidad de pedidos"],
-      ];
-      Object.entries(pedidosPorRepartidor).forEach(([email, pedidos]) => {
-        resumenRows.push([emailUsername(email), (pedidos || []).length]);
-      });
-      const wsResumen = XLSX.utils.aoa_to_sheet(resumenRows);
-      wsResumen["!cols"] = [{ wch: 40 }, { wch: 20 }];
-      wsResumen["!autofilter"] = {
-        ref: XLSX.utils.encode_range({ s: { r: 2, c: 0 }, e: { r: 2, c: 1 } }),
+// ayuda para aplicar estilo a rango
+const applyCellStyleRange = (ws, r0, r1, c0, c1, style) => {
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      const ref = XLSX.utils.encode_cell({ r, c });
+      if (!ws[ref]) continue;
+      ws[ref].s = {
+        ...(ws[ref].s || {}),
+        font: { ...(ws[ref].s?.font || {}), ...(style.font || {}) },
+        alignment: { ...(ws[ref].s?.alignment || {}), ...(style.alignment || {}) },
+        numFmt: style.numFmt || ws[ref].z || ws[ref].numFmt,
       };
-      applyPrintSetup(wsResumen, "portrait");
-      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
-
-      // ---- 1 hoja por repartidor (tabla)
-      Object.keys(pedidosPorRepartidor).forEach((email, idx) => {
-        const lista = (pedidosPorRepartidor[email] || []).map((p, i) => mapPedidoFull(p, i));
-
-        // Encabezado
-        const encabezado = [
-          ["Repartidor:", emailUsername(email)],
-          ["Provincia:", provinciaId],
-          ["Fecha:", fechaStr],
-          ["Base:", BASE_DIRECCION || ""],
-          ["Ruta (Google Maps):", "Abrir"],
-          [""],
-        ];
-
-        // Columnas
-        const header = ["#", "Cliente", "Dirección", "Teléfono", "Vendedor", "Pedido", "Importe"];
-
-        // Filas
-        const filas = lista.map((r) => [
-          r.orden,
-          r.nombre,
-          r.direccion,
-          r.telefono,
-          r.vendedor,
-          r.pedido,
-          r.importeNum,
-        ]);
-
-        const ws = XLSX.utils.aoa_to_sheet([...encabezado, header, ...filas]);
-
-        // Link de ruta (recorta a 25)
-        const rutaURL = buildRouteUrl(
-          BASE_DIRECCION,
-          lista.map((r) => r.direccion.replace(/\n/g, " "))
-        );
-        setHyperlink(ws, 4, 1, rutaURL, "Abrir ruta en Google Maps");
-
-        // ====== ANCHOS EXACTOS A:G ======
-        ws["!cols"] = [
-          { wch: 2.38 },  // A "#"
-          { wch: 9.63 },  // B Cliente
-          { wch: 15.88 }, // C Dirección
-          { wch: 10.88 }, // D Teléfono
-          { wch: 10.75 }, // E Vendedor
-          { wch: 32.25 }, // F Pedido
-          { wch: 6 },     // G Importe
-        ];
-
-        // Alturas de filas
-        const rows = [];
-        const encabezadoLen = encabezado.length;
-        const totalRows = encabezadoLen + 1 + filas.length;
-        for (let r = 0; r <= totalRows; r++) {
-          if (r < encabezadoLen) rows[r] = { hpt: 18 };
-          else if (r === encabezadoLen) rows[r] = { hpt: 24 };
-          else rows[r] = { hpt: 48 };
-        }
-        ws["!rows"] = rows;
-
-        // ====== ESTILOS: Calibri 9, wrap y alineación superior en A:G ======
-        const baseStyle = {
-          font: { name: "Calibri", sz: 9 },
-          alignment: { vertical: "top", wrapText: true },
-        };
-        const firstDataRow = encabezadoLen;
-        const lastDataRow = encabezadoLen + filas.length + 1;
-        applyCellStyleRange(ws, firstDataRow, lastDataRow, 0, 6, baseStyle);
-
-        // Importe como número con miles
-        const colImporte = 6; // G
-        for (let r = encabezadoLen + 1; r <= encabezadoLen + filas.length; r++) {
-          const ref = XLSX.utils.encode_cell({ r, c: colImporte });
-          if (ws[ref] && typeof ws[ref].v === "number") {
-            ws[ref].t = "n";
-            ws[ref].z = "#,##0";
-            ws[ref].s = {
-              ...(ws[ref].s || {}),
-              font: { name: "Calibri", sz: 9 },
-              alignment: { vertical: "top", wrapText: true },
-              numFmt: "#,##0",
-            };
-          }
-        }
-
-        // Autofiltro
-        ws["!autofilter"] = {
-          ref: XLSX.utils.encode_range({
-            s: { r: encabezadoLen, c: 0 },
-            e: { r: encabezadoLen, c: header.length - 1 },
-          }),
-        };
-
-        // Impresión A4 apaisado
-        applyPrintSetup(ws, "landscape");
-
-        const sheetName = safeSheetName(`R${idx + 1}-${emailUsername(email)}`);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      });
-
-      const fileName = `hoja_ruta_${provinciaId}_${fechaStr}.xlsx`;
-      XLSX.writeFile(wb, fileName);
-    } catch (e) {
-      console.error(e);
-      Swal.fire("❌ Error", "No se pudo exportar el Excel.", "error");
     }
+  }
+};
+
+// Forma final de cada pedido para Excel (con wraps)
+const mapPedidoFull = (p, i) => {
+  const telefono = p.telefono ?? p.telefono1 ?? p.telefonoAlt ?? p.celular ?? p.tel ?? "";
+  const vendedor = emailUsername(
+    p.vendedor ?? p.vend ?? p.vendedorNombre ?? p.vendedorEmail ?? p.seller ?? ""
+  );
+  const importeNum = Number(p.importe ?? p.monto ?? p.total ?? 0) || 0;
+
+  return {
+    orden: i + 1,
+    nombre: p.nombre || "",
+    direccion: softWrap(p.direccion || "", 54),
+    telefono,
+    vendedor, // p.ej. "federudiero"
+    pedido: softWrap(p.pedido || "", 54),
+    importeNum,
   };
+};
+
+// FIX: limitar waypoints a 25 en el link
+const buildRouteUrl = (base, direcciones) => {
+  const origin = encodeURIComponent(String(base || ""));
+  const dest = origin;
+  const safeDirs = (direcciones || []).filter(Boolean).map((d) => String(d));
+  const limited = safeDirs.slice(0, MAX_WAYPOINTS);
+  const wps = limited.map((d) => encodeURIComponent(d)).join("|");
+
+  const parts = [
+    "https://www.google.com/maps/dir/?api=1",
+    `origin=${origin}`,
+    `destination=${dest}`,
+    "travelmode=driving",
+  ];
+  if (wps) parts.push(`waypoints=${wps}`);
+  return parts.join("&");
+};
+
+const exportarExcel = () => {
+  try {
+    const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
+    const wb = XLSX.utils.book_new();
+
+    // ---- Resumen rápido
+    const resumenRows = [
+      [`Hoja de Ruta — Prov: ${provinciaId} — Fecha: ${fechaStr}`],
+      [""],
+      ["Repartidor (usuario)", "Cantidad de pedidos"], // título actualizado
+    ];
+    Object.entries(pedidosPorRepartidor).forEach(([email, pedidos]) => {
+      resumenRows.push([emailUsername(email), (pedidos || []).length]);
+    });
+    const wsResumen = XLSX.utils.aoa_to_sheet(resumenRows);
+    wsResumen["!cols"] = [{ wch: 40 }, { wch: 20 }];
+    wsResumen["!autofilter"] = {
+      ref: XLSX.utils.encode_range({ s: { r: 2, c: 0 }, e: { r: 2, c: 1 } }),
+    };
+    applyPrintSetup(wsResumen, "portrait");
+    XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+    // ---- 1 hoja por repartidor (tabla)
+    Object.keys(pedidosPorRepartidor).forEach((email, idx) => {
+      const lista = (pedidosPorRepartidor[email] || []).map((p, i) => mapPedidoFull(p, i));
+
+      // Encabezado
+      const encabezado = [
+        ["Repartidor:", emailUsername(email)], // usuario (antes del @)
+        ["Provincia:", provinciaId],
+        ["Fecha:", fechaStr],
+        ["Base:", BASE_DIRECCION || ""],
+        ["Ruta (Google Maps):", "Abrir"],
+        [""],
+      ];
+
+      // Columnas
+      const header = ["#", "Cliente", "Dirección", "Teléfono", "Vendedor", "Pedido", "Importe"];
+
+      // Filas
+      const filas = lista.map((r) => [
+        r.orden,
+        r.nombre,
+        r.direccion,
+        r.telefono,
+        r.vendedor,
+        r.pedido,
+        r.importeNum,
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet([...encabezado, header, ...filas]);
+
+      // Link de ruta (recorta a 25)
+      const rutaURL = buildRouteUrl(
+        BASE_DIRECCION,
+        lista.map((r) => r.direccion.replace(/\n/g, " "))
+      );
+      setHyperlink(ws, 4, 1, rutaURL, "Abrir ruta en Google Maps");
+
+      // ====== ANCHOS EXACTOS A:G ======
+      ws["!cols"] = [
+        { wch: 2.38 },  // A "#"
+        { wch: 9.63 },  // B Cliente
+        { wch: 15.88 }, // C Dirección
+        { wch: 10.88 }, // D Teléfono
+        { wch: 10.75 }, // E Vendedor
+        { wch: 32.25 }, // F Pedido
+        { wch: 6 },     // G Importe
+      ];
+
+      // Alturas de filas
+      const rows = [];
+      const encabezadoLen = encabezado.length;
+      const totalRows = encabezadoLen + 1 + filas.length;
+      for (let r = 0; r <= totalRows; r++) {
+        if (r < encabezadoLen) rows[r] = { hpt: 18 };
+        else if (r === encabezadoLen) rows[r] = { hpt: 24 };
+        else rows[r] = { hpt: 48 };
+      }
+      ws["!rows"] = rows;
+
+      // ====== ESTILOS: Calibri 9, wrap y alineación superior en A:G ======
+      const baseStyle = {
+        font: { name: "Calibri", sz: 9 },
+        alignment: { vertical: "top", wrapText: true },
+      };
+      const firstDataRow = encabezadoLen;
+      const lastDataRow = encabezadoLen + filas.length + 1;
+      applyCellStyleRange(ws, firstDataRow, lastDataRow, 0, 6, baseStyle);
+
+      // Importe como número con miles
+      const colImporte = 6; // G
+      for (let r = encabezadoLen + 1; r <= encabezadoLen + filas.length; r++) {
+        const ref = XLSX.utils.encode_cell({ r, c: colImporte });
+        if (ws[ref] && typeof ws[ref].v === "number") {
+          ws[ref].t = "n";
+          ws[ref].z = "#,##0";
+          ws[ref].s = {
+            ...(ws[ref].s || {}),
+            font: { name: "Calibri", sz: 9 },
+            alignment: { vertical: "top", wrapText: true },
+            numFmt: "#,##0",
+          };
+        }
+      }
+
+      // Autofiltro
+      ws["!autofilter"] = {
+        ref: XLSX.utils.encode_range({
+          s: { r: encabezadoLen, c: 0 },
+          e: { r: encabezadoLen, c: header.length - 1 },
+        }),
+      };
+
+      // Impresión A4 apaisado
+      applyPrintSetup(ws, "landscape");
+
+      // Nombre de hoja: usa el usuario (antes del @)
+      const sheetName = safeSheetName(`R${idx + 1}-${emailUsername(email)}`);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+
+    const fileName = `hoja_ruta_${provinciaId}_${fechaStr}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  } catch (e) {
+    console.error(e);
+    Swal.fire("❌ Error", "No se pudo exportar el Excel.", "error");
+  }
+};
 
   // =========================
   // UI

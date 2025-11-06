@@ -5,6 +5,13 @@ import Swal from "sweetalert2";
 const normalizar = (s = "") =>
   String(s).toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 
+// 🔹 Nuevo helper: obtener solo la parte anterior al “@”
+const emailUsername = (v) => {
+  const s = String(v || "");
+  const at = s.indexOf("@");
+  return at > 0 ? s.slice(0, at) : (s || "—");
+};
+
 const PedidoTabla = ({ pedidos, onEditar, onEliminar, bloqueado, currentUserEmail }) => {
   const [q, setQ] = useState("");
 
@@ -50,7 +57,9 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
     if (!res.isConfirmed) return;
     try {
       await onEliminar?.(p.id);
-    } catch (e){console.error(e)}
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // 🔎 Filtro local (no pega a Firestore)
@@ -65,6 +74,7 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
         p?.partido,
         p?.pedido,
         p?.vendedorEmail,
+        emailUsername(p?.vendedorEmail), // 🔹 también busca por el username del vendedor
         p?.telefono,
         p?.telefonoAlt,
       ]
@@ -97,7 +107,9 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
       </div>
 
       {filtrados.length === 0 ? (
-        <p className="mt-4 text-center text-gray-400">No se encontraron pedidos con ese criterio.</p>
+        <p className="mt-4 text-center text-gray-400">
+          No se encontraron pedidos con ese criterio.
+        </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filtrados.map((p, i) => {
@@ -108,7 +120,10 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
             const [detalle, total] = String(p.pedido || "").split(" | TOTAL: $");
 
             return (
-              <div key={p.id || i} className="border-l-4 shadow-lg border-primary card bg-base-200">
+              <div
+                key={p.id || i}
+                className="border-l-4 shadow-lg border-primary card bg-base-200"
+              >
                 <div className="card-body">
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="font-bold text-primary">📦 Pedido #{i + 1}</h2>
@@ -122,10 +137,18 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
                   </div>
 
                   <ul className="space-y-1 text-sm">
-                    <li><strong>👤 Nombre:</strong> {p.nombre}</li>
-                    <li><strong>📌 Dirección:</strong> {p.direccion}</li>
-                    <li><strong>🌐 Observación (Entre calles):</strong> {p.entreCalles}</li>
-                    <li><strong>📍 Ciudad o partido:</strong> {p.partido}</li>
+                    <li>
+                      <strong>👤 Nombre:</strong> {p.nombre}
+                    </li>
+                    <li>
+                      <strong>📌 Dirección:</strong> {p.direccion}
+                    </li>
+                    <li>
+                      <strong>🌐 Observación (Entre calles):</strong> {p.entreCalles}
+                    </li>
+                    <li>
+                      <strong>📍 Ciudad o partido:</strong> {p.partido}
+                    </li>
                     <li>
                       <strong>📱 Teléfonos:</strong>
                       <div className="flex flex-col gap-1">
@@ -152,14 +175,27 @@ ${pedido.telefonoAlt ? `📱 Teléfono alt: ${pedido.telefonoAlt}\n` : ""}
                       <span className="whitespace-pre-wrap">{detalle || p.pedido}</span>
                       {total && <p className="mt-1 font-bold text-success">TOTAL: ${total}</p>}
                     </li>
+
+                    {/* 🔹 Mostramos solo lo anterior al @ */}
                     <li>
-                      <strong>👤 Vendedor dueño:</strong> {String(p.vendedorEmail || "—")}
+                      <strong>👤 Vendedor:</strong>{" "}
+                      <span title={p.vendedorEmail || ""}>
+                        {emailUsername(p.vendedorEmail || p.vendedor || p.seller || "—")}
+                      </span>
+                    </li>
+
+                    <li>
+                      <strong>
+                        pago con transferencia se le agrega un 10% al total de la compra
+                      </strong>
                     </li>
                   </ul>
                 </div>
 
                 {p.entregado && (
-                  <div className="mb-2 text-sm text-success">✅ Entregado: edición deshabilitada</div>
+                  <div className="mb-2 text-sm text-success">
+                    ✅ Entregado: edición deshabilitada
+                  </div>
                 )}
 
                 {!(bloqueado || p.entregado || !isOwner) && (

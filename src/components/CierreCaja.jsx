@@ -26,6 +26,7 @@ import Swal from "sweetalert2";
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia.js";
 
+
 // ---------- Utils seguros para serializar datos a logs/auditoría ----------
 function limpiarFirestoreData(value) {
   if (
@@ -279,6 +280,16 @@ export default function CierreCaja() {
   const handleGastoChange = (email, tipo, valor) => {
     setGastos((prev) => ({ ...prev, [email]: { ...prev[email], [tipo]: Number(valor) } }));
   };
+
+
+  const calcularEfectivoRestante = (tot, g) => {
+  const gastos =
+    (g?.repartidor || 0) +
+    (g?.acompanante || 0) +
+    (g?.combustible || 0) +
+    (g?.extra || 0);
+  return Math.round((tot.efectivo - gastos) * 100) / 100;
+};
 
   // ====== Cierre individual ======
   const normalizarCierreIndividual = (email, entregados, noEntregados, totales, g) => ({
@@ -639,25 +650,32 @@ export default function CierreCaja() {
       }
 
       // F) Early exit: si no hay nada para descontar, sólo marcar cierre y escribir resumen
-      if (ops.length === 0) {
-        const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
-        const totalNeto = totalBruto - totalGastos;
+     if (ops.length === 0) {
+  const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
+  const totalNeto = totalBruto - totalGastos;
 
-        await setDoc(doc(colResumenVentas, fechaStr), {
-          fechaStr,
-          totalPorProducto: resumenPorNombre,
-          totalEfectivo,
-          totalTransferencia,
-          totalTransferencia10,
-          totalGastos,           // NUEVO
-          totalNeto,             // NUEVO
-          provinciaId,
-          timestamp: new Date(),
-        });
-        await setDoc(cierreGlobalRef, { stockDescontado: true, inProgress: false }, { merge: true });
-        await Swal.fire("Cierre Global realizado", "No había stock para descontar.", "success");
-        return;
-      }
+  await setDoc(doc(colResumenVentas, fechaStr), {
+    fechaStr,
+    totalPorProducto: resumenPorNombre,
+    totalEfectivo,
+    totalTransferencia,
+    totalTransferencia10,
+    totalGastos,
+    totalNeto,
+    provinciaId,
+    timestamp: new Date(),
+  });
+
+  // 👇 Agregá opsAplicadas: []
+  await setDoc(cierreGlobalRef, {
+    stockDescontado: true,
+    inProgress: false,
+    opsAplicadas: [],   // ← snapshot vacío para que la anulación NO reponga nada
+  }, { merge: true });
+
+  await Swal.fire("Cierre Global realizado", "No había stock para descontar.", "success");
+  return;
+}
 
       // G) Saneamos tipo de stock **solo** en los productos a tocar y descontamos en chunks
       await sanearStocksSiNecesario(ops);
@@ -689,22 +707,29 @@ export default function CierreCaja() {
         provinciaId,
         timestamp: new Date(),
       });
+      // === Snapshot de operaciones aplicadas (para anulación 1:1) ===
+const opsAplicadas = ops.map(({ ref, qty }) => ({
+  path: ref.path,         // ej: "provincias/SF/productos/ABC123"
+  id: ref.id,
+  qty: Number(qty || 0),
+}));
 
       // I) Marcar cierre global y liberar lock
-      await setDoc(
-        cierreGlobalRef,
-        {
-          fechaStr,
-          tipo: "global",
-          repartidores,
-          stockDescontado: true,
-          inProgress: false,
-          provinciaId,
-          ejecutadoPor: (window?.__authEmail) || null,
-          timestamp: new Date(),
-        },
-        { merge: true }
-      );
+     await setDoc(
+  cierreGlobalRef,
+  {
+    fechaStr,
+    tipo: "global",
+    repartidores,
+    stockDescontado: true,
+    inProgress: false,
+    provinciaId,
+    ejecutadoPor: (window?.__authEmail) || null,
+    opsAplicadas,            // 👈 NUEVO: snapshot exacto aplicado
+    timestamp: new Date(),
+  },
+  { merge: true }
+);
 
       await Swal.fire("Cierre Global realizado", "Se descontó stock (solo componentes de combos) y se guardó el resumen.", "success");
     } catch (e) {
@@ -794,61 +819,82 @@ export default function CierreCaja() {
       const resumenSnap = await getDoc(resumenRef);
       const yaDesconto = cierreSnap.exists() && !!cierreSnap.data()?.stockDescontado;
 
-      if (yaDesconto) {
-        // 🔄 REGLA NUEVA: Recalcular cantidades y RESTAURAR solo lo que se descontó:
-        // productos simples y componentes de combos (NO el combo padre).
-        const acumulado = new Map();
+     if (yaDesconto) {
+  // 1) Intentar restaurar usando el snapshot exacto guardado en el cierre
+  const opsAplicadas = cierreSnap.data()?.opsAplicadas;
 
-        for (const email of repartidores) {
-          let cierreRep = cierres[email];
-          if (!cierreRep?.pedidosEntregados) {
-            const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-            const snap = await getDoc(ref);
-            if (snap.exists()) cierreRep = snap.data();
-          }
+if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
+  const grupos = chunk(opsAplicadas, 450);
+  for (const grupo of grupos) {
+    const batch = writeBatch(db);
+    for (const { path, qty } of grupo) {
+      const n = Number(qty || 0);
+      if (!n || !path) continue;
+      const ref = doc(db, ...splitPathSegments(path));
+      batch.set(ref, { stock: increment(+n) }, { merge: true });
+    }
+    await batch.commit();
+  }
+} else {
+    // 🔁 Compatibilidad hacia atrás (legacy): recalcular como venías haciendo
+    //     (productos simples y componentes de combos; NO el combo padre).
+    const acumulado = new Map();
 
-          const entregados = cierreRep?.pedidosEntregados || [];
-          for (const pedido of entregados) {
-            const items = pedido?.productos || [];
-            for (const item of items) {
-              const cant = Number(item?.cantidad || 0);
-              if (!cant) continue;
+    for (const email of repartidores) {
+      let cierreRep = cierres[email];
+      if (!cierreRep?.pedidosEntregados) {
+        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+        const snap = await getDoc(ref);
+        if (snap.exists()) cierreRep = snap.data();
+      }
 
-              const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
-              if (!ref || !pathStr) continue;
+      const entregados = cierreRep?.pedidosEntregados || [];
+      for (const pedido of entregados) {
+        const items = pedido?.productos || [];
+        for (const item of items) {
+          const cant = Number(item?.cantidad || 0);
+          if (!cant) continue;
 
-              const prodSnap = await getDoc(ref);
-              const isCombo = prodSnap.exists() && !!prodSnap.data()?.esCombo;
+          const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
+          if (!ref || !pathStr) continue;
 
-              if (isCombo) {
-                const comps = (prodSnap.data().componentes || []);
-                for (const comp of comps) {
-                  const compCant = cant * Number(comp?.cantidad || 0);
-                  if (!compCant) continue;
-                  const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
-                  const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
-                  acumular(acumulado, compRef, compPath, compCant);
-                }
-              } else {
-                // Producto simple: se había descontado él mismo, por lo tanto se restaura él mismo
-                acumular(acumulado, ref, pathStr, cant);
-              }
+          const prodSnap = await getDoc(ref);
+          const isCombo = prodSnap.exists() && !!prodSnap.data()?.esCombo;
+
+          if (isCombo) {
+            const comps = (prodSnap.data().componentes || []);
+            for (const comp of comps) {
+              const compCant = cant * Number(comp?.cantidad || 0);
+              if (!compCant) continue;
+
+              const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
+              const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
+
+              // acumular(ref, path, qty) — usa tu helper existente
+              acumular(acumulado, compRef, compPath, compCant);
             }
+          } else {
+            // Producto simple: se había descontado él mismo, se restaura él mismo
+            acumular(acumulado, ref, pathStr, cant);
           }
-        }
-
-        const ops = Array.from(acumulado.values());
-        const grupos = chunk(ops, 450);
-        for (const grupo of grupos) {
-          const batch = writeBatch(db);
-          for (const { ref, qty } of grupo) {
-            const n = Number(qty || 0);
-            if (!n) continue;
-            batch.set(ref, { stock: increment(+n) }, { merge: true });
-          }
-          await batch.commit();
         }
       }
+    }
+
+    const ops = Array.from(acumulado.values());
+    const grupos = chunk(ops, 450);
+    for (const grupo of grupos) {
+      const batch = writeBatch(db);
+      for (const { ref, qty } of grupo) {
+        const n = Number(qty || 0);
+        if (!n) continue;
+        batch.set(ref, { stock: increment(+n) }, { merge: true });
+      }
+      await batch.commit();
+    }
+  }
+}
+
 
       // Auditoría + borrar registros
       await addDoc(
@@ -957,16 +1003,30 @@ export default function CierreCaja() {
               <p>💳 Transferencia: ${totales.transferencia.toFixed(0)}</p>
               <p>💳 Transferencia (+10%): ${totales.transferencia10.toFixed(0)}</p>
               {(() => {
-    const g = gastos[email] || {};
-    const subtotalGastos = (g.repartidor || 0) + (g.acompanante || 0) + (g.combustible || 0) + (g.extra || 0);
-    const netoPreview = calcularCajaNeta(totales, g);
-    return (
-      <div className="mt-2 text-sm">
-        <div className="opacity-80">🧾 Gastos cargados (incluye ⛽ combustible): ${subtotalGastos.toFixed(0)}</div>
-        <div className="font-semibold">= Neto estimado: ${netoPreview.toFixed(0)}</div>
+  const g = gastos[email] || {};
+  const subtotalGastos =
+    (g.repartidor || 0) +
+    (g.acompanante || 0) +
+    (g.combustible || 0) +
+    (g.extra || 0);
+  const netoPreview = calcularCajaNeta(totales, g);
+  const efectivoRestante = calcularEfectivoRestante(totales, g); // 👈 NUEVO
+
+  return (
+    <div className="mt-2 text-sm">
+      <div className="opacity-80">
+        🧾 Gastos cargados (incluye ⛽ combustible): ${subtotalGastos.toFixed(0)}
       </div>
-    );
-  })()}
+      <div className="font-semibold">
+        = Neto estimado: ${netoPreview.toFixed(0)}
+      </div>
+      <div className="mt-1">
+        💵 <span className="font-semibold">Efectivo restante (después de gastos):</span>{" "}
+        ${efectivoRestante.toFixed(0)} {/* 👈 NUEVO */}
+      </div>
+    </div>
+  );
+})()}
             </div>
 
             <div className="mt-4">
