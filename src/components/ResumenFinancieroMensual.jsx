@@ -1,15 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/ResumenFinancieroMensual.jsx
+import React, { useEffect, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase/firebase";
-import {
-  getMonth,
-  getYear,
-  parseISO,
-  isValid,
-  startOfMonth,
-  endOfMonth,
-  format,
-} from "date-fns";
+import { parseISO, isValid, format } from "date-fns";
 import {
   PieChart,
   Pie,
@@ -24,287 +17,388 @@ import { useProvincia } from "../hooks/useProvincia.js";
 
 const pieColors = ["#22c55e", "#3b82f6", "#f97316"];
 
+// Helper para saber si un nombre es "envío"
+function esEnvioNombre(nombre) {
+  const n = String(nombre || "").trim().toLowerCase();
+  return n === "envios" || n.startsWith("envio");
+}
+
+// Helper para saber si algo parece combo por nombre / flags
+function esComboInfo(info, nombreBase) {
+  const n = String(nombreBase || info?.nombre || "").trim().toLowerCase();
+  return Boolean(info?.esCombo || info?.tipo === "combo" || n.includes("combo"));
+}
+
+// 🔑 Helper UNIFICADO de clave de agrupación: agrupa por nombre normalizado
+function getClaveProducto(nombre, productoId) {
+  const nombreLower = String(nombre || "").trim().toLowerCase();
+  if (nombreLower) return nombreLower;
+  return productoId ? `id::${productoId}` : "desconocido";
+}
+
 function ResumenFinancieroMensual() {
   const { provinciaId } = useProvincia();
 
+  const hoy = new Date();
+  const defaultDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const defaultHasta = hoy;
+
+  // 📅 Inputs que el usuario va tocando
+  const [fechaDesdeInput, setFechaDesdeInput] = useState(defaultDesde);
+  const [fechaHastaInput, setFechaHastaInput] = useState(defaultHasta);
+
+  // 📅 Rango realmente aplicado (se actualiza SOLO al hacer click)
+  const [fechaDesde, setFechaDesde] = useState(defaultDesde);
+  const [fechaHasta, setFechaHasta] = useState(defaultHasta);
+
   const [loading, setLoading] = useState(true);
-  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().getMonth());
-  const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
 
-  const [porVendedor, setPorVendedor] = useState([]);
-  const [porRepartidor, setPorRepartidor] = useState([]);
+  // Lista de resúmenes por día (directo de resumenVentas)
+  const [resumenesDias, setResumenesDias] = useState([]);
+  const [diasCerrados, setDiasCerrados] = useState(0);
 
+  // Totales globales del rango
   const [totales, setTotales] = useState({
     efectivo: 0,
     transferencia: 0,
     transferencia10: 0,
-    gastos: {
-      repartidor: 0,
-      acompanante: 0,
-      combustible: 0,
-      extra: 0,
-    },
-    pedidosEntregados: 0,
-    pedidosNoEntregados: 0,
+    totalGastos: 0,
+    totalNeto: 0,
   });
 
-  // Rango del mes como strings lexicográficos (yyyy-MM-dd)
-  const rangoMes = useMemo(() => {
-    const inicio = startOfMonth(new Date(anioSeleccionado, mesSeleccionado, 1));
-    const fin = endOfMonth(inicio);
-    return {
-      desde: format(inicio, "yyyy-MM-dd"),
-      hasta: format(fin, "yyyy-MM-dd"),
-    };
-  }, [anioSeleccionado, mesSeleccionado]);
+  // Productos vendidos (expandiendo combos, sin envíos)
+  const [productosVendidos, setProductosVendidos] = useState([]);
 
   useEffect(() => {
     const cargarDatos = async () => {
-      if (!provinciaId) return;
+      if (!provinciaId || !fechaDesde || !fechaHasta) {
+        setLoading(false);
+        return;
+      }
+
+      const desdeStr = format(fechaDesde, "yyyy-MM-dd");
+      const hastaStr = format(fechaHasta, "yyyy-MM-dd");
+
+      // Rango inválido
+      if (desdeStr > hastaStr) {
+        setTotales({
+          efectivo: 0,
+          transferencia: 0,
+          transferencia10: 0,
+          totalGastos: 0,
+          totalNeto: 0,
+        });
+        setResumenesDias([]);
+        setDiasCerrados(0);
+        setProductosVendidos([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
 
-      // ===== 1) CIERRES INDIVIDUALES DEL MES (por provincia) =====
-      // usamos rango por fechaStr ('yyyy-MM-dd' ordenable lexicográficamente)
-      const qCierres = query(
-        collection(db, "provincias", provinciaId, "cierresRepartidor"),
-        where("fechaStr", ">=", rangoMes.desde),
-        where("fechaStr", "<=", rangoMes.hasta)
-      );
-      const snapshot = await getDocs(qCierres);
+      try {
+        /* ===============================
+           1) RESUMENES DIARIOS (resumenVentas)
+           =============================== */
+        const colResumenVentas = collection(
+          db,
+          "provincias",
+          provinciaId,
+          "resumenVentas"
+        );
 
-      // Filtrado defensivo por mes/año (si hay cierres fuera de rango por formato)
-      const cierresData = snapshot.docs
-        .map((doc) => doc.data())
-        .filter((c) => {
-          if (!c.fechaStr) return false;
-          const fecha = parseISO(c.fechaStr);
-          return (
-            isValid(fecha) &&
-            getMonth(fecha) === mesSeleccionado &&
-            getYear(fecha) === anioSeleccionado
-          );
-        });
+        const qResumen = query(
+          colResumenVentas,
+          where("fechaStr", ">=", desdeStr),
+          where("fechaStr", "<=", hastaStr)
+        );
+        const snapResumen = await getDocs(qResumen);
 
-      let efectivo = 0;
-      let transferencia = 0;
-      let transferencia10 = 0;
+        const resumenes = snapResumen.docs
+          .map((d) => d.data())
+          .filter((r) => {
+            if (!r.fechaStr) return false;
+            const f = parseISO(r.fechaStr);
+            return isValid(f);
+          })
+          .sort((a, b) => String(a.fechaStr).localeCompare(String(b.fechaStr)));
 
-      let gastosTotales = { repartidor: 0, acompanante: 0, combustible: 0, extra: 0 };
-      let entregados = 0;
-      let noEntregados = 0;
+        setDiasCerrados(resumenes.length);
 
-      // AGRUPACIÓN POR REPARTIDOR
-      const acumuladoPorRepartidor = {};
+        let totalEfectivoMes = 0;
+        let totalTransferenciaMes = 0;
+        let totalTransferencia10Mes = 0;
+        let totalGastosMes = 0;
+        let totalNetoMes = 0;
 
-      cierresData.forEach((cierre) => {
-        efectivo += cierre.efectivo || 0;
-        transferencia += cierre.transferencia || 0;
-        transferencia10 += cierre.transferencia10 || 0;
+        const filasPorDia = resumenes.map((r) => {
+          const efectivo = Number(r.totalEfectivo || 0);
+          const transferencia = Number(r.totalTransferencia || 0);
+          const transferencia10 = Number(r.totalTransferencia10 || 0);
+          const gastos = Number(r.totalGastos || 0);
 
-        const g = cierre.gastos || {};
-        gastosTotales.repartidor += g.repartidor || 0;
-        gastosTotales.acompanante += g.acompanante || 0;
-        gastosTotales.combustible += g.combustible || 0;
-        gastosTotales.extra += g.extra || 0;
+          const bruto = efectivo + transferencia + transferencia10;
+          const neto =
+            r.totalNeto !== undefined && r.totalNeto !== null
+              ? Number(r.totalNeto)
+              : bruto - gastos;
 
-        entregados += cierre.pedidosEntregados?.length || 0;
-        noEntregados += cierre.pedidosNoEntregados?.length || 0;
+          totalEfectivoMes += efectivo;
+          totalTransferenciaMes += transferencia;
+          totalTransferencia10Mes += transferencia10;
+          totalGastosMes += gastos;
+          totalNetoMes += neto;
 
-        const email = cierre.emailRepartidor || "sin dato";
-        if (!acumuladoPorRepartidor[email]) {
-          acumuladoPorRepartidor[email] = {
-            email,
-            efectivo: 0,
-            transferencia: 0,
-            transferencia10: 0,
-            gastos: { repartidor: 0, acompanante: 0, combustible: 0, extra: 0 },
+          return {
+            fechaStr: r.fechaStr,
+            efectivo,
+            transferencia,
+            transferencia10,
+            bruto,
+            gastos,
+            neto,
           };
-        }
+        });
 
-        acumuladoPorRepartidor[email].efectivo += cierre.efectivo || 0;
-        acumuladoPorRepartidor[email].transferencia += cierre.transferencia || 0;
-        acumuladoPorRepartidor[email].transferencia10 += cierre.transferencia10 || 0;
-        acumuladoPorRepartidor[email].gastos.repartidor += g.repartidor || 0;
-        acumuladoPorRepartidor[email].gastos.acompanante += g.acompanante || 0;
-        acumuladoPorRepartidor[email].gastos.combustible += g.combustible || 0;
-        acumuladoPorRepartidor[email].gastos.extra += g.extra || 0;
-      });
+        setResumenesDias(filasPorDia);
 
-      setTotales({
-        efectivo,
-        transferencia,
-        transferencia10,
-        gastos: gastosTotales,
-        pedidosEntregados: entregados,
-        pedidosNoEntregados: noEntregados,
-      });
+        // ✅ FIX: eliminar el setTotales duplicado que metía "totalNetoMes"
+        // ✅ Dejamos SOLO uno con totalNeto:
+        setTotales({
+          efectivo: totalEfectivoMes,
+          transferencia: totalTransferenciaMes,
+          transferencia10: totalTransferencia10Mes,
+          totalGastos: totalGastosMes,
+          totalNeto: totalNetoMes,
+        });
 
-      setPorRepartidor(Object.values(acumuladoPorRepartidor));
+        /* ===============================
+           2) MAPA DE PRODUCTOS DE STOCK
+           =============================== */
+        const colProductos = collection(
+          db,
+          "provincias",
+          provinciaId,
+          "productos"
+        );
+        const snapProductos = await getDocs(colProductos);
+        const productosMap = {};
+        snapProductos.forEach((docSnap) => {
+          productosMap[docSnap.id] = {
+            id: docSnap.id,
+            ...(docSnap.data() || {}),
+          };
+        });
 
-      // ===== 2) RESUMEN POR VENDEDOR (usa catálogo por provincia) =====
-      const productosSnap = await getDocs(collection(db, "provincias", provinciaId, "productos"));
-      const catalogoById = {};
-      const catalogoByNombre = {};
-      const norm = (s) =>
-        String(s || "")
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .trim();
+        /* ===============================
+           3) PRODUCTOS VENDIDOS DESDE PEDIDOS
+              (expandiendo combos, sin envíos)
+           =============================== */
+        const colPedidos = collection(db, "provincias", provinciaId, "pedidos");
 
-      const debeExcluirItem = (nombre) => {
-        const n = norm(nombre);
-        const keywords = [
-          "envio",
-          "envío",
-          "delivery",
-          "flete",
-          "recargo",
-          "transferencia 10",
-          "transferencia10",
-          "interes",
-          "interés",
-          "tarjeta",
-          "posnet",
-          "comision tarjeta",
-          "comisión tarjeta",
-        ];
-        return keywords.some((k) => n.includes(k));
-      };
+        // usamos fecha (Timestamp) con rango sobre días completos
+        const desdeDate = new Date(fechaDesde);
+        desdeDate.setHours(0, 0, 0, 0);
 
-      productosSnap.forEach((d) => {
-        const data = d.data() || {};
-        const precio = Number(data.precio ?? 0);
-        const nombre = data.nombre || "";
-        catalogoById[d.id] = { precio, nombre };
-        catalogoByNombre[norm(nombre)] = { precio, nombre };
-      });
+        const hastaDate = new Date(fechaHasta);
+        hastaDate.setHours(23, 59, 59, 999);
 
-      const PORCENTAJE_COMISION = 0.1;
-      const resumenPorVendedor = {};
+        const qPedidos = query(
+          colPedidos,
+          where("entregado", "==", true),
+          where("fecha", ">=", desdeDate),
+          where("fecha", "<=", hastaDate)
+        );
+        const snapPedidos = await getDocs(qPedidos);
 
-      cierresData.forEach((cierre) => {
-        // Entregados
-        (cierre.pedidosEntregados || []).forEach((pedido) => {
-          const vendedor = pedido.vendedorEmail || "sin dato";
-          let subtotalProductos = 0;
+        const mapaProductosVendidos = new Map();
 
-          if (Array.isArray(pedido.productos)) {
-            for (const item of pedido.productos) {
-              const cantidad = Number(item.cantidad ?? 1);
-              const nombreItem = item.nombre ?? item.productoNombre ?? item.titulo ?? "";
+        // 🔁 Helper recursivo: expande combos a componentes reales
+        const expandirProducto = (productoId, nombreFallback, cantidadBase) => {
+          if (!cantidadBase || cantidadBase <= 0) return;
 
-              if (debeExcluirItem(nombreItem)) continue;
+          const info = productosMap[productoId] || {};
+          const nombre = info.nombre || nombreFallback || "Producto sin nombre";
+          const nombreLower = String(nombre).toLowerCase().trim();
 
-              const id = item.productoId ?? item.id ?? item.codigo ?? null;
-              const precioPedido = Number(item.precio ?? item.precioUnitario);
+          // Envíos → no se cuentan
+          if (esEnvioNombre(nombreLower) || info?.tipo === "envio") {
+            return;
+          }
 
-              let precio =
-                Number.isFinite(precioPedido) && precioPedido > 0
-                  ? precioPedido
-                  : (id && catalogoById[id]?.precio) ||
-                    catalogoByNombre[norm(nombreItem)]?.precio ||
-                    0;
+          const esCombo = esComboInfo(info, nombre);
 
-              subtotalProductos += precio * cantidad;
+          if (esCombo) {
+            // Si es combo, lo desarmamos en sus componentes
+            const componentes =
+              Array.isArray(info.componentes) && info.componentes.length > 0
+                ? info.componentes
+                : Array.isArray(info.comboComponentes)
+                ? info.comboComponentes
+                : [];
+
+            componentes.forEach((comp) => {
+              const compId = comp.productoId || comp.idProducto || comp.id || null;
+              const compCant = Number(comp.cantidad || comp.cant || comp.unidades || 0);
+              if (!compId || !compCant) return;
+
+              const cantTotalComp = cantidadBase * compCant;
+              expandirProducto(
+                compId,
+                productosMap[compId]?.nombre || "",
+                cantTotalComp
+              );
+            });
+
+            return;
+          }
+
+          // Producto real de stock (no combo, no envío)
+          const clave = getClaveProducto(nombre, productoId);
+
+          if (!mapaProductosVendidos.has(clave)) {
+            mapaProductosVendidos.set(clave, {
+              clave,
+              productoId: productoId || null,
+              nombre,
+              cantidad: 0,
+              total: 0, // se sigue calculando internamente pero no se muestra
+            });
+          }
+
+          const precioUnitario = typeof info.precio === "number" ? info.precio : 0;
+          const subtotal = precioUnitario * cantidadBase;
+
+          const acumulado = mapaProductosVendidos.get(clave);
+          acumulado.cantidad += cantidadBase;
+          acumulado.total += subtotal;
+        };
+
+        // 🔁 Recorremos pedidos entregados
+        snapPedidos.forEach((docSnap) => {
+          const data = docSnap.data();
+          const productos = Array.isArray(data.productos) ? data.productos : [];
+
+          productos.forEach((prod) => {
+            const cantidadPedido = Number(prod.cantidad || 0);
+            if (!cantidadPedido) return;
+
+            const productoId = prod.productoId || prod.idProducto || prod.id || null;
+            const nombrePedido = prod.nombre || "";
+            const infoStock = productoId ? productosMap[productoId] || {} : {};
+
+            const nombreBase = infoStock.nombre || nombrePedido || "Producto sin nombre";
+            const nombreLower = String(nombreBase).toLowerCase().trim();
+
+            // Envíos → fuera
+            if (esEnvioNombre(nombreLower) || infoStock?.tipo === "envio") {
+              return;
             }
-          }
 
-          if (!resumenPorVendedor[vendedor]) {
-            resumenPorVendedor[vendedor] = {
-              email: vendedor,
-              montoProductos: 0,
-              cantidadPedidos: 0,
-              cantidadNoVendidos: 0,
-              comision: 0,
-              promedioTicket: 0,
-            };
-          }
+            if (productoId) {
+              // Si tiene ID, vemos si es combo en stock
+              const esCombo = esComboInfo(infoStock, nombreBase);
+              if (esCombo) {
+                // Lo desarmamos a componentes
+                expandirProducto(productoId, nombreBase, cantidadPedido);
+              } else {
+                // Producto normal con ID → se suma directo
+                expandirProducto(productoId, nombreBase, cantidadPedido);
+              }
+            } else {
+              // Producto sin ID → último recurso: por nombre
+              const esComboInline = nombreLower.includes("combo") || prod.esCombo;
+              if (esComboInline) {
+                // No sabemos sus componentes → mejor descartar para no mentir
+                return;
+              }
 
-          resumenPorVendedor[vendedor].montoProductos += subtotalProductos;
-          resumenPorVendedor[vendedor].cantidadPedidos += 1;
+              const clave = getClaveProducto(nombreBase, null);
+
+              if (!mapaProductosVendidos.has(clave)) {
+                mapaProductosVendidos.set(clave, {
+                  clave,
+                  productoId: null,
+                  nombre: nombreBase,
+                  cantidad: 0,
+                  total: 0,
+                });
+              }
+
+              const precioUnitario = Number(prod.precio || 0);
+              const subtotal = precioUnitario * cantidadPedido;
+
+              const acumulado = mapaProductosVendidos.get(clave);
+              acumulado.cantidad += cantidadPedido;
+              acumulado.total += subtotal;
+            }
+          });
         });
 
-        // No entregados (cuentan solo para la métrica, no suman venta)
-        (cierre.pedidosNoEntregados || []).forEach((pedido) => {
-          const vendedor = pedido.vendedorEmail || "sin dato";
-          if (!resumenPorVendedor[vendedor]) {
-            resumenPorVendedor[vendedor] = {
-              email: vendedor,
-              montoProductos: 0,
-              cantidadPedidos: 0,
-              cantidadNoVendidos: 0,
-              comision: 0,
-              promedioTicket: 0,
-            };
-          }
-          resumenPorVendedor[vendedor].cantidadNoVendidos += 1;
-        });
-      });
+        // Orden alfabético por nombre de producto
+        const listaProductos = Array.from(mapaProductosVendidos.values()).sort((a, b) =>
+          String(a.nombre || "").localeCompare(String(b.nombre || ""), "es", {
+            sensitivity: "base",
+          })
+        );
 
-      Object.values(resumenPorVendedor).forEach((v) => {
-        const base = Number(v.montoProductos || 0);
-        v.comision = Math.round(base * PORCENTAJE_COMISION * 100) / 100;
-        v.promedioTicket =
-          v.cantidadPedidos > 0 ? Math.round((base / v.cantidadPedidos) * 100) / 100 : 0;
-      });
-
-      setPorVendedor(Object.values(resumenPorVendedor));
-
-      setLoading(false);
+        setProductosVendidos(listaProductos);
+      } catch (error) {
+        console.error("Error cargando ResumenFinancieroMensual:", error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     cargarDatos();
-  }, [mesSeleccionado, anioSeleccionado, provinciaId, rangoMes.desde, rangoMes.hasta]);
+  }, [provinciaId, fechaDesde, fechaHasta]);
 
-  const totalGastos = Object.values(totales.gastos).reduce((a, b) => a + b, 0);
-  const totalRecaudado = totales.efectivo + totales.transferencia + totales.transferencia10;
-  const totalNeto = totalRecaudado - totalGastos;
+  const totalBruto =
+    Number(totales.efectivo || 0) +
+    Number(totales.transferencia || 0) +
+    Number(totales.transferencia10 || 0);
 
   const pieData = [
-    { name: "Efectivo", value: totales.efectivo },
-    { name: "Transferencia", value: totales.transferencia },
-    { name: "Transferencia (10%)", value: totales.transferencia10 },
+    { name: "Efectivo", value: Number(totales.efectivo || 0) },
+    { name: "Transferencia", value: Number(totales.transferencia || 0) },
+    { name: "Transferencia (10%)", value: Number(totales.transferencia10 || 0) },
   ];
 
-  const exportarResumenMensual = () => {
-    const fechaLabel = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, "0")}`;
+  const exportarResumen = () => {
+    const etiqueta =
+      format(fechaDesde, "yyyy-MM-dd") + "_a_" + format(fechaHasta, "yyyy-MM-dd");
 
-    const dataRepartidores = porRepartidor.map((r) => ({
-      Email: r.email,
-      "💵 Efectivo": r.efectivo,
-      "💳 Transferencia": r.transferencia,
-      "💳 Transferencia (10%)": r.transferencia10,
-      "🧾 Total Recaudado": r.efectivo + r.transferencia + r.transferencia10,
-      "🛠️ Gastos Repartidor": r.gastos?.repartidor || 0,
-      "🛠️ Gastos Acompañante": r.gastos?.acompanante || 0,
-      "🛠️ Gastos Combustible": r.gastos?.combustible || 0,
-      "🛠️ Gastos Extra": r.gastos?.extra || 0,
-      "🛠️ Total Gastos":
-        (r.gastos?.repartidor || 0) +
-        (r.gastos?.acompanante || 0) +
-        (r.gastos?.combustible || 0) +
-        (r.gastos?.extra || 0),
-    }));
-
-    const dataVendedores = porVendedor.map((v) => ({
-      Email: v.email,
-      "✅ Entregados": v.cantidadPedidos,
-      "❌ No Entregados": v.cantidadNoVendidos,
-      "💲 Total Vendido (solo productos)": v.montoProductos || 0,
-      "💰 Comisión 10%": v.comision || 0,
-      "📊 Promedio Ticket": v.promedioTicket || 0,
+    // Hoja 1: resumen por día
+    const rows = resumenesDias.map((r) => ({
+      Provincia: provinciaId,
+      Fecha: r.fechaStr,
+      Efectivo: r.efectivo,
+      Transferencia: r.transferencia,
+      Transferencia10: r.transferencia10,
+      Bruto: r.bruto,
+      Gastos: r.gastos,
+      Neto: r.neto,
     }));
 
     const workbook = XLSX.utils.book_new();
-    const sheet1 = XLSX.utils.json_to_sheet(dataRepartidores);
-    const sheet2 = XLSX.utils.json_to_sheet(dataVendedores);
+    const sheetResumen = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, sheetResumen, "ResumenVentas");
 
-    XLSX.utils.book_append_sheet(workbook, sheet1, "Resumen Repartidores");
-    XLSX.utils.book_append_sheet(workbook, sheet2, "Resumen Vendedores");
+    // Hoja 2: productos vendidos (solo cantidades, sin total facturado)
+    if (productosVendidos.length > 0) {
+      const rowsProd = productosVendidos.map((p) => ({
+        Provincia: provinciaId,
+        ProductoId: p.productoId || "",
+        Producto: p.nombre,
+        CantidadVendida: p.cantidad,
+      }));
+      const sheetProd = XLSX.utils.json_to_sheet(rowsProd);
+      XLSX.utils.book_append_sheet(workbook, sheetProd, "ProductosVendidos");
+    }
 
-    const nombre = `Resumen_Mensual_${provinciaId || "prov"}_${fechaLabel}.xlsx`;
-    XLSX.writeFile(workbook, nombre);
+    const nombreArchivo = `Resumen_${provinciaId || "prov"}_${etiqueta}.xlsx`;
+    XLSX.writeFile(workbook, nombreArchivo);
   };
 
   return (
@@ -315,87 +409,129 @@ function ResumenFinancieroMensual() {
       <div className="h-16" />
 
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-3xl font-bold">💼 Resumen Financiero Mensual</h2>
-        <span className="font-mono badge badge-primary">Prov: {provinciaId || "—"}</span>
+        <h2 className="text-3xl font-bold">💼 Resumen Financiero</h2>
+        <span className="font-mono badge badge-primary">
+          Prov: {provinciaId || "—"}
+        </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        <label className="font-semibold">📅 Seleccionar mes:</label>
-        <select
-          className="select select-bordered"
-          value={mesSeleccionado}
-          onChange={(e) => setMesSeleccionado(parseInt(e.target.value))}
-        >
-          {Array.from({ length: 12 }, (_, i) => (
-            <option key={i} value={i}>
-              {new Date(0, i).toLocaleString("es-AR", { month: "long" })}
-            </option>
-          ))}
-        </select>
+      {/* Filtros de fecha */}
+      <div className="flex flex-wrap items-end gap-4 mb-6">
+        <div>
+          <label className="block mb-1 font-semibold">Desde (incluido):</label>
+          <input
+            type="date"
+            className="input input-bordered"
+            value={format(fechaDesdeInput, "yyyy-MM-dd")}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              setFechaDesdeInput(new Date(v + "T00:00:00"));
+            }}
+          />
+        </div>
 
-        <select
-          className="select select-bordered"
-          value={anioSeleccionado}
-          onChange={(e) => setAnioSeleccionado(parseInt(e.target.value))}
-        >
-          {Array.from({ length: 5 }, (_, i) => (
-            <option key={i} value={2023 + i}>
-              {2023 + i}
-            </option>
-          ))}
-        </select>
+        <div>
+          <label className="block mb-1 font-semibold">Hasta (incluido):</label>
+          <input
+            type="date"
+            className="input input-bordered"
+            value={format(fechaHastaInput, "yyyy-MM-dd")}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              setFechaHastaInput(new Date(v + "T00:00:00"));
+            }}
+          />
+        </div>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              setFechaDesde(fechaDesdeInput);
+              setFechaHasta(fechaHastaInput);
+            }}
+          >
+            🔄 Aplicar rango
+          </button>
+        </div>
       </div>
+
+      {format(fechaDesde, "yyyy-MM-dd") > format(fechaHasta, "yyyy-MM-dd") && (
+        <div className="p-3 mb-4 text-sm text-red-500 border rounded-lg border-error">
+          El rango de fechas es inválido: la fecha "Desde" no puede ser mayor que "Hasta".
+        </div>
+      )}
 
       {loading ? (
         <p className="text-center">Cargando datos...</p>
       ) : (
         <>
+          {/* Totales del rango */}
           <div className="grid gap-6 mb-6 md:grid-cols-2">
             <div className="p-4 border rounded-lg shadow-md bg-base-200 border-base-300">
-              <h3 className="mb-2 text-lg font-bold">💰 Totales Recaudados</h3>
-              <p>💵 Efectivo: ${totales.efectivo.toLocaleString("es-AR")}</p>
-              <p>💳 Transferencia: ${totales.transferencia.toLocaleString("es-AR")}</p>
+              <h3 className="mb-2 text-lg font-bold">💰 Totales del rango</h3>
+              <p>💵 Efectivo: ${Number(totales.efectivo || 0).toLocaleString("es-AR")}</p>
+              <p>
+                💳 Transferencia: $
+                {Number(totales.transferencia || 0).toLocaleString("es-AR")}
+              </p>
               <p>
                 💳 Transferencia (10%): $
-                {totales.transferencia10.toLocaleString("es-AR", {
+                {Number(totales.transferencia10 || 0).toLocaleString("es-AR", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
               </p>
               <hr className="my-2" />
               <p className="font-semibold">
-                🧾 Total Recaudado: ${totalRecaudado.toLocaleString("es-AR")}
+                🧾 Total Bruto: ${Number(totalBruto || 0).toLocaleString("es-AR")}
               </p>
-              <p className="font-semibold text-success">
-                💼 Neto: ${totalNeto.toLocaleString("es-AR")}
+              <p className="font-semibold">
+                🛠️ Total Gastos:{" "}
+                {Number(totales.totalGastos || 0).toLocaleString("es-AR")}
+              </p>
+              <p className="mt-1 text-lg font-bold text-success">
+                💼 Neto (después de gastos):{" "}
+                {Number(totales.totalNeto || 0).toLocaleString("es-AR")}
               </p>
             </div>
 
             <div className="p-4 border rounded-lg shadow-md bg-base-200 border-base-300">
-              <h3 className="mb-2 text-lg font-bold">📦 Pedidos</h3>
-              <p>✅ Entregados: {totales.pedidosEntregados}</p>
-              <p>❌ No entregados: {totales.pedidosNoEntregados}</p>
-              <p>👥 Repartidores: {porRepartidor.length}</p>
+              <h3 className="mb-2 text-lg font-bold">📆 Días trabajados</h3>
+              <p>📅 Días con cierre global: {diasCerrados}</p>
+              <p>
+                📊 Promedio Neto / día:{" "}
+                {diasCerrados > 0
+                  ? Math.round(Number(totales.totalNeto || 0) / diasCerrados).toLocaleString("es-AR")
+                  : 0}
+              </p>
             </div>
           </div>
 
-          <div className="p-4 mb-6 border rounded-lg shadow-md bg-base-200 border-base-300">
-            <h3 className="mb-2 text-lg font-bold">🛠️ Gastos Totales</h3>
-            <p>🧍 Repartidor: ${totales.gastos.repartidor.toLocaleString("es-AR")}</p>
-            <p>🧑‍🤝‍🧑 Acompañante: ${totales.gastos.acompanante.toLocaleString("es-AR")}</p>
-            <p>⛽ Combustible: ${totales.gastos.combustible.toLocaleString("es-AR")}</p>
-            <p>📦 Extra: ${totales.gastos.extra.toLocaleString("es-AR")}</p>
-            <hr className="my-2" />
-            <p className="font-semibold">🧾 Total Gastos: ${totalGastos.toLocaleString("es-AR")}</p>
-          </div>
-
+          {/* Gráfico pie */}
           <div className="p-4 mb-8 border rounded-lg shadow-md bg-base-200 border-base-300">
-            <h3 className="mb-4 text-lg font-bold">📊 Distribución por Método de Pago</h3>
+            <h3 className="mb-4 text-lg font-bold">
+              📊 Distribución por Método de Pago
+            </h3>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false}>
+                <Pie
+                  data={pieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  labelLine={false}
+                >
                   {pieData.map((entry, index) => (
-                    <Cell key={index} fill={pieColors[index % pieColors.length]} />
+                    <Cell
+                      key={index}
+                      fill={pieColors[index % pieColors.length]}
+                    />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -404,43 +540,87 @@ function ResumenFinancieroMensual() {
             </ResponsiveContainer>
           </div>
 
-          <div className="p-4 border rounded-lg shadow-md bg-base-200 border-base-300">
-            <h3 className="mb-4 text-lg font-bold">👤 Detalle por Repartidor</h3>
+          {/* Tabla día por día */}
+          <div className="p-4 mb-8 border rounded-lg shadow-md bg-base-200 border-base-300">
+            <h3 className="mb-4 text-lg font-bold">
+              📅 Detalle por día (resumenVentas)
+            </h3>
             <div className="overflow-x-auto">
               <table className="table w-full table-sm">
                 <thead>
                   <tr>
-                    <th>Email</th>
+                    <th>Fecha</th>
                     <th>Efectivo</th>
                     <th>Transf</th>
                     <th>Transf10</th>
+                    <th>Bruto</th>
                     <th>Gastos</th>
+                    <th>Neto</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {porRepartidor.map((r, i) => {
-                    const totalGastosR =
-                      (r.gastos?.repartidor || 0) +
-                      (r.gastos?.acompanante || 0) +
-                      (r.gastos?.combustible || 0) +
-                      (r.gastos?.extra || 0);
+                  {resumenesDias.map((r) => (
+                    <tr key={r.fechaStr}>
+                      <td>{r.fechaStr}</td>
+                      <td>${r.efectivo.toLocaleString("es-AR")}</td>
+                      <td>${r.transferencia.toLocaleString("es-AR")}</td>
+                      <td>
+                        $
+                        {r.transferencia10.toLocaleString("es-AR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td>${r.bruto.toLocaleString("es-AR")}</td>
+                      <td>${r.gastos.toLocaleString("es-AR")}</td>
+                      <td className="font-semibold">
+                        ${r.neto.toLocaleString("es-AR")}
+                      </td>
+                    </tr>
+                  ))}
+                  {resumenesDias.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="text-center">
+                        No hay cierres globales en este rango.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                    return (
-                      <tr key={i}>
-                        <td>{r.email ? r.email.split("@")[0] : "-"}</td>
-                        <td>${r.efectivo.toLocaleString("es-AR")}</td>
-                        <td>${r.transferencia.toLocaleString("es-AR")}</td>
-                        <td>
-                          $
-                          {r.transferencia10.toLocaleString("es-AR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </td>
-                        <td>${totalGastosR.toLocaleString("es-AR")}</td>
-                      </tr>
-                    );
-                  })}
+          {/* Productos vendidos (expandiendo combos, sin envíos) */}
+          <div className="p-4 mb-8 border rounded-lg shadow-md bg-base-200 border-base-300">
+            <h3 className="mb-4 text-lg font-bold">
+              🧺 Productos vendidos en el rango
+            </h3>
+            <p className="mb-2 text-xs opacity-70">
+              *Las cantidades incluyen productos dentro de combos. Solo se
+              muestran unidades vendidas (sin montos facturados por producto).
+            </p>
+            <div className="overflow-x-auto">
+              <table className="table w-full table-sm">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Cantidad vendida</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productosVendidos.map((p) => (
+                    <tr key={p.clave}>
+                      <td>{p.nombre}</td>
+                      <td>{p.cantidad}</td>
+                    </tr>
+                  ))}
+                  {productosVendidos.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="text-center">
+                        No hay información de productos en este rango.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -448,48 +628,12 @@ function ResumenFinancieroMensual() {
         </>
       )}
 
-      <div className="p-4 mt-8 border rounded-lg shadow-md bg-base-200 border-base-300">
-        <h3 className="mb-4 text-lg font-bold">🧑‍💼 Detalle por Vendedor</h3>
-        <div className="overflow-x-auto">
-          <table className="table w-full table-sm">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>✅ Entregados</th>
-                <th>❌ No Entregados</th>
-                <th>💲 Total Vendido</th>
-                <th>💰 Comisión (10%)</th>
-                <th>📊 Promedio Ticket</th>
-              </tr>
-            </thead>
-            <tbody>
-              {porVendedor.map((v, i) => (
-                <tr key={i}>
-                  <td>{v.email ? v.email.split("@")[0] : "-"}</td>
-                  <td>{v.cantidadPedidos}</td>
-                  <td>{v.cantidadNoVendidos}</td>
-                  <td>${(v.montoProductos || 0).toLocaleString("es-AR")}</td>
-                  <td>
-                    $
-                    {(v.comision || 0).toLocaleString("es-AR", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </td>
-                  <td>
-                    $
-                    {(v.promedioTicket || 0).toLocaleString("es-AR", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex justify-end mt-6">
-          <button className="btn btn-success btn-sm" onClick={exportarResumenMensual}>
-            📤 Exportar Excel
+      {/* Excel */}
+      <div className="p-4 mt-2 border rounded-lg shadow-md bg-base-200 border-base-300">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold">📤 Exportar resumen</h3>
+          <button className="btn btn-success btn-sm" onClick={exportarResumen}>
+            Exportar Excel
           </button>
         </div>
       </div>

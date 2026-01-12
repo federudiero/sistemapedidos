@@ -67,6 +67,18 @@ const toWhatsAppAR = (raw) => {
   return "54" + national; // listo para usar en ?phone=
 };
 
+
+const normalizeLocationUrl = (raw) => {
+  if (!raw) return "";
+  let s = String(raw).trim();
+  // Si NO empieza con http:// o https:// le agregamos https://
+  if (!/^https?:\/\//i.test(s)) {
+    s = "https://" + s;
+  }
+  return s;
+};
+
+
 // NUEVO: helpers para normalizar direcciones y construir el link coherente
 const sanitizeDireccion = (s) => {
   let x = String(s || "").normalize("NFKC").trim().replace(/\s+/g, " ");
@@ -210,6 +222,12 @@ function RepartidorView() {
       (raw.coordenadas && typeof raw.coordenadas.direccion === "string"
         ? raw.coordenadas.direccion
         : "");
+
+        const linkUbicacion =
+    typeof raw.linkUbicacion === "string" && raw.linkUbicacion.trim()
+      ? raw.linkUbicacion.trim()
+      : null; // 👈 NUEVO
+
     return {
       ...raw,
       id,
@@ -221,6 +239,7 @@ function RepartidorView() {
       pagoMixtoTransferencia,
       pagoMixtoCon10,
       direccion,
+       linkUbicacion, 
     };
   };
 
@@ -290,32 +309,102 @@ function RepartidorView() {
   };
 
   /* ===== acciones ===== */
-  const toggleEntregado = async (pedido) => {
-    if (!puedeEntregar) {
-      Swal.fire("Permisos", "No tenés permiso para marcar entregas.", "info");
+ const toggleEntregado = async (pedido) => {
+  if (!puedeEntregar) {
+    Swal.fire("Permisos", "No tenés permiso para marcar entregas.", "info");
+    return;
+  }
+
+  const nuevoEstado = !pedido.entregado;
+  const ref = doc(db, "provincias", provinciaId, "pedidos", pedido.id);
+
+  let extraPatch = {};
+
+  // 🟡 Solo validamos cuando se quiere pasar a ENTREGADO = true
+  if (nuevoEstado === true) {
+    // 1) Tiene que existir método de pago
+    if (!pedido.metodoPago) {
+      Swal.fire(
+        "Método de pago requerido",
+        "Primero seleccioná cómo pagó el cliente antes de marcar Entregado.",
+        "warning"
+      );
       return;
     }
-    const nuevoEstado = !pedido.entregado;
 
-    try {
-      await updateDoc(doc(db, "provincias", provinciaId, "pedidos", pedido.id), {
-        entregado: nuevoEstado,
-        ...(puedeBloquear ? { bloqueadoVendedor: nuevoEstado } : {}),
-        editLockByCourierAt: nuevoEstado ? Timestamp.now() : deleteField(),
-      });
+    // 2) Si es MIXTO, validamos e incluimos los importes en el update
+    if (pedido.metodoPago === "mixto") {
+      const monto = Number(pedido.monto || 0);
+      const ef = Number(pedido.pagoMixtoEfectivo || 0);
+      const tr = Number(pedido.pagoMixtoTransferencia || 0);
 
-      // Optimista
-      setPedidos((prev) =>
-        prev.map((p) => (p.id === pedido.id ? { ...p, entregado: nuevoEstado } : p))
-      );
-    } catch (e) {
-      const msg =
-        e?.code === "permission-denied"
-          ? "No tenés permiso (reglas)."
-          : "No se pudo actualizar el estado.";
-      Swal.fire("Error", msg, "error");
+      if (ef < 0 || tr < 0) {
+        Swal.fire(
+          "Pago mixto inválido",
+          "Los importes de efectivo y transferencia no pueden ser negativos.",
+          "warning"
+        );
+        return;
+      }
+
+      if (ef + tr !== monto) {
+        const diff = monto - (ef + tr);
+        Swal.fire(
+          "Pago mixto incompleto",
+          diff > 0
+            ? `Faltan $${diff.toFixed(
+                0
+              )} para llegar al monto total de $${monto.toFixed(0)}.`
+            : `Te pasaste por $${(-diff).toFixed(
+                0
+              )} sobre el monto total de $${monto.toFixed(0)}.`,
+          "warning"
+        );
+        return;
+      }
+
+      // Si todo OK, armamos el patch para guardar el mixto
+      extraPatch = {
+        metodoPago: "mixto",
+        pagoMixtoEfectivo: ef,
+        pagoMixtoTransferencia: tr,
+        pagoMixtoCon10: !!pedido.pagoMixtoCon10,
+      };
     }
-  };
+  }
+
+  try {
+    await updateDoc(ref, {
+      ...extraPatch,
+      entregado: nuevoEstado,
+      ...(puedeBloquear ? { bloqueadoVendedor: nuevoEstado } : {}),
+      editLockByCourierAt: nuevoEstado ? Timestamp.now() : deleteField(),
+    });
+
+    // 🔄 Update optimista en el estado local
+    setPedidos((prev) =>
+      prev.map((p) =>
+        p.id === pedido.id
+          ? {
+              ...p,
+              ...extraPatch,
+              entregado: nuevoEstado,
+              ...(puedeBloquear ? { bloqueadoVendedor: nuevoEstado } : {}),
+              editLockByCourierAt: nuevoEstado ? new Date() : null,
+            }
+          : p
+      )
+    );
+  } catch (e) {
+    console.error("Error toggleEntregado", e);
+    const msg =
+      e?.code === "permission-denied"
+        ? "No tenés permiso (reglas)."
+        : "No se pudo actualizar el estado.";
+    Swal.fire("Error", msg, "error");
+  }
+};
+
 
   const actualizarPago = async (pedidoId, metodoPagoNuevo) => {
     if (!puedePagos) {
@@ -476,18 +565,36 @@ function RepartidorView() {
   /* ===== UI ===== */
   return (
     <div className="max-w-4xl px-4 py-6 mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold">🚚 Mi Hoja de Ruta</h2>
-        <div className="flex items-center gap-2">
-          <span className="font-mono badge badge-primary">Prov: {provinciaId}</span>
-          {emailRepartidor && (
-            <span className="text-sm opacity-70">Repartidor: {emailRepartidor}</span>
-          )}
-        </div>
-        <button onClick={() => navigate("/")} className="btn btn-outline btn-accent">
-          ⬅️ Volver
-        </button>
+  {/* HEADER RESPONSIVE */}
+  <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
+    {/* Icono + título + repartidor */}
+    <div className="flex items-center gap-3">
+      <span className="text-3xl md:text-4xl">🚚</span>
+      <div>
+        <h2 className="text-2xl font-bold leading-tight md:text-3xl">
+          Mi Hoja de Ruta
+        </h2>
+        {emailRepartidor && (
+          <p className="text-xs md:text-sm opacity-70">
+            Repartidor: {emailRepartidor}
+          </p>
+        )}
       </div>
+    </div>
+
+    {/* Prov + botón volver */}
+    <div className="flex items-center justify-between gap-2 md:justify-end">
+      <span className="font-mono badge badge-primary">
+        Prov: {provinciaId}
+      </span>
+      <button
+        onClick={() => navigate("/")}
+        className="btn btn-outline btn-accent btn-sm md:btn-md"
+      >
+        ⬅️ Volver
+      </button>
+    </div>
+  </div>
 
       {bloqueado && (
         <div className="mb-3 alert alert-warning">
@@ -537,202 +644,261 @@ function RepartidorView() {
             const extra10MixtoActual = Math.round((p.pagoMixtoCon10 ? tr : 0) * 0.10);
             const trCon10Actual = Math.round(tr + extra10MixtoActual);
 
+
+            const montoHeader =
+  p.metodoPago === "transferencia10" ? totalCon10Full : monto;
+
             return (
               <li
-                key={p.id}
-                className="p-4 border rounded-lg shadow bg-base-200 border-base-300"
+  key={p.id}
+  className="p-4 space-y-3 border shadow rounded-2xl bg-base-200 border-base-300"
+>
+  {/* HEADER: número + estado + monto */}
+  <div className="flex items-center justify-between gap-2">
+    <div className="flex items-center gap-2">
+      <span className="px-2 py-1 font-mono text-xs rounded-full bg-base-300/80">
+        🛣️ Pedido #{idx + 1}
+      </span>
+      {p.entregado && (
+        <span className="flex items-center gap-1 text-xs badge badge-success badge-sm">
+          ✅ Entregado
+        </span>
+      )}
+    </div>
+    <div className="text-right">
+  <p className="text-[10px] uppercase tracking-wide opacity-60">
+    Monto
+  </p>
+  <p className="text-lg font-semibold">
+    ${Number.isFinite(montoHeader) ? montoHeader.toFixed(0) : 0}
+  </p>
+</div>
+  </div>
+
+  {/* CUERPO: datos del cliente y pedido */}
+  <div className="grid gap-3 text-sm md:grid-cols-2">
+    {/* Columna izquierda */}
+    <div className="space-y-1">
+      <p>
+        <strong>🧍 Cliente:</strong> {p.nombre}
+      </p>
+
+      {/* Teléfonos → WhatsApp */}
+      <div>
+        <strong>📞 Teléfonos:</strong>{" "}
+        {getPhones(p).length === 0 ? (
+          <span className="opacity-70">No informado</span>
+        ) : (
+          <span className="inline-flex flex-wrap gap-2">
+            {getPhones(p).map((ph, i) => (
+              <a
+                key={i}
+                className="link link-accent"
+                href={`https://wa.me/${toWhatsAppAR(ph)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`WhatsApp a ${formatPhoneARDisplay(ph)}`}
               >
-                <p className="mb-1 text-sm opacity-60">🛣️ Pedido #{idx + 1}</p>
+                {formatPhoneARDisplay(ph)}
+              </a>
+            ))}
+          </span>
+        )}
+      </div>
 
-                <p><strong>🧍 Cliente:</strong> {p.nombre}</p>
+      <p>
+        <strong>📍 Dirección:</strong> {p.direccion}
+        <a
+          href={buildMapsLink(p, baseContext)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-2 link link-accent"
+        >
+          🧭 Ir a mapa
+        </a>
+      </p>
 
-                {/* Teléfonos → WhatsApp */}
-                <div className="mt-1">
-                  <strong>📞 Teléfonos:</strong>{" "}
-                  {getPhones(p).length === 0 ? (
-                    <span className="opacity-70">No informado</span>
-                  ) : (
-                    <span className="inline-flex flex-wrap gap-2">
-                      {getPhones(p).map((ph, i) => (
-                        <a
-                          key={i}
-                          className="link link-accent"
-                          href={`https://wa.me/${toWhatsAppAR(ph)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={`WhatsApp a ${formatPhoneARDisplay(ph)}`}
-                        >
-                          {formatPhoneARDisplay(ph)}
-                        </a>
-                      ))}
-                    </span>
-                  )}
-                </div>
+   {p.linkUbicacion && (
+  <p className="mt-1 text-xs">
+    <strong>🔗 Ubicación enviada por el cliente:</strong>{" "}
+    <a
+      href={normalizeLocationUrl(p.linkUbicacion)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="link link-secondary"
+    >
+      Abrir ubicación WhatsApp / Maps
+    </a>
+  </p>
+)}
 
-                <p className="mt-1">
-                  <strong>📍 Dirección:</strong> {p.direccion}
-                  <a
-                    href={buildMapsLink(p, baseContext)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-2 link link-accent"
-                  >
-                    🧭 Ir a mapa
-                  </a>
-                </p>
+      {p?.entreCalles?.trim() && (
+        <p>
+          <strong>↔️ Entre calles:</strong> {p.entreCalles}
+        </p>
+      )}
+    </div>
 
-                <p className="mt-1"><strong>📦 Pedido:</strong> {p.pedido}</p>
+    {/* Columna derecha */}
+    <div className="space-y-1">
+      <p>
+        <strong>📦 Pedido:</strong> {p.pedido}
+      </p>
 
-                {/* ↔️ Entre calles */}
-                {p?.entreCalles?.trim() && (
-                  <p className="mt-1"><strong>↔️ Entre calles:</strong> {p.entreCalles}</p>
-                )}
+      {/* 📝 Observación (cubre variantes) */}
+      {(() => {
+        const obs =
+          p?.observacion ||
+          p?.["observación"] ||
+          p?.observaciones ||
+          p?.nota ||
+          p?.notas ||
+          "";
+        return obs.trim() ? (
+          <p>
+            <strong>📝 Observación:</strong> {obs}
+          </p>
+        ) : null;
+      })()}
+    </div>
+  </div>
 
-                {/* 📝 Observación (cubre variantes) */}
-                {(() => {
-                  const obs =
-                    p?.observacion ||
-                    p?.["observación"] ||
-                    p?.observaciones ||
-                    p?.nota ||
-                    p?.notas ||
-                    "";
-                  return obs.trim()
-                    ? <p className="mt-1"><strong>📝 Observación:</strong> {obs}</p>
-                    : null;
-                })()}
+  {/* SECCIÓN PAGO */}
+  <div className="pt-2 mt-2 space-y-2 border-t border-base-300/60">
+    <div>
+      <label className="mr-2 text-sm font-semibold">💳 Método de pago:</label>
+      <select
+        className="w-full max-w-xs mt-1 select select-sm select-bordered"
+        value={p.metodoPago || ""}
+        onChange={(e) => actualizarPago(p.id, e.target.value)}
+        disabled={bloqueado}
+      >
+        <option value="">-- Seleccionar --</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="transferencia10">Transferencia (+10%)</option>
+        <option value="transferencia">Transferencia (sin 10%)</option>
+        <option value="mixto">Mixto (efectivo + transferencia)</option>
+      </select>
+    </div>
 
-                <p className="mt-1"><strong>💵 Monto:</strong> ${monto || 0}</p>
+    {/* Cálculo visible: Transferencia +10% */}
+    {p.metodoPago === "transferencia10" && (
+      <div className="p-3 rounded-lg bg-base-300">
+        <p className="text-sm">
+          Base: ${monto.toFixed(0)} — <strong>+10%:</strong> ${extra10Full} —{" "}
+          <strong>Total con 10%:</strong> ${totalCon10Full}
+        </p>
+      </div>
+    )}
 
-                <div className="mt-2">
-                  <label className="mr-2 font-semibold">💳 Método de pago:</label>
-                  <select
-                    className="select select-sm select-bordered"
-                    value={p.metodoPago || ""}
-                    onChange={(e) => actualizarPago(p.id, e.target.value)}
-                    disabled={bloqueado}
-                  >
-                    <option value="">-- Seleccionar --</option>
-                    <option value="efectivo">Efectivo</option>
-                    <option value="transferencia10">Transferencia (+10%)</option>
-                    <option value="transferencia">Transferencia (sin 10%)</option>
-                    <option value="mixto">Mixto (efectivo + transferencia)</option>
-                  </select>
-                </div>
+    {/* Pago Mixto (lógica intacta) */}
+    {p.metodoPago === "mixto" && (
+      <div className="p-3 rounded-lg bg-base-300">
+        <div className="grid items-end gap-3 md:grid-cols-3">
+          <div>
+            <label className="block mb-1 text-sm">💵 Efectivo parcial</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              className={`w-full input input-sm ${inputClass}`}
+              value={Number.isFinite(ef) ? ef : 0}
+              onChange={(e) =>
+                setMixtoLocal(p.id, "pagoMixtoEfectivo", e.target.value)
+              }
+              disabled={bloqueado}
+            />
+          </div>
+          <div>
+            <label className="block mb-1 text-sm">💳 Transferencia parcial</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              className={`w-full input input-sm ${inputClass}`}
+              value={Number.isFinite(tr) ? tr : 0}
+              onChange={(e) =>
+                setMixtoLocal(p.id, "pagoMixtoTransferencia", e.target.value)
+              }
+              disabled={bloqueado}
+            />
+          </div>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="toggle toggle-sm"
+              checked={!!p.pagoMixtoCon10}
+              onChange={(e) =>
+                setMixtoLocal(p.id, "pagoMixtoCon10", e.target.checked)
+              }
+              disabled={bloqueado}
+            />
+            <span className="text-sm">Aplicar +10% a la transferencia</span>
+          </label>
+        </div>
 
-                {/* Cálculo visible: Transferencia +10% */}
-                {p.metodoPago === "transferencia10" && (
-                  <div className="p-3 mt-3 rounded-lg bg-base-300">
-                    <p className="text-sm">
-                      Base: ${monto.toFixed(0)} — <strong>+10%:</strong> ${extra10Full} —{" "}
-                      <strong>Total con 10%:</strong> ${totalCon10Full}
-                    </p>
-                  </div>
-                )}
+        {/* Cálculos visibles extra para el repartidor */}
+        <div className="mt-2 text-sm">
+          <div className="opacity-80">
+            Suma actual: <strong>${(ef + tr).toFixed(0)}</strong> / $
+            {monto.toFixed(0)}
+          </div>
 
-                {/* Pago Mixto */}
-                {p.metodoPago === "mixto" && (
-                  <div className="p-3 mt-3 rounded-lg bg-base-300">
-                    <div className="grid items-end gap-3 md:grid-cols-3">
-                      <div>
-                        <label className="block mb-1 text-sm">💵 Efectivo parcial</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          inputMode="decimal"
-                          className={`w-full input input-sm ${inputClass}`}
-                          value={Number.isFinite(ef) ? ef : 0}
-                          onChange={(e) =>
-                            setMixtoLocal(p.id, "pagoMixtoEfectivo", e.target.value)
-                          }
-                          disabled={bloqueado}
-                        />
-                      </div>
-                      <div>
-                        <label className="block mb-1 text-sm">💳 Transferencia parcial</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          inputMode="decimal"
-                          className={`w-full input input-sm ${inputClass}`}
-                          value={Number.isFinite(tr) ? tr : 0}
-                          onChange={(e) =>
-                            setMixtoLocal(p.id, "pagoMixtoTransferencia", e.target.value)
-                          }
-                          disabled={bloqueado}
-                        />
-                      </div>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="toggle toggle-sm"
-                          checked={!!p.pagoMixtoCon10}
-                          onChange={(e) =>
-                            setMixtoLocal(p.id, "pagoMixtoCon10", e.target.checked)
-                          }
-                          disabled={bloqueado}
-                        />
-                        <span className="text-sm">Aplicar +10% a la transferencia</span>
-                      </label>
-                    </div>
+          <div className="mt-1">
+            <span className="opacity-80">Sugerido según efectivo:</span>{" "}
+            <strong>Transferencia = ${trRestanteSugerida.toFixed(0)}</strong>
+            {p.pagoMixtoCon10 ? (
+              <>
+                {" "}
+                → <strong>+10%:</strong> ${extra10MixtoSugerido} —{" "}
+                <strong>Total transf. con 10%:</strong> ${trCon10Sugerida}
+              </>
+            ) : null}
+          </div>
 
-                    {/* Cálculos visibles extra para el repartidor */}
-                    <div className="mt-2 text-sm">
-                      <div className="opacity-80">
-                        Suma actual: <strong>${(ef + tr).toFixed(0)}</strong> / ${monto.toFixed(0)}
-                      </div>
+          {tr > 0 && (
+            <div className="mt-1">
+              <span className="opacity-80">Con los valores cargados:</span>{" "}
+              {p.pagoMixtoCon10 ? (
+                <>
+                  <strong>+10% actual:</strong> ${extra10MixtoActual} —{" "}
+                  <strong>Transf. con 10%:</strong> ${trCon10Actual}
+                </>
+              ) : (
+                <span>sin 10% aplicado</span>
+              )}
+            </div>
+          )}
+        </div>
 
-                      <div className="mt-1">
-                        <span className="opacity-80">Sugerido según efectivo:</span>{" "}
-                        <strong>Transferencia = ${trRestanteSugerida.toFixed(0)}</strong>
-                        {p.pagoMixtoCon10 ? (
-                          <>
-                            {" "}→ <strong>+10%:</strong> ${extra10MixtoSugerido} —{" "}
-                            <strong>Total transf. con 10%:</strong> ${trCon10Sugerida}
-                          </>
-                        ) : null}
-                      </div>
+        <button
+          className="mt-3 btn btn-xs btn-primary"
+          onClick={() => guardarPagoMixto(p)}
+          disabled={bloqueado || !(ef + tr === monto) || ef < 0 || tr < 0}
+          title="La suma debe coincidir con el monto."
+        >
+          💾 Guardar pago mixto
+        </button>
+      </div>
+    )}
 
-                      {tr > 0 && (
-                        <div className="mt-1">
-                          <span className="opacity-80">Con los valores cargados:</span>{" "}
-                          {p.pagoMixtoCon10 ? (
-                            <>
-                              <strong>+10% actual:</strong> ${extra10MixtoActual} —{" "}
-                              <strong>Transf. con 10%:</strong> ${trCon10Actual}
-                            </>
-                          ) : (
-                            <span>sin 10% aplicado</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+    {/* Botón Entregado */}
+    <div className="flex justify-end">
+      <button
+        disabled={bloqueado}
+        onClick={() => toggleEntregado(p)}
+        className={`btn btn-sm mt-2 ${
+          p.entregado ? "btn-success" : "btn-warning"
+        }`}
+      >
+        {p.entregado ? "✅ Entregado" : "📦 Marcar como entregado"}
+      </button>
+    </div>
+  </div>
+</li>
 
-                    <button
-                      className="mt-3 btn btn-xs btn-primary"
-                      onClick={() => guardarPagoMixto(p)}
-                      disabled={bloqueado || !(ef + tr === monto) || ef < 0 || tr < 0}
-                      title="La suma debe coincidir con el monto."
-                    >
-                      💾 Guardar pago mixto
-                    </button>
-                  </div>
-                )}
-
-                <div className="mt-2">
-                  <button
-                    disabled={bloqueado}
-                    onClick={() => toggleEntregado(p)}
-                    className={`btn btn-sm mt-2 ${
-                      p.entregado ? "btn-success" : "btn-warning"
-                    }`}
-                  >
-                    {p.entregado ? "✅ Entregado" : "📦 Marcar como entregado"}
-                  </button>
-                </div>
-              </li>
             );
           })}
         </ul>

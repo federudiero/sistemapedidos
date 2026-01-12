@@ -1,28 +1,35 @@
-// src/components/ExportarExcel.jsx — genera Excel SOLO de la provincia actual
-// Mantiene la misma estructura de columnas; elimina el hardcode de "Buenos Aires".
-// - Toma provincia desde el hook useProvincia()
-// - Filtra pedidos por provinciaId === provincia actual (si el pedido trae provinciaId)
-// - Escribe el nombre correcto de la provincia en la columna y en el nombre del archivo
-// - AGREGA hoja "ResumenProductos" con los productos agrupados y suma de cantidades
-// - Muestra el usuario del vendedor (antes del @) en la columna VENDEDOR
-
+// src/components/ExportarExcel.jsx
 import React from "react";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { useProvincia } from "../hooks/useProvincia.js";
+import { resolveVendedorNombre } from "./vendedoresMap";
 
+// 🗺️ Diccionario completo de provincias argentinas
 const PROV_NOMBRE = {
-  CBA: "Córdoba",
   BA: "Buenos Aires",
-  BUE: "Buenos Aires",
-  // Agregá más códigos si usás otras provincias
-};
-
-// helper: parte ANTES del @
-const emailUsername = (v) => {
-  const s = String(v || "");
-  const at = s.indexOf("@");
-  return at > 0 ? s.slice(0, at) : s;
+  CAT: "Catamarca",
+  CHU: "Chubut",
+  CBA: "Córdoba",
+  CHA: "Chaco",
+  COR: "Corrientes",
+  ER: "Entre Ríos",
+  FOR: "Formosa",
+  JUJ: "Jujuy",
+  LP: "La Pampa",
+  LR: "La Rioja",
+  MZA: "Mendoza",
+  MIS: "Misiones",
+  NEU: "Neuquén",
+  RN: "Río Negro",
+  SAL: "Salta",
+  SJ: "San Juan",
+  SL: "San Luis",
+  SC: "Santa Cruz",
+  SF: "Santa Fe",
+  SDE: "Santiago del Estero",
+  TDF: "Tierra del Fuego, Antártida e Islas del Atlántico Sur",
+  TUC: "Tucumán",
 };
 
 const ExportarExcel = ({ pedidos = [] }) => {
@@ -30,25 +37,27 @@ const ExportarExcel = ({ pedidos = [] }) => {
   const provinciaNombre = PROV_NOMBRE[provinciaId] || provinciaId || "";
 
   const exportar = () => {
-    // Si los pedidos traen provinciaId, filtro. Si no, exporto todo (backwards-compatible)
     const pedidosProv = pedidos.some((p) => p?.provinciaId)
       ? pedidos.filter((p) => p.provinciaId === provinciaId)
       : pedidos;
 
-    // ===== Hoja 1: "Pedidos" (misma estructura) =====
+    // ===== Hoja 1: "Pedidos" =====
     const wsData = pedidosProv.map((p) => {
       const productosDetalle = Array.isArray(p.productos)
         ? p.productos.map((prod) => `${prod.nombre} x${prod.cantidad}`).join(", ")
         : "";
 
+      const vendedorEmail = p.vendedorEmail || p.vendedor || p.seller || "";
+      const vendedorNombre = resolveVendedorNombre(vendedorEmail);
+
       return [
         p.nombre || "",
-        provinciaNombre, // provincia correcta
+        provinciaNombre,
         p.partido || "",
-        "", // ORDEN (vacío como en tu versión)
+        "",
         p.direccion || "",
         String(p.telefono || ""),
-        emailUsername(p.vendedorEmail || p.vendedor || p.seller || ""), // <<< usuario del vendedor
+        vendedorNombre,
         p.pedido || "",
         p.entreCalles || "",
         productosDetalle,
@@ -63,7 +72,7 @@ const ExportarExcel = ({ pedidos = [] }) => {
         "ORDEN",
         "CALLE Y ALTURA",
         "TELEFONO",
-        "VENDEDOR (usuario)",   // <<< actualizado
+        "VENDEDOR",
         "PEDIDO",
         "OBSERVACION",
         "PRODUCTOS (detalle array)",
@@ -72,7 +81,7 @@ const ExportarExcel = ({ pedidos = [] }) => {
 
     const wsPedidos = XLSX.utils.aoa_to_sheet([...encabezados, ...wsData]);
 
-    // ===== Hoja 2: "ResumenProductos" (agrupado por nombre, sumando cantidades) =====
+    // ===== Hoja 2: "ResumenProductos" =====
     const contador = {};
     for (const p of pedidosProv) {
       const lista = Array.isArray(p?.productos) ? p.productos : [];
@@ -91,10 +100,12 @@ const ExportarExcel = ({ pedidos = [] }) => {
         "Cantidad total": cantidad,
       }));
 
-    const totalItems = resumenArray.reduce((acc, r) => acc + (Number(r["Cantidad total"]) || 0), 0);
-    if (resumenArray.length > 0) {
+    const totalItems = resumenArray.reduce(
+      (acc, r) => acc + (Number(r["Cantidad total"]) || 0),
+      0
+    );
+    if (resumenArray.length > 0)
       resumenArray.push({ Producto: "TOTAL Ítems", "Cantidad total": totalItems });
-    }
 
     const wsResumen = XLSX.utils.json_to_sheet(
       resumenArray.length ? resumenArray : [{ Producto: "—", "Cantidad total": 0 }]
@@ -105,7 +116,7 @@ const ExportarExcel = ({ pedidos = [] }) => {
     XLSX.utils.book_append_sheet(wb, wsPedidos, "Pedidos");
     XLSX.utils.book_append_sheet(wb, wsResumen, "ResumenProductos");
 
-    // Fecha para el nombre del archivo
+    // Nombre del archivo con provincia y fecha
     const baseFecha =
       pedidosProv.length > 0 && pedidosProv[0].fecha?.toDate
         ? pedidosProv[0].fecha.toDate()

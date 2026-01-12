@@ -1,5 +1,5 @@
 // src/components/ConteoPedidosPorDiaPorRepartidor.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase/firebase";
 import {
   collection,
@@ -14,10 +14,10 @@ import { format } from "date-fns";
 
 /**
  * Conteo del día agrupado por repartidor.
- * - Mismo enfoque que ConteoPedidosPorDia (ID-first, combos desglosados, excluye envíos/servicios)
+ * - IDs primero (desglosa combos, excluye envíos/servicios)
  * - Agrupa por repartidor detectando:
- *    • asignadoA = array → toma el primer email/string
- *    • asignadoA = string → lo usa directo
+ *    • asignadoA = array → primer email/string
+ *    • asignadoA = string → directo
  *    • repartidor = string → fallback
  *    • sino → "Sin asignar"
  *
@@ -34,16 +34,7 @@ export default function ConteoPedidosPorDiaPorRepartidor({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Estructura:
-  // grouped = {
-  //   [repartidorKey]: {
-  //     pedidosCount: number,
-  //     enviosIgnorados: number,
-  //     totalUnidades: number,
-  //     rows: [{ id, nombre, cantidad }],
-  //     observaciones: string[],
-  //   }
-  // }
+  // grouped = { [repKey]: { pedidosCount, enviosIgnorados, totalUnidades, rows:[{id,nombre,cantidad}], observaciones:[] } }
   const [grouped, setGrouped] = useState({});
 
   const fechaSel = useMemo(() => fecha || new Date(), [fecha]);
@@ -58,7 +49,7 @@ export default function ConteoPedidosPorDiaPorRepartidor({
     [provinciaId]
   );
 
-  // ---- utils
+  // ───────────────────────── utils
   const norm = (s) =>
     String(s || "")
       .normalize("NFD")
@@ -68,7 +59,7 @@ export default function ConteoPedidosPorDiaPorRepartidor({
       .replace(/\s+/g, " ")
       .trim();
 
-  // Detecta envíos/servicios para EXCLUIR del conteo (mismo criterio que tus componentes)
+  // Detecta envíos/servicios para EXCLUIR del conteo
   const esEnvioOServicio = (prod, nombreFallback = "") => {
     if (prod) {
       if (prod.noDescuentaStock === true) return true;
@@ -105,9 +96,10 @@ export default function ConteoPedidosPorDiaPorRepartidor({
     return false;
   };
 
-  // ---- Catálogo en memoria (idéntico patrón a tus componentes)
-  const [catalogoById, setCatalogoById] = useState(new Map());
-  const [catalogoByNombreExacto, setCatalogoByNombreExacto] = useState(new Map());
+  // ───────────────────────── Catálogo en memoria (estable)
+  const catalogoByIdRef = useRef(new Map());
+  const catalogoByNombreExactoRef = useRef(new Map());
+  const [catalogVersion, setCatalogVersion] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -121,8 +113,9 @@ export default function ConteoPedidosPorDiaPorRepartidor({
           const nombre = String(data.nombre || "").trim();
           if (nombre) byName.set(nombre, data);
         });
-        setCatalogoById(byId);
-        setCatalogoByNombreExacto(byName);
+        catalogoByIdRef.current = byId;
+        catalogoByNombreExactoRef.current = byName;
+        setCatalogVersion((v) => v + 1);
       } catch (e) {
         console.warn("No se pudo cargar catálogo de productos:", e);
       }
@@ -132,32 +125,31 @@ export default function ConteoPedidosPorDiaPorRepartidor({
   // Cache puntual para IDs no presentes al inicio
   const fetchProductoByIdOnce = async (id) => {
     if (!id) return null;
-    if (catalogoById.has(id)) return catalogoById.get(id);
+    const byId = catalogoByIdRef.current;
+    if (byId.has(id)) return byId.get(id);
     const ref = doc(db, "provincias", provinciaId, "productos", id);
     const ds = await getDoc(ref);
     if (!ds.exists()) return null;
     const prod = { id, ...ds.data() };
-    setCatalogoById((prev) => {
-      const cp = new Map(prev);
-      cp.set(id, prod);
-      return cp;
-    });
+    const cpId = new Map(catalogoByIdRef.current);
+    cpId.set(id, prod);
+    catalogoByIdRef.current = cpId;
+
     const nombre = String(prod.nombre || "").trim();
     if (nombre) {
-      setCatalogoByNombreExacto((prev) => {
-        const cp = new Map(prev);
-        if (!cp.has(nombre)) cp.set(nombre, prod);
-        return cp;
-      });
+      const cpName = new Map(catalogoByNombreExactoRef.current);
+      if (!cpName.has(nombre)) cpName.set(nombre, prod);
+      catalogoByNombreExactoRef.current = cpName;
     }
+    setCatalogVersion((v) => v + 1); // invalida cálculos dependientes
     return prod;
   };
 
-  // Helper: obtener clave de repartidor desde el pedido
+  // Repartidor key desde pedido
   const getRepartidorKey = (p) => {
-    // 1) asignadoA array → primer elemento
+    // 1) asignadoA array → primer elemento no vacío
     if (Array.isArray(p?.asignadoA) && p.asignadoA.length > 0) {
-      const v = String(p.asignadoA[0] || "").trim();
+      const v = String(p.asignadoA[0] ?? "").trim();
       if (v) return v;
     }
     // 2) asignadoA string
@@ -170,33 +162,65 @@ export default function ConteoPedidosPorDiaPorRepartidor({
       const v = p.repartidor.trim();
       if (v) return v;
     }
-    // 4) sin asignar
     return "Sin asignar";
   };
 
-  // ---- Cálculo principal
+  // ───────────────────────── Cálculo principal
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError("");
       try {
-        // Rango del día (00:00 → 23:59)
         const start = new Date(fechaSel);
         start.setHours(0, 0, 0, 0);
         const end = new Date(fechaSel);
         end.setHours(23, 59, 59, 999);
 
-        const qRef = query(
-          colPedidos,
-          where("fecha", ">=", Timestamp.fromDate(start)),
-          where("fecha", "<=", Timestamp.fromDate(end))
-        );
+        // 1) Intento por Timestamp en "fecha"
+        let qs;
+        try {
+          const qRef = query(
+            colPedidos,
+            where("fecha", ">=", Timestamp.fromDate(start)),
+            where("fecha", "<=", Timestamp.fromDate(end))
+          );
+          qs = await getDocs(qRef);
+        } catch (e) {
+          console.warn(
+            "[ConteoPedidosPorDiaPorRepartidor] Lectura por rango 'fecha' falló. " +
+              "Posibles causas: índice/reglas. Se probará por 'fechaStr'.",
+            e
+          );
+          qs = null;
+        }
 
-        const qs = await getDocs(qRef);
+        // 2) Fallback por igualdad en "fechaStr" = yyyy-MM-dd
+        if (!qs || qs.empty) {
+          try {
+            const qStr = query(colPedidos, where("fechaStr", "==", ymd(fechaSel)));
+            const alt = await getDocs(qStr);
+            if (alt && !alt.empty) {
+              qs = alt;
+            } else {
+              console.info(
+                "[ConteoPedidosPorDiaPorRepartidor] Fallback 'fechaStr' no devolvió resultados."
+              );
+            }
+          } catch (e) {
+            console.warn(
+              "[ConteoPedidosPorDiaPorRepartidor] Lectura por 'fechaStr' falló (reglas/índice).",
+              e
+            );
+          }
+        }
 
-        // Mapa por repartidor → conteo por producto (id → { prod, cantidad })
+        if (!qs) {
+          throw new Error(
+            "No se pudieron leer pedidos del día seleccionado (fecha/fechaStr bloqueados por reglas o índices)."
+          );
+        }
+
         const buckets = new Map(); // repKey -> { countById: Map, pedidosCount, enviosIgnorados, observaciones: [] }
-
         const ensureBucket = (repKey) => {
           if (!buckets.has(repKey)) {
             buckets.set(repKey, {
@@ -212,12 +236,12 @@ export default function ConteoPedidosPorDiaPorRepartidor({
         const addByProd = (bucket, prod, delta) => {
           if (!prod) return;
           if (esEnvioOServicio(prod)) {
-            bucket.enviosIgnorados += Number(delta) || 0; // excluir envíos/servicios
+            bucket.enviosIgnorados += Number(delta) || 0;
             return;
           }
           const prev = bucket.countById.get(prod.id) || { prod, cantidad: 0 };
           prev.cantidad += Number(delta) || 0;
-          prev.prod = prod; // mantener última versión
+          prev.prod = prod;
           bucket.countById.set(prod.id, prev);
         };
 
@@ -228,7 +252,6 @@ export default function ConteoPedidosPorDiaPorRepartidor({
           bucket.pedidosCount += 1;
 
           if (!Array.isArray(p.productos) || p.productos.length === 0) {
-            // si solo hay texto libre en p.pedido, lo ignoramos para no contaminar el conteo
             if (p.pedido) {
               bucket.observaciones.push(
                 `Pedido ${d.id}: detalles en texto ignorados (sin IDs).`
@@ -249,7 +272,16 @@ export default function ConteoPedidosPorDiaPorRepartidor({
 
             let prod = null;
             if (id) {
-              prod = catalogoById.get(id) || (await fetchProductoByIdOnce(id));
+              try {
+                prod =
+                  catalogoByIdRef.current.get(id) ||
+                  (await fetchProductoByIdOnce(id));
+              } catch (e) {
+                console.warn(
+                  `[ConteoPedidosPorDiaPorRepartidor] Error obteniendo producto ${id}:`,
+                  e
+                );
+              }
               if (!prod) {
                 bucket.observaciones.push(
                   `Pedido ${d.id}: ID ${id} no encontrado en catálogo.`
@@ -257,7 +289,6 @@ export default function ConteoPedidosPorDiaPorRepartidor({
                 continue;
               }
             } else {
-              // Fallback SOLO por nombre EXACTO
               const nombreExacto = String(it?.nombre || "").trim();
               if (!nombreExacto) {
                 bucket.observaciones.push(
@@ -266,7 +297,7 @@ export default function ConteoPedidosPorDiaPorRepartidor({
                 continue;
               }
               const prodByName =
-                catalogoByNombreExacto.get(nombreExacto) || null;
+                catalogoByNombreExactoRef.current.get(nombreExacto) || null;
               if (!prodByName) {
                 bucket.observaciones.push(
                   `Pedido ${d.id}: "${nombreExacto}" sin ID y sin match exacto en catálogo (ignorado).`
@@ -276,7 +307,6 @@ export default function ConteoPedidosPorDiaPorRepartidor({
               prod = prodByName;
             }
 
-            // Si el propio producto es envío/servicio, no se cuenta
             if (esEnvioOServicio(prod, it?.nombre)) {
               bucket.enviosIgnorados += qty;
               continue;
@@ -284,7 +314,6 @@ export default function ConteoPedidosPorDiaPorRepartidor({
 
             const esCombo = !!prod.esCombo && Array.isArray(prod.componentes);
             if (desglosarCombos && esCombo) {
-              // Desglosar componentes (por ID), excluyendo envíos/servicios
               for (const comp of prod.componentes) {
                 const compCant = qty * Number(comp?.cantidad || 0);
                 if (!compCant) continue;
@@ -294,8 +323,17 @@ export default function ConteoPedidosPorDiaPorRepartidor({
                   );
                   continue;
                 }
-                const compProd =
-                  catalogoById.get(comp.id) || (await fetchProductoByIdOnce(comp.id));
+                let compProd = null;
+                try {
+                  compProd =
+                    catalogoByIdRef.current.get(comp.id) ||
+                    (await fetchProductoByIdOnce(comp.id));
+                } catch (e) {
+                  console.warn(
+                    `[ConteoPedidosPorDiaPorRepartidor] Error obteniendo componente ${comp.id}:`,
+                    e
+                  );
+                }
                 if (!compProd) {
                   bucket.observaciones.push(
                     `Pedido ${d.id}: combo ${prod.id} componente ${comp.id} no encontrado (ignorado).`
@@ -309,13 +347,11 @@ export default function ConteoPedidosPorDiaPorRepartidor({
                 addByProd(bucket, compProd, compCant);
               }
             } else {
-              // Producto simple
               addByProd(bucket, prod, qty);
             }
           }
         }
 
-        // Convertir buckets → objeto renderizable
         const obj = {};
         for (const [repKey, b] of buckets.entries()) {
           const listado = Array.from(b.countById.values())
@@ -344,63 +380,82 @@ export default function ConteoPedidosPorDiaPorRepartidor({
       } catch (e) {
         console.error("ConteoPedidosPorDiaPorRepartidor → error:", e);
         setError(
-          "No se pudo calcular el conteo por repartidor. Revisá datos/IDs."
+          "No se pudo calcular el conteo por repartidor. Revisá datos/IDs o índices (fecha/fechaStr)."
         );
         setGrouped({});
       } finally {
         setLoading(false);
       }
     })();
-  }, [
-    colPedidos,
-    colProductos,
-    fechaSel,
-    desglosarCombos,
-    provinciaId,
-    catalogoById,
-    catalogoByNombreExacto,
-  ]);
+    // Importante: dependemos de provincia/fecha/desglosar y de la "versión" del catálogo
+  }, [colPedidos, fechaSel, desglosarCombos, provinciaId, catalogVersion]);
 
-  // Render
+  // ───────────────────────── Render
   const repKeys = Object.keys(grouped).sort((a, b) =>
     a.toLowerCase().localeCompare(b.toLowerCase())
   );
 
   return (
     <div className="p-4 mx-4 mb-10 border rounded-xl bg-base-100 border-base-300">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-lg font-semibold">
-          📦 Conteo por repartidor — Prov: <span className="font-mono">{provinciaId}</span>
+      <div className="flex flex-col gap-1 mb-2 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="text-base font-semibold sm:text-lg">
+          📦 Conteo por repartidor — Prov:{" "}
+          <span className="font-mono">{provinciaId}</span>
         </h3>
-        <div className="text-sm opacity-80">Fecha: {ymd(fechaSel)}</div>
+        <div className="text-xs opacity-80 sm:text-sm">
+          Fecha: {ymd(fechaSel)}
+        </div>
       </div>
 
-      {error && <div className="mt-3 alert alert-error">{error}</div>}
-      {loading && <div className="mt-3 loading loading-dots loading-lg" />}
+      {error && <div className="mt-3 text-sm alert alert-error">{error}</div>}
+      {loading && (
+        <div className="flex justify-center mt-3">
+          <span className="loading loading-dots loading-lg" />
+        </div>
+      )}
 
       {!loading && repKeys.length === 0 && (
-        <div className="mt-3 opacity-70">No hay pedidos para esa fecha.</div>
+        <div className="mt-3 text-sm opacity-70">
+          No hay pedidos para esa fecha.
+        </div>
       )}
 
       <div className="grid gap-3 mt-4">
         {repKeys.map((rep) => {
           const g = grouped[rep];
           return (
-            <details key={rep} className="border group card bg-base-200 border-base-300">
-              <summary className="flex items-center justify-between px-4 py-3 cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{rep}</span>
-                  <span className="badge badge-outline">Pedidos: {g.pedidosCount}</span>
-                  <span className="badge badge-secondary">Unidades: {g.totalUnidades}</span>
-                  <span className="badge badge-ghost">Envíos ignorados: {g.enviosIgnorados}</span>
+            <details
+              key={rep}
+              className="border group bg-base-200 border-base-300 rounded-2xl"
+            >
+              <summary className="px-4 py-3 cursor-pointer">
+                <div className="flex flex-col w-full gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  {/* Repartidor (email/alias) */}
+                  <div className="text-xs font-medium break-all sm:text-sm">
+                    {rep}
+                  </div>
+
+                  {/* Chips de resumen */}
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
+                    <span className="px-3 py-1 rounded-full badge badge-outline">
+                      Pedidos: {g.pedidosCount}
+                    </span>
+                    <span className="px-3 py-1 rounded-full badge badge-secondary">
+                      Unidades: {g.totalUnidades}
+                    </span>
+                    <span className="px-3 py-1 rounded-full badge badge-ghost">
+                      Envíos ignorados: {g.enviosIgnorados}
+                    </span>
+                    <span className="ml-auto text-xs transition opacity-60 sm:ml-0 group-open:rotate-180">
+                      ▾
+                    </span>
+                  </div>
                 </div>
-                <span className="transition opacity-60 group-open:rotate-180">▾</span>
               </summary>
 
-              {/* Observaciones por repartidor */}
               {g.observaciones.length > 0 && (
                 <div className="px-4">
-                  <div className="p-3 mt-2 text-sm border rounded-lg bg-base-100 border-base-300">
+                  <div className="p-3 mt-2 text-xs border rounded-lg bg-base-100 border-base-300 sm:text-sm">
                     <div className="mb-1 font-semibold">⚠ Observaciones</div>
                     <ul className="pl-6 list-disc">
                       {g.observaciones.map((t, i) => (
@@ -411,35 +466,45 @@ export default function ConteoPedidosPorDiaPorRepartidor({
                 </div>
               )}
 
-              {/* Tabla por repartidor */}
               <div className="px-4 pb-4 overflow-x-auto">
-                <table className="table mt-3 table-zebra">
+                <table className="table w-full mt-3 table-zebra table-sm md:table-md">
                   <thead>
                     <tr>
-                      <th className="min-w-64">Producto</th>
-                      <th className="text-right w-28">Cantidad</th>
+                      <th className="min-w-[10rem] text-xs sm:text-sm">
+                        Producto
+                      </th>
+                      <th className="w-24 text-xs text-right sm:w-28 sm:text-sm">
+                        Cantidad
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {g.rows.length === 0 ? (
                       <tr>
-                        <td colSpan={2} className="opacity-70">
+                        <td
+                          colSpan={2}
+                          className="text-xs opacity-70 sm:text-sm"
+                        >
                           Sin productos para este repartidor.
                         </td>
                       </tr>
                     ) : (
                       g.rows.map((r) => (
                         <tr key={r.id}>
-                          <td>{r.nombre}</td>
-                          <td className="text-right">{r.cantidad}</td>
+                          <td className="text-xs sm:text-sm">{r.nombre}</td>
+                          <td className="text-xs text-right sm:text-sm">
+                            {r.cantidad}
+                          </td>
                         </tr>
                       ))
                     )}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <th>Total de unidades</th>
-                      <th className="text-right">{g.totalUnidades}</th>
+                      <th className="text-xs sm:text-sm">Total de unidades</th>
+                      <th className="text-xs text-right sm:text-sm">
+                        {g.totalUnidades}
+                      </th>
                     </tr>
                   </tfoot>
                 </table>

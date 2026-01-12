@@ -4,6 +4,7 @@ import { collection, getDocs, query, where, Timestamp, doc, getDoc } from "fireb
 import { db } from "../firebase/firebase";
 import { useProvincia } from "../hooks/useProvincia";
 import AdminNavbar from "../components/AdminNavbar";
+import { resolveVendedorNombre } from "../components/vendedoresMap";
 
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -47,7 +48,7 @@ const estaEntregado = (p) => {
   return true;
 };
 
-// recordar % por provincia en localStorage
+// recordar % por provincia en localStorage (se guarda { defaultPct, porVendedor })
 const STORAGE_KEY = (prov) => `liq:pct:${prov || "global"}`;
 
 /* ================= Componente ================= */
@@ -59,19 +60,62 @@ export default function LiquidacionesComisiones() {
   const [hasta, setHasta] = useState(new Date());
 
   const [soloEntregados, setSoloEntregados] = useState(true);
-  const [pctComision, setPctComision] = useState(10);
+
+  // % global por defecto + overrides por vendedor
+  const [pctGlobal, setPctGlobal] = useState(10);
+  const [pctPorVendedor, setPctPorVendedor] = useState({});
 
   // cargar % guardado para cada provincia
   useEffect(() => {
+    if (!provinciaId) return;
     const raw = localStorage.getItem(STORAGE_KEY(provinciaId));
-    if (raw !== null) {
-      const saved = Number(raw);
-      if (Number.isFinite(saved) && saved >= 0) setPctComision(saved);
+    if (!raw) {
+      setPctGlobal(10);
+      setPctPorVendedor({});
+      return;
     }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (Number.isFinite(parsed.defaultPct)) {
+          setPctGlobal(parsed.defaultPct);
+        }
+        if (parsed.porVendedor && typeof parsed.porVendedor === "object") {
+          setPctPorVendedor(parsed.porVendedor);
+        } else {
+          setPctPorVendedor({});
+        }
+        return;
+      }
+    } catch (e) {
+      console.warn("Error parseando comisiones guardadas:", e);
+      // compat viejo: antes solo guardaba un número
+      const saved = Number(raw);
+      if (Number.isFinite(saved) && saved >= 0) {
+        setPctGlobal(saved);
+        setPctPorVendedor({});
+        return;
+      }
+    }
+
+    setPctGlobal(10);
+    setPctPorVendedor({});
   }, [provinciaId]);
+
+  // guardar cambios
   useEffect(() => {
-    if (provinciaId) localStorage.setItem(STORAGE_KEY(provinciaId), String(pctComision));
-  }, [provinciaId, pctComision]);
+    if (!provinciaId) return;
+    const payload = {
+      defaultPct: pctGlobal,
+      porVendedor: pctPorVendedor,
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY(provinciaId), JSON.stringify(payload));
+    } catch (e) {
+      console.warn("No se pudo guardar las comisiones en localStorage:", e);
+    }
+  }, [provinciaId, pctGlobal, pctPorVendedor]);
 
   const [loading, setLoading] = useState(true);
 
@@ -241,18 +285,34 @@ export default function LiquidacionesComisiones() {
   }, [provinciaId, desde, hasta, soloEntregados]);
 
   /* ======= Derivados ======= */
+
+  // helper para obtener % efectivo de un vendedor (override o global)
+  const getPctForVendor = (emailKey) => {
+    const override = n(pctPorVendedor[emailKey]);
+    if (Number.isFinite(override) && override >= 0) return override;
+    return n(pctGlobal);
+  };
+
   // Vendedores con comisión
   const filasVendedores = useMemo(() => {
-    const pct = n(pctComision) / 100;
-    const arr = Object.entries(ventasBasePorVendedor).map(([email, v]) => ({
-      email: email || "(sin vendedor)",
-      pedidos: v.pedidos,
-      total: v.total,
-      comision: v.total * pct,
-    }));
+    const arr = Object.entries(ventasBasePorVendedor).map(([email, v]) => {
+      const pct = getPctForVendor(email);
+      const factor = pct / 100;
+      const displayName = email ? resolveVendedorNombre(email) : "(sin vendedor)";
+      return {
+        email: email || "",
+        displayName,
+        keyEmail: email, // clave interna (normalizada)
+        pedidos: v.pedidos,
+        total: v.total,
+        pct,
+        comision: v.total * factor,
+      };
+    });
     arr.sort((a, b) => b.total - a.total);
     return arr;
-  }, [ventasBasePorVendedor, pctComision]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ventasBasePorVendedor, pctGlobal, pctPorVendedor]);
 
   const totalComisiones = useMemo(
     () => filasVendedores.reduce((acc, r) => acc + r.comision, 0),
@@ -297,7 +357,7 @@ export default function LiquidacionesComisiones() {
       [""],
       ["Total pedidos", totales.totalPedidos],
       ["Total ventas", totales.totalVentas],
-      ["% Comisión", `${n(pctComision)}%`],
+      ["% Comisión (por defecto)", `${n(pctGlobal)}%`],
       ["Total comisiones", totales.totalComisiones],
       ["Días trabajados (repartidores)", totalDias],
       ["Total paga repartidores", totalPagaRepartidores],
@@ -308,10 +368,18 @@ export default function LiquidacionesComisiones() {
     XLSX.utils.book_append_sheet(wb, wsRes, "Resumen");
 
     // Vendedores
-    const headerVend = ["Vendedor", "Pedidos", "Total ventas", "%", "Comisión"];
+    const headerVend = ["Vendedor", "Pedidos", "Total ventas", "% Comisión", "Comisión"];
     const aoaVend = [
       headerVend,
-      ...filasVendedores.map((r) => [r.email, r.pedidos, r.total, `${n(pctComision)}%`, r.comision]),
+      ...filasVendedores.map((r) => [
+        r.displayName
+          ? `${r.displayName}${r.email ? ` (${r.email})` : ""}`
+          : r.email || "(sin vendedor)",
+        r.pedidos,
+        r.total,
+        `${r.pct}%`,
+        r.comision,
+      ]),
     ];
     const wsVend = XLSX.utils.aoa_to_sheet(aoaVend);
     wsVend["!autofilter"] = {
@@ -335,15 +403,29 @@ export default function LiquidacionesComisiones() {
   };
 
   /* ======= UI ======= */
+
+  // columnas para desktop (solo se aplican en md+)
   const gridVend =
-    "grid grid-cols-[minmax(220px,1fr)_minmax(90px,auto)_minmax(140px,auto)_minmax(80px,auto)_minmax(150px,auto)] gap-x-4 items-center";
-  // Repartidor | Días | Paga
+    "grid-cols-[minmax(220px,1fr)_minmax(90px,auto)_minmax(140px,auto)_minmax(100px,auto)_minmax(150px,auto)] gap-x-4 items-center";
   const gridRep =
-    "grid grid-cols-[minmax(240px,1fr)_minmax(80px,auto)_minmax(160px,auto)] gap-x-4 items-center";
+    "grid-cols-[minmax(240px,1fr)_minmax(80px,auto)_minmax(160px,auto)] gap-x-4 items-center";
   const numClass = "text-right font-mono tabular-nums";
 
+  const handlePctVendChange = (emailKey, value) => {
+    const v = Number(value);
+    setPctPorVendedor((prev) => {
+      const next = { ...prev };
+      if (!Number.isFinite(v) || v < 0) {
+        delete next[emailKey]; // vuelve a usar el global
+      } else {
+        next[emailKey] = v;
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="px-4 py-6 mx-auto max-w-7xl">
+    <div className="px-4 pt-6 pb-10 mx-auto max-w-7xl">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
         <AdminNavbar />
       </div>
@@ -352,36 +434,53 @@ export default function LiquidacionesComisiones() {
       {/* Filtros */}
       <div className="flex flex-wrap items-end gap-4 mb-6">
         <div>
-          <label className="block mb-1 font-semibold">Desde</label>
-          <DatePicker selected={desde} onChange={(d) => setDesde(d)} className="input input-bordered" />
+          <label className="block mb-1 text-sm font-semibold md:text-base">Desde</label>
+          <DatePicker
+            selected={desde}
+            onChange={(d) => setDesde(d)}
+            className="w-full max-w-[150px] input input-bordered input-sm md:input-md"
+          />
         </div>
         <div>
-          <label className="block mb-1 font-semibold">Hasta</label>
-          <DatePicker selected={hasta} onChange={(d) => setHasta(d)} className="input input-bordered" />
+          <label className="block mb-1 text-sm font-semibold md:text-base">Hasta</label>
+          <DatePicker
+            selected={hasta}
+            onChange={(d) => setHasta(d)}
+            className="w-full max-w-[150px] input input-bordered input-sm md:input-md"
+          />
         </div>
         <div className="form-control">
           <label className="gap-2 cursor-pointer label">
-            <span className="label-text">Solo entregados</span>
+            <span className="text-sm label-text md:text-base">Solo entregados</span>
             <input
               type="checkbox"
-              className="toggle"
+              className="toggle toggle-sm md:toggle-md"
               checked={soloEntregados}
               onChange={(e) => setSoloEntregados(e.target.checked)}
             />
           </label>
         </div>
         <div>
-          <label className="block mb-1 font-semibold">% Comisión vendedores</label>
+          <label className="block mb-1 text-sm font-semibold md:text-base">
+            % Comisión por defecto
+          </label>
           <input
             type="number"
             min="0"
             step="0.1"
-            value={pctComision}
-            onChange={(e) => setPctComision(Number(e.target.value || 0))}
-            className="w-32 text-lg input input-bordered"
+            value={pctGlobal}
+            onChange={(e) => setPctGlobal(Number(e.target.value || 0))}
+            className="w-24 text-sm md:text-lg input input-bordered input-sm md:input-md"
           />
+          <p className="mt-1 text-xs opacity-70 max-w-[220px]">
+            Si no se define un % para un vendedor, se usa este valor.
+          </p>
         </div>
-        <button className="btn btn-outline btn-lg" onClick={exportarExcel} disabled={loading}>
+        <button
+          className="mt-2 md:mt-0 btn btn-outline btn-sm md:btn-md lg:btn-lg"
+          onClick={exportarExcel}
+          disabled={loading}
+        >
           📤 Exportar Excel
         </button>
       </div>
@@ -391,76 +490,149 @@ export default function LiquidacionesComisiones() {
       ) : (
         <div className="grid grid-cols-1 gap-8">
           {/* Vendedores */}
-          <div className="p-6 border shadow rounded-2xl bg-base-200 border-base-300">
-            <h3 className="mb-4 text-xl font-extrabold text-primary">💼 Vendedores</h3>
+          <div className="p-4 border shadow sm:p-6 rounded-2xl bg-base-200 border-base-300">
+            <h3 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">
+              💼 Vendedores
+            </h3>
+            <p className="mb-4 text-xs opacity-70 sm:text-sm">
+              Podés ajustar el % de comisión por vendedor. En móvil se muestran como tarjetas; en
+              escritorio, como tabla.
+            </p>
 
-            <div className={`${gridVend} text-sm font-bold uppercase opacity-70`}>
-              <div>Vendedor</div>
-              <div className="text-right">Pedidos</div>
-              <div className="text-right">Ventas</div>
-              <div className="text-right">%</div>
-              <div className="text-right">Comisión</div>
-            </div>
-            <div className="my-3 divider"></div>
+            <div className="overflow-x-auto">
+              {/* Header desktop */}
+              <div
+                className={`hidden md:grid ${gridVend} text-[11px] md:text-xs font-bold uppercase opacity-70`}
+              >
+                <div>Vendedor</div>
+                <div className="text-right">Pedidos</div>
+                <div className="text-right">Ventas</div>
+                <div className="text-right">% Comisión</div>
+                <div className="text-right">Comisión</div>
+              </div>
+              <div className="my-3 divider" />
 
-            {filasVendedores.length === 0 ? (
-              <div className="opacity-70">Sin datos</div>
-            ) : (
-              filasVendedores.map((r, i) => (
-                <div
-                  key={`${r.email}-${i}`}
-                  className={`${gridVend} py-2 border-b last:border-b-0 border-base-300 text-base`}
-                >
-                  <div className="truncate">{r.email}</div>
-                  <div className={numClass}>{r.pedidos ?? 0}</div>
-                  <div className={numClass}>{f2(r.total)}</div>
-                  <div className={numClass}>{f2(pctComision)}%</div>
-                  <div className={numClass}>{f2(r.comision)}</div>
+              {filasVendedores.length === 0 ? (
+                <div className="opacity-70">Sin datos</div>
+              ) : (
+                filasVendedores.map((r, i) => {
+                  const valuePct = getPctForVendor(r.keyEmail);
+
+                  return (
+                    <div
+                      key={`${r.email}-${i}`}
+                      className="py-3 text-sm border-b border-base-300 last:border-b-0 md:text-base"
+                    >
+                      <div className={`flex flex-col gap-1 md:grid ${gridVend}`}>
+                        {/* Vendedor */}
+                        <div className="truncate">
+                          <div className="font-semibold">{r.displayName}</div>
+                          {r.email && (
+                            <div className="text-xs truncate opacity-60">
+                              {r.email}
+                            </div>
+                          )}
+                          {/* mini resumen para mobile */}
+                          <div className="mt-1 text-xs opacity-70 md:hidden">
+                            Pedidos: <span className="font-mono">{r.pedidos ?? 0}</span> · Ventas:{" "}
+                            <span className="font-mono">{f2(r.total)}</span>
+                          </div>
+                        </div>
+
+                        {/* Pedidos */}
+                        <div className={`hidden md:block ${numClass}`}>{r.pedidos ?? 0}</div>
+
+                        {/* Ventas */}
+                        <div className={`hidden md:block ${numClass}`}>{f2(r.total)}</div>
+
+                        {/* % Comisión editable */}
+                        <div className="flex items-center justify-between md:justify-end md:space-x-2">
+                          <span className="mr-2 text-xs opacity-70 md:hidden">% Comisión</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={valuePct}
+                            onChange={(e) => handlePctVendChange(r.keyEmail, e.target.value)}
+                            className="w-24 text-xs text-right md:text-sm input input-bordered input-xs md:input-sm"
+                          />
+                        </div>
+
+                        {/* Comisión */}
+                        <div className={`${numClass}`}>
+                          <span className="mr-1 text-xs opacity-70 md:hidden">Comisión:</span>
+                          {f2(r.comision)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              <div className="my-3 divider" />
+              <div className={`flex flex-col gap-2 md:grid ${gridVend} text-sm md:text-base font-semibold`}>
+                <div>Total</div>
+                <div className={`hidden md:block ${numClass}`}>
+                  {totales.totalPedidos ?? 0}
                 </div>
-              ))
-            )}
-
-            <div className="my-3 divider"></div>
-            <div className={`${gridVend} text-base font-semibold`}>
-              <div>Total</div>
-              <div className={numClass}>{totales.totalPedidos ?? 0}</div>
-              <div className={numClass}>{f2(totales.totalVentas)}</div>
-              <div />
-              <div className={numClass}>{f2(totales.totalComisiones)}</div>
+                <div className={`hidden md:block ${numClass}`}>
+                  {f2(totales.totalVentas)}
+                </div>
+                <div className="hidden md:block" />
+                <div className={numClass}>{f2(totales.totalComisiones)}</div>
+              </div>
             </div>
           </div>
 
           {/* Repartidores (solo Días y Paga) */}
-          <div className="p-6 border shadow rounded-2xl bg-base-200 border-base-300">
-            <h3 className="mb-4 text-xl font-extrabold text-primary">🛵 Repartidores (Paga por días)</h3>
+          <div className="p-4 border shadow sm:p-6 rounded-2xl bg-base-200 border-base-300">
+            <h3 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">
+              🛵 Repartidores (Paga por días)
+            </h3>
+            <p className="mb-4 text-xs opacity-70 sm:text-sm">
+              Resumen de días trabajados y paga total por repartidor.
+            </p>
 
-            <div className={`${gridRep} text-sm font-bold uppercase opacity-70`}>
-              <div>Repartidor</div>
-              <div className="text-right">Días</div>
-              <div className="text-right">Paga</div>
-            </div>
-            <div className="my-3 divider"></div>
+            <div className="overflow-x-auto">
+              {/* Header desktop */}
+              <div
+                className={`hidden md:grid ${gridRep} text-[11px] md:text-xs font-bold uppercase opacity-70`}
+              >
+                <div>Repartidor</div>
+                <div className="text-right">Días</div>
+                <div className="text-right">Paga</div>
+              </div>
+              <div className="my-3 divider" />
 
-            {filasRepartidores.length === 0 ? (
-              <div className="opacity-70">Sin datos</div>
-            ) : (
-              filasRepartidores.map((r, i) => (
-                <div
-                  key={`${r.email}-${i}`}
-                  className={`${gridRep} py-2 border-b last:border-b-0 border-base-300 text-base`}
-                >
-                  <div className="truncate">{r.email}</div>
-                  <div className={numClass}>{r.dias ?? 0}</div>
-                  <div className={numClass}>{f2(r.repartidor)}</div>
-                </div>
-              ))
-            )}
+              {filasRepartidores.length === 0 ? (
+                <div className="opacity-70">Sin datos</div>
+              ) : (
+                filasRepartidores.map((r, i) => (
+                  <div
+                    key={`${r.email}-${i}`}
+                    className="py-3 text-sm border-b border-base-300 last:border-b-0 md:text-base"
+                  >
+                    <div className={`flex flex-col gap-1 md:grid ${gridRep}`}>
+                      <div>
+                        <div className="font-semibold truncate">{r.email}</div>
+                        <div className="mt-1 text-xs opacity-70 md:hidden">
+                          Días: <span className="font-mono">{r.dias ?? 0}</span> · Paga:{" "}
+                          <span className="font-mono">{f2(r.repartidor)}</span>
+                        </div>
+                      </div>
+                      <div className={`hidden md:block ${numClass}`}>{r.dias ?? 0}</div>
+                      <div className={numClass}>{f2(r.repartidor)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
 
-            <div className="my-3 divider"></div>
-            <div className={`${gridRep} text-base font-semibold`}>
-              <div>Total</div>
-              <div className={numClass}>{totalDias}</div>
-              <div className={numClass}>{f2(totalPagaRepartidores)}</div>
+              <div className="my-3 divider" />
+              <div className={`flex flex-col gap-2 md:grid ${gridRep} text-sm md:text-base font-semibold`}>
+                <div>Total</div>
+                <div className={`hidden md:block ${numClass}`}>{totalDias}</div>
+                <div className={numClass}>{f2(totalPagaRepartidores)}</div>
+              </div>
             </div>
           </div>
         </div>

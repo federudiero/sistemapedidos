@@ -13,31 +13,29 @@ import CierreCaja from "./components/CierreCaja";
 import PanelStock from "./components/PanelStock";
 import ResumenFinancieroMensual from "./components/ResumenFinancieroMensual";
 import LiquidacionesComisiones from "./components/LiquidacionesComisiones";
-
-
-
-
 import RepartidorView from "./views/RepartidorView";
 import SeleccionarProvincia from "./views/SeleccionarProvincia";
+import AdminDepositoPedidos from "./views/AdminDepositoPedidos";
 
+// 🆕 Historial de movimientos de stock
+import HistorialMovimientosStock from "../src/components/HistorialMovimientosStock.jsx";
 
-// Utilidad para replicar catálogo (import corregido) import CopiarCatalogoATodas from "./utils/CopiarCatalogoATodas.jsx"; import GeneradorPedidosTest from "./views/GeneradorPedidosTest";
-
+// Utilidad para replicar catálogo (import corregido)
+// import CopiarCatalogoATodas from "./utils/CopiarCatalogoATodas.jsx";
+// import GeneradorPedidosTest from "./views/GeneradorPedidosTest";
 
 function App() {
-  
-
   return (
     <div className="min-h-screen">
       <Routes>
         <Route path="/" element={<SeleccionarProvincia />} />
         <Route path="/home" element={<Home />} />
 
-
         <Route path="/login-vendedor" element={<LoginVendedor />} />
         <Route path="/vendedor" element={<VendedorView />} />
 
         <Route path="/admin" element={<AdminLogin />} />
+        <Route path="/admin/deposito" element={<AdminDepositoPedidos />} />
         <Route path="/admin/pedidos" element={<AdminPedidos />} />
         <Route path="/admin/dividir-pedidos" element={<AdminDivisionPedidos />} />
         <Route path="/admin/hoja-de-ruta" element={<AdminHojaRuta />} />
@@ -45,12 +43,18 @@ function App() {
         <Route path="/admin/cierre-caja" element={<CierreCaja />} />
         <Route path="/admin/panel-stock" element={<PanelStock />} />
         <Route path="/admin/estadisticas" element={<ResumenFinancieroMensual />} />
-        <Route path="/admin/LiquidacionesComisiones" element={<LiquidacionesComisiones />} />
-         
+        <Route
+          path="/admin/LiquidacionesComisiones"
+          element={<LiquidacionesComisiones />}
+        />
+        {/* 🆕 Nueva ruta: Historial de movimientos de stock */}
+        <Route
+          path="/admin/historial-stock"
+          element={<HistorialMovimientosStock />}
+        />
 
         <Route path="/login-repartidor" element={<LoginRepartidor />} />
         <Route path="/repartidor" element={<RepartidorView />} />
-             
 
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

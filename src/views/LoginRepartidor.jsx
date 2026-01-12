@@ -3,8 +3,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/firebase";
 import {
-  GoogleAuthProvider,
-  signInWithPopup,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -50,12 +48,18 @@ export default function LoginRepartidor() {
     setError("");
     setLoading(true);
     try {
-      const cred = await signInWithEmailAndPassword(auth, emailForm.trim(), passForm);
+      const cred = await signInWithEmailAndPassword(
+        auth,
+        emailForm.trim(),
+        passForm
+      );
       const email = String(cred.user?.email || "").toLowerCase();
       const ok = await esRepartidor(email);
       if (!ok) {
         await signOut(auth);
-        return setError("❌ Este correo no está autorizado como repartidor en esta provincia.");
+        return setError(
+          "❌ Este correo no está autorizado como repartidor en esta provincia."
+        );
       }
       limpiarStorageOtrosRoles();
       localStorage.setItem("repartidorAutenticado", "true");
@@ -69,31 +73,6 @@ export default function LoginRepartidor() {
     }
   };
 
-  const loginGoogle = async () => {
-    if (!provinciaId || loading) return;
-    setError("");
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      const res = await signInWithPopup(auth, provider);
-      const email = String(res.user?.email || "").toLowerCase();
-      const ok = await esRepartidor(email);
-      if (!ok) {
-        await signOut(auth);
-        return setError("❌ Este correo no está autorizado como repartidor en esta provincia.");
-      }
-      limpiarStorageOtrosRoles();
-      localStorage.setItem("repartidorAutenticado", "true");
-      localStorage.setItem("emailRepartidor", email);
-      navigate("/repartidor", { replace: true });
-    } catch (e) {
-      console.error(e);
-      setError("❌ Error al iniciar sesión con Google.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const cambiarProvincia = () => {
     setProvincia("");
     navigate("/seleccionar-provincia");
@@ -102,13 +81,17 @@ export default function LoginRepartidor() {
   return (
     <div className="relative flex items-center justify-center min-h-screen px-4 bg-base-100 text-base-content">
       <div className="w-full max-w-md p-8 space-y-4 border shadow-xl bg-base-200 border-base-300 rounded-xl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-2xl font-bold">🚚 Acceso de Repartidor</h2>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <span className="font-mono badge badge-primary">
               Prov: {provinciaId || "—"}
             </span>
-            <button className="btn btn-xs btn-outline" onClick={cambiarProvincia}>
+            <button
+              className="btn btn-xs btn-outline"
+              onClick={cambiarProvincia}
+            >
               Cambiar provincia
             </button>
           </div>
@@ -128,26 +111,30 @@ export default function LoginRepartidor() {
             value={passForm}
             onChange={(e) => setPassForm(e.target.value)}
           />
-          <button className="w-full btn btn-primary" onClick={loginEmailPass} disabled={loading}>
+          <button
+            className="w-full btn btn-primary"
+            onClick={loginEmailPass}
+            disabled={loading}
+          >
             Ingresar
           </button>
         </div>
 
-        <div className="divider">o</div>
+        {/* Mensaje en lugar del botón de Google */}
+        <p className="mt-2 text-xs text-center opacity-70">
+          Acceso solo con usuario y contraseña asignados.
+        </p>
 
         <button
-          className="w-full btn btn-outline"
-          onClick={loginGoogle}
-          disabled={!provinciaId || loading}
+          className="w-full mt-2 btn btn-outline"
+          onClick={() => navigate("/home")}
         >
-          Iniciar sesión con Google
-        </button>
-
-        <button className="w-full btn btn-outline" onClick={() => navigate("/home")}>
           ⬅ Volver a Home
         </button>
 
-        {error && <div className="mt-4 text-sm alert alert-error">{error}</div>}
+        {error && (
+          <div className="mt-4 text-sm alert alert-error">{error}</div>
+        )}
       </div>
     </div>
   );

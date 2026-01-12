@@ -25,6 +25,85 @@ import SeguimientoRepartidoresAdmin from "../components/SeguimientoRepartidoresA
 import { useProvincia } from "../hooks/useProvincia.js";
 import ConteoPedidosPorDia from "../components/ConteoPedidosPorDiaPorRepartidor.jsx";
 
+// ⬇️ Nuevo: nombres de vendedores con fallback a alias (antes del @)
+import { resolveVendedorNombre } from "../components/vendedoresMap";
+
+// helper local (por si hay emails raros o vacíos)
+const emailUsername = (v) => {
+  const s = String(v || "");
+  const at = s.indexOf("@");
+  return at > 0 ? s.slice(0, at) : s;
+};
+
+// normalizar para búsquedas
+const normalizar = (s = "") =>
+  String(s).toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+
+// ========= WHATSAPP NORMALIZACIÓN (antibug '3415') =========
+// Devuelve { e: '54...' } o { e: null, reason: 'motivo' }
+const toWhatsAppAR = (raw) => {
+  let d = String(raw || "").replace(/\D+/g, "");
+  if (!d) return { e: null, reason: "vacío" };
+
+  // limpiar prefijos
+  if (d.startsWith("00")) d = d.replace(/^00+/, ""); // 00xx...
+  if (d.startsWith("54")) d = d.slice(2); // +54/54
+  if (d.startsWith("0")) d = d.slice(1); // 0AA...
+
+  // sólo '15' sin característica => inválido
+  if (/^15\d{6,8}$/.test(d)) return { e: null, reason: "falta_caracteristica" };
+
+  // --- detectar '15' pos-característica de forma segura ---
+  const L = d.length;
+  const has15After = (areaLen) =>
+    L >= areaLen + 2 + 6 && L <= areaLen + 2 + 8 && d.slice(areaLen, areaLen + 2) === "15";
+
+  let had15Mobile = false;
+  let areaLenFor15 = null;
+
+  // probar 4, luego 3, y por último 2 (solo si es 11)
+  if (has15After(4)) {
+    had15Mobile = true;
+    areaLenFor15 = 4;
+  } else if (has15After(3)) {
+    had15Mobile = true;
+    areaLenFor15 = 3;
+  } else if (d.startsWith("11") && has15After(2)) {
+    had15Mobile = true;
+    areaLenFor15 = 2; // AMBA
+  }
+
+  if (had15Mobile) {
+    // quitar el '15' real pos-característica
+    d = d.slice(0, areaLenFor15) + d.slice(areaLenFor15 + 2);
+  }
+
+  // si ya viene con 9 delante del área (formato móvil int), respetar
+  const has9Area = /^9\d{2,4}\d{6,8}$/.test(d);
+
+  // validar largo del core (área + número)
+  const core = has9Area ? d.slice(1) : d;
+  if (core.length < 8 || core.length > 12) {
+    return { e: null, reason: "longitud_invalida" };
+  }
+
+  // agregar 9 SOLO si hubo '15' verdadero
+  let national = d;
+  if (had15Mobile && !has9Area) national = "9" + d;
+
+  return { e: "54" + national };
+};
+
+// Arma href estable usando api.whatsapp.com
+const buildWAHref = (phone, text = "") => {
+  const w = toWhatsAppAR(phone);
+  if (!w.e) return { href: null, reason: w.reason };
+  const msg = encodeURIComponent(text || "");
+  return {
+    href: `https://api.whatsapp.com/send?phone=${w.e}${msg ? `&text=${msg}` : ""}`,
+  };
+};
+
 function AdminPedidos() {
   const navigate = useNavigate();
   const { provinciaId } = useProvincia();
@@ -230,7 +309,7 @@ function AdminPedidos() {
     }
   };
 
-  // Guardar (misma lógica que tu versión que funciona)
+  // Guardar (misma lógica)
   const guardarCambios = async (pedidoEditado) => {
     if (diaCerrado) {
       Swal.fire({
@@ -299,71 +378,10 @@ function AdminPedidos() {
     }
   };
 
-  // ========= WHATSAPP NORMALIZACIÓN (reemplazar) =========
-  // Devuelve { e: '54...'} o { e: null, reason: 'motivo' }
-  // ========= WHATSAPP NORMALIZACIÓN (antibug '3415') =========
-// Devuelve { e: '54...' } o { e: null, reason: 'motivo' }
-const toWhatsAppAR = (raw) => {
-  let d = String(raw || "").replace(/\D+/g, "");
-  if (!d) return { e: null, reason: "vacío" };
-
-  // limpiar prefijos
-  if (d.startsWith("00")) d = d.replace(/^00+/, ""); // 00xx...
-  if (d.startsWith("54")) d = d.slice(2);            // +54/54
-  if (d.startsWith("0")) d = d.slice(1);             // 0AA...
-
-  // sólo '15' sin característica => inválido
-  if (/^15\d{6,8}$/.test(d)) return { e: null, reason: "falta_caracteristica" };
-
-  // --- detectar '15' pos-característica de forma segura ---
-  const L = d.length;
-  const has15After = (areaLen) =>
-    L >= areaLen + 2 + 6 && L <= areaLen + 2 + 8 && d.slice(areaLen, areaLen + 2) === "15";
-
-  let had15Mobile = false;
-  let areaLenFor15 = null;
-
-  // probar 4, luego 3, y por último 2 (solo si es 11)
-  if (has15After(4)) {
-    had15Mobile = true; areaLenFor15 = 4;
-  } else if (has15After(3)) {
-    had15Mobile = true; areaLenFor15 = 3;
-  } else if (d.startsWith("11") && has15After(2)) {
-    had15Mobile = true; areaLenFor15 = 2; // AMBA
-  }
-
-  if (had15Mobile) {
-    // quitar el '15' real pos-característica
-    d = d.slice(0, areaLenFor15) + d.slice(areaLenFor15 + 2);
-  }
-
-  // si ya viene con 9 delante del área (formato móvil int), respetar
-  const has9Area = /^9\d{2,4}\d{6,8}$/.test(d);
-
-  // validar largo del core (área + número)
-  const core = has9Area ? d.slice(1) : d;
-  if (core.length < 8 || core.length > 12) {
-    return { e: null, reason: "longitud_invalida" };
-  }
-
-  // agregar 9 SOLO si hubo '15' verdadero
-  let national = d;
-  if (had15Mobile && !has9Area) national = "9" + d;
-
-  return { e: "54" + national };
-};
-
-  // Arma href estable usando api.whatsapp.com
-  const buildWAHref = (phone, text = "") => {
-    const w = toWhatsAppAR(phone);
-    if (!w.e) return { href: null, reason: w.reason };
-    const msg = encodeURIComponent(text || "");
-    return {
-      href: `https://api.whatsapp.com/send?phone=${w.e}${msg ? `&text=${msg}` : ""}`,
-    };
-  };
-
   // === Opciones y lista filtrada ===
+
+  // 1) Opciones de vendedor del <select>: valor = email (como antes),
+  //    etiqueta = nombre resuelto (mapa) con fallback a alias.
   const vendedoresUnicos = useMemo(() => {
     const set = new Set(
       pedidos
@@ -373,21 +391,31 @@ const toWhatsAppAR = (raw) => {
     return Array.from(set).sort();
   }, [pedidos]);
 
+  // 2) Filtro por vendedor seleccionado y por texto:
+  //    el texto ahora matchea email, alias y también el nombre resuelto.
   const pedidosFiltrados = useMemo(() => {
     let arr = pedidos;
+
     if (vendedorSel !== "TODOS") {
       arr = arr.filter(
         (p) => (p.vendedorEmail || "").toLowerCase() === vendedorSel
       );
     }
-    const q = filtroVendedor.trim().toLowerCase();
+
+    const q = normalizar(filtroVendedor.trim());
     if (q) {
       arr = arr.filter((p) => {
         const email = (p.vendedorEmail || "").toLowerCase();
-        const alias = email.split("@")[0];
-        return email.includes(q) || alias.includes(q);
+        const alias = emailUsername(email);
+        const nombreResuelto = resolveVendedorNombre(email); // usa mapa + fallback
+        const campo = [email, alias, nombreResuelto]
+          .filter(Boolean)
+          .map(normalizar)
+          .join(" | ");
+        return campo.includes(q);
       });
     }
+
     return arr;
   }, [pedidos, vendedorSel, filtroVendedor]);
 
@@ -428,9 +456,9 @@ const toWhatsAppAR = (raw) => {
               onChange={(e) => setVendedorSel(e.target.value)}
             >
               <option value="TODOS">Todos</option>
-              {vendedoresUnicos.map((v) => (
-                <option key={v} value={v}>
-                  {v}
+              {vendedoresUnicos.map((email) => (
+                <option key={email} value={email}>
+                  {resolveVendedorNombre(email)} {/* etiqueta amigable */}
                 </option>
               ))}
             </select>
@@ -441,7 +469,7 @@ const toWhatsAppAR = (raw) => {
             <input
               type="text"
               className="w-full input input-bordered"
-              placeholder="alias o email (ej: eliascalderon)"
+              placeholder="nombre, alias o email (ej: CAMI, eliascalderon, ...)"
               value={filtroVendedor}
               onChange={(e) => setFiltroVendedor(e.target.value)}
             />
@@ -484,6 +512,8 @@ const toWhatsAppAR = (raw) => {
                     <th>Nombre</th>
                     <th>Calle y altura</th>
                     <th>Teléfono</th>
+                    {/* 🔹 NUEVO: columna seguimiento */}
+                    <th>Seg.</th>
                     <th>Vendedor</th>
                     <th>Pedido</th>
                     <th>Observación</th>
@@ -491,88 +521,113 @@ const toWhatsAppAR = (raw) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pedidosFiltrados.map((pedido, index) => (
-                    <tr
-                      key={pedido.id}
-                      className="transition-colors duration-200 hover:bg-base-300"
-                    >
-                      <td>{index + 1}</td>
-                      <td>{pedido.nombre}</td>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          <span>{pedido.direccion}</span>
-                          {pedido.direccion && (
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                                pedido.direccion
-                              )}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:underline"
-                              title="Abrir en Google Maps"
+                  {pedidosFiltrados.map((pedido, index) => {
+                    const email = (pedido.vendedorEmail || "").toLowerCase();
+                    const vendedorMostrar = resolveVendedorNombre(email); // mapa + fallback
+
+                    const seguimientoFlag = pedido.seguimientoEnviado === true;
+
+                    return (
+                      <tr
+                        key={pedido.id}
+                        className="transition-colors duration-200 hover:bg-base-300"
+                      >
+                        <td>{index + 1}</td>
+                        <td>{pedido.nombre}</td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <span>{pedido.direccion}</span>
+                            {pedido.direccion && (
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                  pedido.direccion
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:underline"
+                                title="Abrir en Google Maps"
+                              >
+                                📍
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex flex-col">
+                            {[pedido.telefono, pedido.telefonoAlt]
+                              .filter(Boolean)
+                              .filter((v, i, a) => a.indexOf(v) === i)
+                              .map((ph, i) => {
+                                const item = buildWAHref(
+                                  ph,
+                                  "Hola! Te contacto por tu pedido."
+                                );
+                                return item.href ? (
+                                  <a
+                                    key={i}
+                                    className="link link-accent"
+                                    href={item.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {i === 0 ? "Principal: " : "Alt: "} {ph}
+                                  </a>
+                                ) : (
+                                  <span
+                                    key={i}
+                                    className="opacity-70"
+                                    title={`Número inválido (${item.reason})`}
+                                  >
+                                    {i === 0 ? "Principal: " : "Alt: "} {ph}
+                                  </span>
+                                );
+                              })}
+                          </div>
+                        </td>
+                        {/* 🔹 NUEVO: celda de seguimiento */}
+                        <td className="text-center">
+                          {seguimientoFlag ? (
+                            <span
+                              title="Ya se envió el mensaje de seguimiento a este cliente"
+                              className="text-lg text-success"
                             >
-                              📍
-                            </a>
+                              ✅
+                            </span>
+                          ) : (
+                            <span
+                              title="Aún no se envió el mensaje de seguimiento"
+                              className="opacity-40"
+                            >
+                              —
+                            </span>
                           )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="flex flex-col">
-                          {[pedido.telefono, pedido.telefonoAlt]
-                            .filter(Boolean)
-                            .filter((v, i, a) => a.indexOf(v) === i)
-                            .map((ph, i) => {
-                              const item = buildWAHref(
-                                ph,
-                                "Hola! Te contacto por tu pedido."
-                              );
-                              return item.href ? (
-                                <a
-                                  key={i}
-                                  className="link link-accent"
-                                  href={item.href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {i === 0 ? "Principal: " : "Alt: "} {ph}
-                                </a>
-                              ) : (
-                                <span
-                                  key={i}
-                                  className="opacity-70"
-                                  title={`Número inválido (${item.reason})`}
-                                >
-                                  {i === 0 ? "Principal: " : "Alt: "} {ph}
-                                </span>
-                              );
-                            })}
-                        </div>
-                      </td>
-                      <td>
-                        {pedido.vendedorEmail ? pedido.vendedorEmail.split("@")[0] : "-"}
-                      </td>
-                      <td className="whitespace-pre-wrap">
-                        {pedido.pedido || <span className="italic text-base-300">Sin detalles</span>}
-                      </td>
-                      <td>{pedido.entreCalles || "-"}</td>
-                      <td className="flex flex-col gap-1 md:flex-row">
-                        <button
-                          className="btn btn-xs btn-warning"
-                          onClick={() => editarPedido(pedido)}
-                          disabled={diaCerrado || pedido.entregado}
-                        >
-                          Editar
-                        </button>
-                        <button
-                          className="btn btn-xs btn-error"
-                          onClick={() => eliminarPedido(pedido.id)}
-                          disabled={diaCerrado || pedido.entregado}
-                        >
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>{vendedorMostrar || emailUsername(email) || "-"}</td>
+                        <td className="whitespace-pre-wrap">
+                          {pedido.pedido || (
+                            <span className="italic text-base-300">Sin detalles</span>
+                          )}
+                        </td>
+                        <td>{pedido.entreCalles || "-"}</td>
+                        <td className="flex flex-col gap-1 md:flex-row">
+                          <button
+                            className="btn btn-xs btn-warning"
+                            onClick={() => editarPedido(pedido)}
+                            disabled={diaCerrado || pedido.entregado}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="btn btn-xs btn-error"
+                            onClick={() => eliminarPedido(pedido.id)}
+                            disabled={diaCerrado || pedido.entregado}
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -581,7 +636,9 @@ const toWhatsAppAR = (raw) => {
             <ExportarExcel pedidos={pedidosFiltrados} />
           </>
         ) : (
-          <p className="mt-8 text-center text-base-300">📭 No hay pedidos para esta fecha.</p>
+          <p className="mt-8 text-center text-base-300">
+            📭 No hay pedidos para esta fecha.
+          </p>
         )}
       </div>
 
@@ -592,7 +649,7 @@ const toWhatsAppAR = (raw) => {
         onGuardar={guardarCambios}
       />
 
-     <ConteoPedidosPorDia provinciaId={provinciaId} fecha={fechaSeleccionada} />
+      <ConteoPedidosPorDia provinciaId={provinciaId} fecha={fechaSeleccionada} />
     </div>
   );
 }

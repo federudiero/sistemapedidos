@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProvincia } from "../hooks/useProvincia";
 
 function Home() {
   const navigate = useNavigate();
   const { provinciaId } = useProvincia(); // 🔹 para mostrar la provincia actual
+  const [hovered, setHovered] = useState(null); // índice de tarjeta activa
 
   const accesos = [
     {
@@ -28,63 +29,92 @@ function Home() {
   ];
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen px-6 py-12 bg-gradient-to-br from-base-200 via-base-300 to-base-200 text-base-content">
-      {/* Botón volver a provincias */}
-      <div className="absolute top-4 left-4">
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => navigate("/")}
-        >
-          ← Cambiar provincia
-        </button>
+    <div className="relative flex items-center justify-center min-h-screen px-6 py-10 text-base-content">
+      {/* 🔹 Fondo con imagen + overlay oscuro */}
+      <div className="absolute inset-0 -z-10">
+        <img
+          src="https://res.cloudinary.com/doxadkm4r/image/upload/v1763403943/art-1840481_1920_nvm7g6.jpg"
+          alt="Fondo abstracto"
+          className="object-cover w-full h-full"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-base-300/95 via-base-300/90 to-base-300/98" />
       </div>
 
-      {/* Logo */}
-      <div className="mb-6 animate-fade-in-up">
-        <div className="p-2 rounded-full shadow-xl bg-base-100 ring-2 ring-primary/40">
-          <img
-            src="https://res.cloudinary.com/doxadkm4r/image/upload/v1752703043/icono_pedidos_sin_fondo_l6ssgq.png"
-            alt="Icono del sistema"
-            className="w-28 h-28 md:w-36 md:h-36"
-          />
-        </div>
-      </div>
-
-      {/* Título */}
-      <h1 className="mb-2 text-4xl font-extrabold md:text-5xl text-base-content animate-fade-in-up">
-        📦 Sistema de Pedidos
-      </h1>
-      <p className="mb-2 text-lg md:text-xl text-base-content/80 animate-fade-in-up">
-        Seleccioná tu tipo de acceso para continuar
-      </p>
-
-      {/* Mostrar provincia actual */}
-      {provinciaId && (
-        <p className="mb-8 font-semibold text-md text-primary animate-fade-in-up">
-          Provincia seleccionada: <span className="font-mono">{provinciaId}</span>
-        </p>
-      )}
-
-      {/* Tarjetas de acceso */}
-      <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-3">
-        {accesos.map(({ rol, texto, btn, ruta }, i) => (
-          <div
-            key={i}
-            className="bg-base-100 text-base-content border border-base-300 shadow-lg rounded-xl p-6 flex flex-col justify-between min-h-[260px] animate-fade-in-up transform transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl"
-            style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
-          >
-            <div className="text-center">
-              <h2 className="mb-2 text-2xl font-bold">{rol}</h2>
-              <p className="text-sm text-base-content/70">{texto}</p>
+      <div className="w-full max-w-6xl mx-auto">
+        {/* HEADER */}
+        <div className="flex flex-col gap-6 mb-10 lg:flex-row lg:items-center lg:justify-between">
+          {/* Icono + título */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center justify-center w-16 h-16 border-2 shadow-xl rounded-2xl border-primary/60 bg-base-100/90 md:w-20 md:h-20">
+              <img
+                src="https://res.cloudinary.com/doxadkm4r/image/upload/v1752703043/icono_pedidos_sin_fondo_l6ssgq.png"
+                alt="Icono del sistema"
+                className="object-contain w-10 h-10 md:w-12 md:h-12"
+              />
             </div>
+
+            <div>
+              <h1 className="text-3xl font-extrabold leading-snug md:text-4xl">
+                Elegí el tipo de acceso
+                <br />
+                para continuar.
+              </h1>
+            </div>
+          </div>
+
+          {/* Provincia + botón cambiar */}
+          <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
+            {provinciaId && (
+              <span className="px-4 py-1 text-sm font-semibold rounded-full badge badge-primary">
+                Prov: <span className="ml-1 font-mono">{provinciaId}</span>
+              </span>
+            )}
             <button
-              className="w-full mt-6 transition-transform btn btn-primary hover:scale-105"
-              onClick={() => navigate(ruta)}
+              className="btn btn-outline btn-sm"
+              onClick={() => navigate("/")}
             >
-              {btn}
+              ← Cambiar provincia
             </button>
           </div>
-        ))}
+        </div>
+
+        {/* TARJETAS DE ACCESO */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          {accesos.map(({ rol, texto, btn, ruta }, i) => {
+            const isActive = hovered === i;
+            const isDimmed = hovered !== null && hovered !== i;
+
+            return (
+              <div
+                key={i}
+                className={[
+                  "flex flex-col justify-between h-full p-6 border shadow-lg rounded-2xl bg-base-100/95 border-base-300",
+                  "transition-all duration-300",
+                  isActive
+                    ? "shadow-2xl -translate-y-2 ring-2 ring-primary/70"
+                    : "hover:-translate-y-2 hover:shadow-2xl",
+                  isDimmed ? "opacity-40 scale-[0.98]" : "opacity-100",
+                ].join(" ")}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => setHovered(i)}   // accesible con tab
+                onBlur={() => setHovered(null)}
+                tabIndex={0} // permite foco con teclado
+              >
+                <div className="mb-4 text-center md:text-left">
+                  <h2 className="mb-2 text-2xl font-bold">{rol}</h2>
+                  <p className="text-sm text-base-content/70">{texto}</p>
+                </div>
+                <button
+                  className="w-full mt-2 btn btn-primary"
+                  onClick={() => navigate(ruta)}
+                >
+                  {btn}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

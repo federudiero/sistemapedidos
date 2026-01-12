@@ -1,5 +1,5 @@
 // src/components/PedidoForm.jsx
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import Swal from "sweetalert2";
 import { format } from "date-fns";
 import { collection, getDocs } from "firebase/firestore";
@@ -8,6 +8,53 @@ import { useLoadScript, GoogleMap } from "@react-google-maps/api";
 import { useProvincia } from "../hooks/useProvincia.js";
 
 const LIBRARIES = ["places", "marker"];
+
+/**
+ * Helper universal para WhatsApp:
+ * - Si viene con +<pais>... o 00<pais>..., NO tocamos nada (internacional).
+ * - Si no trae país, asumimos AR: quita 54/0, quita 15 solo si venía con 0, agrega 9 y antepone 54.
+ * Devuelve E.164 SIN el "+" (para usar en wa.me/<num>).
+ */
+const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
+  if (!raw) return "";
+  let s = String(raw).trim();
+
+  // Internacional con + o 00
+  let intl = "";
+  if (s.startsWith("+")) intl = s.slice(1).replace(/\D/g, "");
+  else if (s.startsWith("00")) intl = s.slice(2).replace(/\D/g, "");
+
+  if (intl) {
+    return intl; // ya incluye país
+  }
+
+  // Local
+  let d = s.replace(/\D/g, "");
+  if (!d) return "";
+
+  if (defaultCountry === "AR") {
+    if (d.startsWith("54")) d = d.slice(2);
+
+    let hadTrunkZero = false;
+    if (d.startsWith("0")) {
+      hadTrunkZero = true;
+      d = d.slice(1);
+    }
+
+    if (hadTrunkZero) {
+      d = d
+        .replace(/^(\d{4})15(\d{5,7})$/, "$1$2")
+        .replace(/^(\d{3})15(\d{6,8})$/, "$1$2")
+        .replace(/^(\d{2})15(\d{7,8})$/, "$1$2");
+    }
+
+    if (!d.startsWith("9")) d = "9" + d;
+
+    return "54" + d;
+  }
+
+  return "";
+};
 
 const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
   const { provinciaId } = useProvincia();
@@ -30,6 +77,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
   const [telefonoAlt, setTelefonoAlt] = useState("");
   const [errorTelefonoAlt, setErrorTelefonoAlt] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [linkUbicacion, setLinkUbicacion] = useState(""); // 👈 NUEVO
 
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
@@ -73,6 +121,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     );
   };
 
+  // =============== MARCADOR EN EL MAPA ===============
   useEffect(() => {
     if (!isLoaded || !mapReady || !mapRef.current) return;
 
@@ -139,6 +188,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     };
   }, [isLoaded, mapReady, coordenadas, nombre, direccion]);
 
+  // =============== AUTOCOMPLETE ===============
   useEffect(() => {
     if (!isLoaded || !pacHostRef.current || !window.google?.maps) return;
 
@@ -177,7 +227,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
         if ("inputValue" in pacInstanceRef.current) {
           pacInstanceRef.current.inputValue = "";
         }
-      } catch (e) { console.error(e) }
+      } catch (e) {
+        console.error(e);
+      }
     })();
 
     return () => {
@@ -185,6 +237,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     };
   }, [isLoaded, bloqueado, pacRefresh]);
 
+  // =============== CARGA DE PRODUCTOS ===============
   useEffect(() => {
     const cargarProductos = async () => {
       if (!provinciaId) return;
@@ -225,7 +278,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     cargarProductos();
   }, [provinciaId]);
 
-  // Si estás editando, reconstruimos productosSeleccionados trayendo los IDs reales del catálogo (por nombre)
+  // =============== EDITAR PEDIDO ===============
   useEffect(() => {
     if (pedidoAEditar && productosFirestore.length > 0) {
       setNombre(pedidoAEditar.nombre || "");
@@ -234,14 +287,13 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       setEntreCalles(pedidoAEditar.entreCalles || "");
       setPartido(pedidoAEditar.partido || "");
       setTelefonoAlt(pedidoAEditar.telefonoAlt || "");
+      setLinkUbicacion(pedidoAEditar.linkUbicacion || ""); // 👈 NUEVO
 
       if (pedidoAEditar.coordenadas) setCoordenadas(pedidoAEditar.coordenadas);
 
       const nuevosProductos = (pedidoAEditar.productos || [])
         .map((pedidoProd) => {
-          // Intentamos recuperar por nombre; si coincide, trae id real del catálogo
           const productoOriginal = productosFirestore.find((p) => p.nombre === pedidoProd.nombre);
-          // si no existe (p.ej. devolución) devolvemos el mismo item sin id
           return productoOriginal
             ? { ...productoOriginal, cantidad: pedidoProd.cantidad, precio: productoOriginal.precio }
             : { ...pedidoProd, cantidad: pedidoProd.cantidad, precio: pedidoProd.precio };
@@ -273,6 +325,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     setProductosSeleccionados([]);
     setTelefonoAlt("");
     setErrorTelefonoAlt("");
+    setLinkUbicacion(""); // 👈 NUEVO
 
     setCoordenadas(null);
 
@@ -281,12 +334,16 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
         pacInstanceRef.current.value = "";
         if ("inputValue" in pacInstanceRef.current) pacInstanceRef.current.inputValue = "";
       }
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e);
+    }
     setPacRefresh((k) => k + 1);
 
     try {
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const onSubmit = () => {
@@ -307,20 +364,19 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     const { resumen, total } = calcularResumenPedido();
     const pedidoFinal = `${resumen} | TOTAL: $${total}`;
 
-    // vendedorEmail según sesión actual
     const vendedorEmail = String(auth?.currentUser?.email || "").toLowerCase();
 
     const pedidoConProductos = {
-      vendedorEmail,        // 👈 requerido por las reglas
+      vendedorEmail,
       nombre,
       telefono,
       telefonoAlt: telefonoAlt?.trim() ? telefonoAlt : null,
       partido,
       direccion,
       entreCalles,
+      linkUbicacion: linkUbicacion?.trim() || null, // 👈 NUEVO
       pedido: pedidoFinal,
       coordenadas,
-      // 👉 Guardamos SIEMPRE productoId (doc.id), si existe. Ítems especiales (devoluciones) quedan con null.
       productos: productosSeleccionados.map((p) => ({
         productoId: p.id ?? p.productoId ?? null,
         nombre: p.nombre,
@@ -349,6 +405,10 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       resetFormulario();
     });
   };
+
+  // 🔍 Vista previa en tiempo real del link de WhatsApp
+  const e164Principal = useMemo(() => phoneToWaE164(telefono, { defaultCountry: "AR" }), [telefono]);
+  const e164Alt = useMemo(() => phoneToWaE164(telefonoAlt, { defaultCountry: "AR" }), [telefonoAlt]);
 
   return isLoaded ? (
     <div className="px-4 py-6">
@@ -393,7 +453,10 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               <div key={pacRefresh} ref={pacHostRef} className="w-full" />
 
               {coordenadas && (
-                <div className="w-full my-4 overflow-hidden border rounded-lg border-base-300" style={{ height: "300px" }}>
+                <div
+                  className="w-full my-4 overflow-hidden border rounded-lg border-base-300"
+                  style={{ height: "300px" }}
+                >
                   <GoogleMap
                     mapContainerStyle={{ width: "100%", height: "100%" }}
                     center={coordenadas}
@@ -406,6 +469,21 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                   />
                 </div>
               )}
+
+              {/* NUEVO: link de ubicación manual */}
+              <label className="label">
+                <span className="label-text">
+                  📍 Link ubicación (WhatsApp / Google Maps) (opcional)
+                </span>
+              </label>
+              <input
+                type="text"
+                className="w-full input input-bordered"
+                value={linkUbicacion}
+                onChange={(e) => setLinkUbicacion(e.target.value)}
+                placeholder="Pegá acá el link que te mandó el cliente"
+                disabled={bloqueado}
+              />
 
               <label className="label">
                 <span className="label-text">🗒️ Observación (entre calles)</span>
@@ -445,7 +523,25 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               />
               {errorTelefono && <p className="text-sm text-error">{errorTelefono}</p>}
 
-              <label className="label">
+              {/* 🔗 Vista previa del link de WhatsApp para el teléfono principal */}
+              {telefono ? (
+                e164Principal ? (
+                  <a
+                    href={`https://wa.me/${e164Principal}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block mt-1 text-xs link"
+                  >
+                    Abrir WhatsApp: wa.me/{e164Principal}
+                  </a>
+                ) : (
+                  <span className="block mt-1 text-xs text-warning">
+                    Ingresá con código de país (+.. o 00..) o número local válido
+                  </span>
+                )
+              ) : null}
+
+              <label className="mt-4 label">
                 <span className="label-text">📞 Teléfono alternativo (opcional)</span>
               </label>
               <input
@@ -455,11 +551,31 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, "");
                   setTelefonoAlt(val);
-                  setErrorTelefonoAlt(val ? (/^[0-9]{6,15}$/.test(val) ? "" : "❌ Solo números (6 a 15 dígitos).") : "");
+                  setErrorTelefonoAlt(
+                    val ? (/^[0-9]{6,15}$/.test(val) ? "" : "❌ Solo números (6 a 15 dígitos).") : ""
+                  );
                 }}
                 disabled={bloqueado}
               />
               {errorTelefonoAlt && <p className="text-sm text-error">{errorTelefonoAlt}</p>}
+
+              {/* 🔗 Vista previa WhatsApp alternativo */}
+              {telefonoAlt ? (
+                e164Alt ? (
+                  <a
+                    href={`https://wa.me/${e164Alt}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block mt-1 text-xs link"
+                  >
+                    Abrir WhatsApp (alt): wa.me/{e164Alt}
+                  </a>
+                ) : (
+                  <span className="block mt-1 text-xs text-warning">
+                    Ingresá con código de país (+.. o 00..) o número local válido
+                  </span>
+                )
+              ) : null}
             </div>
           </div>
 
@@ -481,23 +597,32 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {productosFirestore
-                .filter((prod) => prod.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+                .filter((prod) =>
+                  (prod.nombre || "").toLowerCase().includes(busqueda.toLowerCase())
+                )
                 .map((prod, idx) => {
                   const seleccionado = productosSeleccionados.find((p) => p.nombre === prod.nombre);
                   const cantidad = seleccionado?.cantidad || 0;
 
                   return (
-                    <div key={idx} className="flex items-center justify-between gap-3 py-2 border-b border-base-200">
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-3 py-2 border-b border-base-200"
+                    >
                       <div className="flex items-center flex-1 min-w-0 gap-2">
                         <input
                           type="checkbox"
                           checked={!!seleccionado}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              // guardamos también el doc.id del catálogo en el seleccionado
-                              setProductosSeleccionados((prev) => [...prev, { ...prod, cantidad: 1 }]);
+                              setProductosSeleccionados((prev) => [
+                                ...prev,
+                                { ...prod, cantidad: 1 },
+                              ]);
                             } else {
-                              setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== prod.nombre));
+                              setProductosSeleccionados((prev) =>
+                                prev.filter((p) => p.nombre !== prod.nombre)
+                              );
                             }
                           }}
                           disabled={bloqueado}
@@ -505,7 +630,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                         />
                         <div>
                           <p className="font-semibold">{prod.nombre}</p>
-                          <p className="text-sm text-gray-500">${(prod.precio || 0).toLocaleString()}</p>
+                          <p className="text-sm text-gray-500">
+                            ${(prod.precio || 0).toLocaleString()}
+                          </p>
                         </div>
                       </div>
 
@@ -526,9 +653,14 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                             min="1"
                             value={cantidad}
                             onChange={(e) => {
-                              const cant = Math.max(1, parseInt(e.target.value || "1", 10));
+                              const cant = Math.max(
+                                1,
+                                parseInt(e.target.value || "1", 10)
+                              );
                               setProductosSeleccionados((prev) =>
-                                prev.map((p) => (p.nombre === prod.nombre ? { ...p, cantidad: cant } : p))
+                                prev.map((p) =>
+                                  p.nombre === prod.nombre ? { ...p, cantidad: cant } : p
+                                )
                               );
                             }}
                             className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
@@ -554,6 +686,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
             </div>
           </div>
 
+          {/* DEVOLUCIONES */}
           <button
             type="button"
             className="w-full mb-4 btn btn-outline btn-error btn-sm"
@@ -571,32 +704,45 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                 <div className="pr-1 overflow-x-hidden overflow-y-auto max-h-64">
                   {productosFirestore.map((prod, idx) => {
                     const nombreDevolucion = `Devolución de ${prod.nombre}`;
-                    const seleccionado = productosSeleccionados.find((p) => p.nombre === nombreDevolucion);
+                    const seleccionado = productosSeleccionados.find(
+                      (p) => p.nombre === nombreDevolucion
+                    );
                     const cantidad = seleccionado?.cantidad || 1;
                     const estaSeleccionado = !!seleccionado;
 
                     return (
-                      <div key={idx} className="flex items-center justify-between gap-3 py-2 border-b border-error/30">
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between gap-3 py-2 border-b border-error/30"
+                      >
                         <div className="flex items-center flex-1 min-w-0 gap-2">
                           <input
                             type="checkbox"
                             checked={estaSeleccionado}
                             onChange={(e) => {
                               if (e.target.checked) {
-                                // ítem especial de devolución → sin ID de catálogo
                                 setProductosSeleccionados((prev) => [
                                   ...prev,
-                                  { nombre: nombreDevolucion, precio: -Math.abs(prod.precio || 0), cantidad: 1, productoId: null },
+                                  {
+                                    nombre: nombreDevolucion,
+                                    precio: -Math.abs(prod.precio || 0),
+                                    cantidad: 1,
+                                    productoId: null,
+                                  },
                                 ]);
                               } else {
-                                setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== nombreDevolucion));
+                                setProductosSeleccionados((prev) =>
+                                  prev.filter((p) => p.nombre !== nombreDevolucion)
+                                );
                               }
                             }}
                             className="checkbox checkbox-error"
                             disabled={bloqueado}
                           />
                           <div>
-                            <p className="font-semibold text-error">{nombreDevolucion}</p>
+                            <p className="font-semibold text-error">
+                              {nombreDevolucion}
+                            </p>
                             <p className="text-sm text-error">
                               ${(prod.precio || 0).toLocaleString()}
                             </p>
@@ -619,10 +765,15 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                               min="1"
                               value={cantidad}
                               onChange={(e) => {
-                                const cant = Math.max(1, parseInt(e.target.value || "1", 10));
+                                const cant = Math.max(
+                                  1,
+                                  parseInt(e.target.value || "1", 10)
+                                );
                                 setProductosSeleccionados((prev) =>
                                   prev.map((p) =>
-                                    p.nombre === nombreDevolucion ? { ...p, cantidad: cant } : p
+                                    p.nombre === nombreDevolucion
+                                      ? { ...p, cantidad: cant }
+                                      : p
                                   )
                                 );
                               }}
@@ -648,8 +799,13 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
             </div>
           )}
 
+          {/* BOTÓN GUARDAR + PREVIEW */}
           <div className="mt-6 text-right">
-            <button type="submit" className={`btn ${pedidoAEditar ? "btn-warning" : "btn-primary"}`} disabled={bloqueado}>
+            <button
+              type="submit"
+              className={`btn ${pedidoAEditar ? "btn-warning" : "btn-primary"}`}
+              disabled={bloqueado}
+            >
               {pedidoAEditar ? "✏️ Actualizar pedido" : "➕ Agregar pedido"}
             </button>
           </div>
@@ -665,7 +821,12 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               value={
                 productosSeleccionados.length
                   ? productosSeleccionados
-                      .map((p) => `${p.nombre} x${p.cantidad} ($${(p.precio * p.cantidad).toLocaleString()})`)
+                      .map(
+                        (p) =>
+                          `${p.nombre} x${p.cantidad} ($${(
+                            p.precio * p.cantidad
+                          ).toLocaleString()})`
+                      )
                       .join(" - ") +
                     ` | TOTAL: $${productosSeleccionados
                       .reduce((sum, p) => sum + p.precio * p.cantidad, 0)

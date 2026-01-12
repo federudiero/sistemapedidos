@@ -5,7 +5,7 @@ import {
   useJsApiLoader,
   DirectionsRenderer,
   Marker,
-  InfoWindow, // 👈 NUEVO
+  InfoWindow,
 } from "@react-google-maps/api";
 import { baseDireccion } from "../constants/provincias";
 import { useProvincia } from "../hooks/useProvincia.js";
@@ -23,7 +23,7 @@ const sanitizeDireccion = (s) => {
   let x = String(s || "").normalize("NFKC").trim();
   x = x.replace(/\s+/g, " ");
   const from = "ÁÉÍÓÚÜÑáéíóúüñ";
-  const to   = "AEIOUUNaeiouun";
+  const to = "AEIOUUNaeiouun";
   x = x.replace(/[ÁÉÍÓÚÜÑáéíóúüñ]/g, (ch) => to[from.indexOf(ch)] || ch);
   return x;
 };
@@ -44,7 +44,11 @@ const chunkArray = (arr, size) => {
   return out;
 };
 
-export default function MapaRutaRepartidor({ pedidos = [], onReindex }) {
+export default function MapaRutaRepartidor({
+  pedidos = [],
+  onReindex,
+  readOnly = false, // 👈 NUEVO: modo solo lectura
+}) {
   const { provinciaId } = useProvincia();
   const BASE_DIRECCION = baseDireccion(provinciaId);
 
@@ -242,6 +246,9 @@ export default function MapaRutaRepartidor({ pedidos = [], onReindex }) {
 
   // ===== Handlers del editor (InfoWindow) =====
   const openEditor = (markerIdx) => {
+    // 👇 En modo solo lectura o sin callback, NO abrimos editor
+    if (readOnly || !onReindex) return;
+
     const pedidoId = markerIndexToPedidoId[markerIdx];
     const position = numberedMarkers[markerIdx]?.position;
     setEditor({
@@ -255,7 +262,7 @@ export default function MapaRutaRepartidor({ pedidos = [], onReindex }) {
   const closeEditor = () => setEditor(null);
 
   const saveEditor = () => {
-    if (!editor || !onReindex) return;
+    if (!editor || !onReindex || readOnly) return; // 👈 también respeta readonly
     const total = pedidosValidos.length;
     let to = parseInt(editor.value, 10);
     if (Number.isNaN(to)) return;
@@ -293,63 +300,77 @@ export default function MapaRutaRepartidor({ pedidos = [], onReindex }) {
           />
         ))}
 
-        {/* Pines numerados 1..N (click = abrir editor) */}
+        {/* Pines numerados 1..N (click = abrir editor SOLO si no es readOnly) */}
         {numberedMarkers.map((m, i) => (
           <Marker
             key={`pin-${i}`}
             position={m.position}
             label={m.label}
-            title={`${m.title} — click para editar`}
-            onClick={() => openEditor(i)}
+            title={
+              readOnly
+                ? m.title
+                : `${m.title} — click para editar`
+            }
+            onClick={() => openEditor(i)} // openEditor ya respeta readOnly
           />
         ))}
 
         {/* InfoWindow “modalito” para editar el # */}
         {editor && editor.position && (
-  <InfoWindow
-    position={editor.position}
-    onCloseClick={closeEditor}
-    options={{ maxWidth: 240 }}
-  >
-    <div className="p-2 space-y-2 text-sm rounded-lg shadow-md bg-base-200">
-      <div className="font-semibold text-base-content/90">Editar posición</div>
+          <InfoWindow
+            position={editor.position}
+            onCloseClick={closeEditor}
+            options={{ maxWidth: 240 }}
+          >
+            <div className="p-2 space-y-2 text-sm rounded-lg shadow-md bg-base-200">
+              <div className="font-semibold text-base-content/90">Editar posición</div>
 
-      <div className="flex gap-2 items-center">
-        <span className="opacity-70">Actual:</span>
-        <span className="font-mono badge badge-success badge-sm">#{editor.index + 1}</span>
-      </div>
+              <div className="flex items-center gap-2">
+                <span className="opacity-70">Actual:</span>
+                <span className="font-mono badge badge-success badge-sm">
+                  #{editor.index + 1}
+                </span>
+              </div>
 
-      <label className="w-full form-control">
-        <span className="text-xs label-text">Nueva posición</span>
-        <input
-          type="number"
-          min={1}
-          max={pedidosValidos.length}
-          value={editor.value}
-          onChange={(e) => setEditor((prev) => ({ ...prev, value: e.target.value }))}
-          className="w-24 text-center input input-sm input-bordered bg-base-100"
-        />
-      </label>
+              <label className="w-full form-control">
+                <span className="text-xs label-text">Nueva posición</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={pedidosValidos.length}
+                  value={editor.value}
+                  onChange={(e) =>
+                    setEditor((prev) => ({ ...prev, value: e.target.value }))
+                  }
+                  className="w-24 text-center input input-sm input-bordered bg-base-100"
+                />
+              </label>
 
-      <div className="flex gap-2 justify-end pt-1">
-        <button className="btn btn-xs btn-ghost" onClick={closeEditor}>
-          ✖ Cancelar
-        </button>
-        <button className="flex gap-1 items-center btn btn-xs btn-primary" onClick={saveEditor}>
-          <span>💾</span> Guardar
-        </button>
-      </div>
-    </div>
-  </InfoWindow>
-)}
+              <div className="flex justify-end gap-2 pt-1">
+                <button className="btn btn-xs btn-ghost" onClick={closeEditor}>
+                  ✖ Cancelar
+                </button>
+                <button
+                  className="flex items-center gap-1 btn btn-xs btn-primary"
+                  onClick={saveEditor}
+                >
+                  <span>💾</span> Guardar
+                </button>
+              </div>
+            </div>
+          </InfoWindow>
+        )}
       </GoogleMap>
 
       {/* Listado por tramo debajo del mapa */}
       {chunkPedidos.length > 0 && (
         <div className="mt-4">
           {chunkPedidos.map((chunk, i) => (
-            <div key={i} className="p-3 mb-3 rounded-lg border border-base-300 bg-base-100">
-              <div className="flex gap-2 items-center mb-2">
+            <div
+              key={i}
+              className="p-3 mb-3 border rounded-lg border-base-300 bg-base-100"
+            >
+              <div className="flex items-center gap-2 mb-2">
                 <div
                   className="w-3 h-3 rounded"
                   style={{ backgroundColor: COLOR_PALETTE[i % COLOR_PALETTE.length] }}
@@ -361,8 +382,12 @@ export default function MapaRutaRepartidor({ pedidos = [], onReindex }) {
               <ul className="text-sm list-disc list-inside">
                 {chunk.map((p, j) => (
                   <li key={p.id || j}>
-                    <span className="opacity-70">#{i * MAX_WAYPOINTS + j + 1} — </span>
-                    <span className="font-medium">{p.nombre || "Sin nombre"}</span>
+                    <span className="opacity-70">
+                      #{i * MAX_WAYPOINTS + j + 1} —{" "}
+                    </span>
+                    <span className="font-medium">
+                      {p.nombre || "Sin nombre"}
+                    </span>
                     {" · "}
                     <span>{p.direccion}</span>
                   </li>

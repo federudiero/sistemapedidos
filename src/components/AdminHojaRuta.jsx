@@ -28,6 +28,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../firebase/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { resolveVendedorNombre } from "../components/vendedoresMap";
 
 import { startOfDay, endOfDay, format } from "date-fns";
 import DatePicker from "react-datepicker";
@@ -766,6 +767,24 @@ const emailUsername = (v) => {
   return at > 0 ? s.slice(0, at) : s;
 };
 
+// Nombre visible del vendedor: intenta con resolveVendedorNombre; si falla, usa vendedorNombre o usuario antes del @
+const sellerDisplayName = (p) => {
+  let email =
+    p.vendedorEmail ??
+    p.vendedor ??
+    p.seller ??
+    p.vend ??
+    "";
+  email = String(email || "").trim();
+
+  // solo resolvemos si parece un email
+  const looksEmail = email.includes("@");
+  const resolved = looksEmail ? resolveVendedorNombre(email.toLowerCase()) : "";
+  if (resolved && String(resolved).trim()) return String(resolved).trim();
+  if (p.vendedorNombre && String(p.vendedorNombre).trim()) return String(p.vendedorNombre).trim();
+  return emailUsername(email); // fallback consistente con tu lógica previa
+};
+
 const INVALID_SHEET_CHARS = /[:/\\?*[\]]/g;
 const safeSheetName = (name) =>
   (String(name || "").replace(INVALID_SHEET_CHARS, "-").trim().slice(0, 31)) ||
@@ -808,9 +827,8 @@ const applyCellStyleRange = (ws, r0, r1, c0, c1, style) => {
 // Forma final de cada pedido para Excel (con wraps)
 const mapPedidoFull = (p, i) => {
   const telefono = p.telefono ?? p.telefono1 ?? p.telefonoAlt ?? p.celular ?? p.tel ?? "";
-  const vendedor = emailUsername(
-    p.vendedor ?? p.vend ?? p.vendedorNombre ?? p.vendedorEmail ?? p.seller ?? ""
-  );
+  
+  const vendedor = sellerDisplayName(p);
   const importeNum = Number(p.importe ?? p.monto ?? p.total ?? 0) || 0;
 
   return {
@@ -1047,41 +1065,51 @@ const disabledOptimizar =
                 key={r.email}
                 className="p-4 mb-8 border shadow-md rounded-xl border-base-300 bg-base-200"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h3 className="text-lg font-semibold text-primary">
-                    🛵 {r.label} — {r.email}
-                  </h3>
-                  <div className="flex gap-2">
-                     <button
-    className={`btn btn-sm btn-primary ${busyByEmail[e] ? "btn-disabled" : ""}`}
-    onClick={() => guardarOrden(e)}
-    disabled={disabledGuardar}
-  >
-    {busyByEmail[e] ? "⏳ Guardando…" : "💾 Guardar orden"}
-  </button>
+               <div className="flex flex-col w-full gap-2 mb-2 sm:flex-row sm:items-center sm:justify-between">
+  {/* Título: arriba en mobile, izquierda en desktop */}
+  <h3 className="text-sm font-semibold break-all text-primary sm:text-lg">
+    🛵 {r.label} — {r.email}
+  </h3>
 
-  <button
-    className={`btn btn-sm btn-accent ${busyByEmail[e] ? "btn-disabled" : ""}`}
-    onClick={() => optimizarRuta(e)}
-    disabled={disabledOptimizar}
-  >
-    {busyByEmail[e]
-      ? "⏳ Optimizando…"
-      : !canOptimize
-        ? "⏳ Preparando mapa…"
-        : "🧠 Optimizar ruta"}
-  </button>
+  {/* Botones: columna en mobile, fila en sm+ */}
+  <div className="flex flex-col w-full gap-2 sm:w-auto sm:flex-row sm:justify-end">
+    <button
+      className={`btn btn-sm btn-primary w-full sm:w-auto ${
+        busyByEmail[e] ? "btn-disabled" : ""
+      }`}
+      onClick={() => guardarOrden(e)}
+      disabled={disabledGuardar}
+    >
+      {busyByEmail[e] ? "⏳ Guardando…" : "💾 Guardar orden"}
+    </button>
 
-  <button
-    className={`btn btn-sm btn-secondary ${busyByEmail[e] ? "btn-disabled" : ""}`}
-    onClick={() => optimizarRutaAlReves(e)}
-    disabled={disabledOptimizar}
-    title="Calcular el circuito optimizado pero recorriéndolo al revés"
-  >
-    🔁 Invertir circuito
-  </button>    
-                  </div>
-                </div>
+    <button
+      className={`btn btn-sm btn-accent w-full sm:w-auto ${
+        busyByEmail[e] ? "btn-disabled" : ""
+      }`}
+      onClick={() => optimizarRuta(e)}
+      disabled={disabledOptimizar}
+    >
+      {busyByEmail[e]
+        ? "⏳ Optimizando…"
+        : !canOptimize
+          ? "⏳ Preparando mapa…"
+          : "🧠 Optimizar ruta"}
+    </button>
+
+    <button
+      className={`btn btn-sm btn-secondary w-full sm:w-auto ${
+        busyByEmail[e] ? "btn-disabled" : ""
+      }`}
+      onClick={() => optimizarRutaAlReves(e)}
+      disabled={disabledOptimizar}
+      title="Calcular el circuito optimizado pero recorriéndolo al revés"
+    >
+      🔁 Invertir circuito
+    </button>
+  </div>
+</div>
+
 
                 <DndContext
                   sensors={sensors}

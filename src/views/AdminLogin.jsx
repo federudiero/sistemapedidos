@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { auth, db } from "../firebase/firebase";
 import {
   GoogleAuthProvider,
-  signInWithPopup,
+ 
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -72,31 +72,7 @@ export default function AdminLogin() {
     }
   };
 
-  const loginGoogle = async () => {
-    if (!provinciaId || loading) return;
-    setError("");
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      const res = await signInWithPopup(auth, provider);
-      const email = String(res.user?.email || "").toLowerCase(); // 🔑 normalizado
-      const ok = await validarAdmin(email);
-      if (!ok) {
-        await signOut(auth);
-        return setError("❌ Este correo no es administrador de esta provincia.");
-      }
-      limpiarStorageOtrosRoles();
-      localStorage.setItem("adminAutenticado", "true");
-      localStorage.setItem("emailKey", email); // 🔑 guardar clave normalizada
-      navigate("/admin/pedidos", { replace: true });
-    } catch (e) {
-      console.error(e);
-      setError("❌ Error al iniciar sesión.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  
   const cambiarProvincia = () => {
     setProvincia("");
     limpiarStorageOtrosRoles();
@@ -106,17 +82,21 @@ export default function AdminLogin() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-base-100 text-base-content">
       <div className="w-full max-w-md p-8 border shadow-lg border-base-300 bg-base-200 rounded-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">🔐 Acceso Administrador</h2>
-          <div className="flex items-center gap-2">
-            <span className="font-mono badge badge-primary">
-              Prov: {provinciaId || "—"}
-            </span>
-            <button className="btn btn-xs btn-outline" onClick={cambiarProvincia}>
-              Cambiar provincia
-            </button>
-          </div>
-        </div>
+       <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+  <h2 className="text-2xl font-bold">🔐 Acceso Administrador</h2>
+
+  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+    <span className="font-mono badge badge-primary">
+      Prov: {provinciaId || "—"}
+    </span>
+    <button
+      className="btn btn-xs btn-outline"
+      onClick={cambiarProvincia}
+    >
+      Cambiar provincia
+    </button>
+  </div>
+</div>
 
         <div className="mb-4 space-y-2">
           <input
@@ -143,14 +123,7 @@ export default function AdminLogin() {
 
         <div className="divider">o</div>
 
-        <button
-          className="w-full btn btn-outline"
-          onClick={loginGoogle}
-          disabled={!provinciaId || loading}
-        >
-          Iniciar sesión con Google
-        </button>
-
+        
         <button className="w-full mt-2 btn btn-outline" onClick={() => navigate("/home")}>
           ⬅ Volver a Home
         </button>

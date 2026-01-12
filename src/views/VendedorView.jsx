@@ -64,18 +64,15 @@ function VendedorView() {
     const checkVendedor = async () => {
       if (!provinciaId || !emailVendedor) return;
       try {
-      
-
         const cfgRef = doc(db, "provincias", provinciaId, "config", "usuarios");
         const cfgSnap = await getDoc(cfgRef);
-       
+
         const data = cfgSnap.exists() ? cfgSnap.data() : {};
-        const arr =
-          Array.isArray(data.vendedores)
-            ? data.vendedores
-            : data.vendedores
-            ? Object.keys(data.vendedores)
-            : [];
+        const arr = Array.isArray(data.vendedores)
+          ? data.vendedores
+          : data.vendedores
+          ? Object.keys(data.vendedores)
+          : [];
 
         const ok = arr.some(
           (v) =>
@@ -180,7 +177,11 @@ function VendedorView() {
 
     // Reglas/UI: no entregado; dueño; vendedor de provincia; sin cierre global
     if (previo.entregado) {
-      await Swal.fire("Bloqueado", "No podés editar un pedido ya entregado.", "info");
+      await Swal.fire(
+        "Bloqueado",
+        "No podés editar un pedido ya entregado.",
+        "info"
+      );
       return;
     }
     const soyDueno =
@@ -205,7 +206,7 @@ function VendedorView() {
         `global_${previo.fechaStr}`
       );
       const snapCierre = await getDoc(refCierre);
-      
+
       if (snapCierre.exists()) {
         await Swal.fire(
           "Bloqueado",
@@ -278,8 +279,6 @@ function VendedorView() {
         return;
       }
 
-      
-
       await updateDoc(
         doc(db, "provincias", provinciaId, "pedidos", pedidoActualizado.id),
         editablesFiltrados
@@ -332,7 +331,7 @@ function VendedorView() {
         `global_${p.fechaStr}`
       );
       const snapCierre = await getDoc(refCierre);
-      
+
       if (snapCierre.exists()) {
         await Swal.fire(
           "Bloqueado",
@@ -422,7 +421,7 @@ function VendedorView() {
             bloqueado={estaCerrado}
           />
 
-        {!estaCerrado && pedidoAEditar && (
+          {!estaCerrado && pedidoAEditar && (
             <button
               className="w-full mt-4 btn btn-outline"
               onClick={() => setPedidoAEditar(null)}
@@ -444,7 +443,8 @@ function VendedorView() {
             onEditar={setPedidoAEditar}
             onEliminar={eliminarPedido}
             bloqueado={estaCerrado}
-            currentUserEmail={emailVendedor}   // ← para que los botones coincidan con reglas
+            currentUserEmail={emailVendedor} // ← reglas de dueño
+            provinciaId={provinciaId}        // ✅ NUEVO: para SeguimientoPedidoButton
           />
         </div>
 

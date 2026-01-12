@@ -3,16 +3,10 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { auth } from "../firebase/firebase";
 import { signOut } from "firebase/auth";
-import { LogOut, Menu } from "lucide-react";
-
-
+import { LogOut, Menu, Warehouse } from "lucide-react";
 
 const AdminNavbar = () => {
   const navigate = useNavigate();
-// "admin" para admin de la provincia
-
-  
-      // <-- solo superadmin
 
   const handleLogout = async () => {
     try {
@@ -32,24 +26,36 @@ const AdminNavbar = () => {
           <label tabIndex={0} className="btn btn-ghost lg:hidden">
             <Menu className="w-5 h-5" />
           </label>
+
           {/* --- MENÚ MOBILE --- */}
           <ul
             tabIndex={0}
             className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52"
           >
             <li><Link to="/admin/pedidos">Pedidos</Link></li>
-
-           
             <li><Link to="/admin/dividir-pedidos">División de Pedidos</Link></li>
             <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
+
+            {/* ✅ NUEVO: Depósito */}
+            <li><Link to="/admin/deposito">Depósito</Link></li>
+
             <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
             <li><Link to="/admin/LiquidacionesComisiones">LiquidacionesComisiones</Link></li>
-          
             <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
             <li><Link to="/admin/stock">Agregar Stock</Link></li>
             <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
+
+            {/* 🆕 Historial de movimientos de stock */}
+            <li><Link to="/admin/historial-stock">Historial Stock</Link></li>
+
             <li><button onClick={handleLogout}>Cerrar Sesión</button></li>
           </ul>
+        </div>
+
+        {/* Título opcional (si querés mostrarlo) */}
+        <div className="items-center hidden gap-2 ml-2 lg:flex">
+          <Warehouse className="w-5 h-5 opacity-70" />
+          <span className="font-semibold">Admin</span>
         </div>
       </div>
 
@@ -57,17 +63,20 @@ const AdminNavbar = () => {
       <div className="hidden navbar-center lg:flex">
         <ul className="px-1 menu menu-horizontal">
           <li><Link to="/admin/pedidos">Pedidos</Link></li>
-
-       
-
           <li><Link to="/admin/dividir-pedidos">División</Link></li>
           <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
+
+          {/* ✅ NUEVO: Depósito */}
+          <li><Link to="/admin/deposito">Depósito</Link></li>
+
           <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
           <li><Link to="/admin/LiquidacionesComisiones">LiquidacionesComisiones</Link></li>
-          
           <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
           <li><Link to="/admin/stock">Agregar Stock</Link></li>
           <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
+
+          {/* 🆕 Historial de movimientos de stock */}
+          <li><Link to="/admin/historial-stock">Historial Stock</Link></li>
         </ul>
       </div>
 

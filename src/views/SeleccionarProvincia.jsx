@@ -21,11 +21,21 @@ export default function SeleccionarProvincia() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4 py-10 bg-gradient-to-br from-base-200 via-base-300 to-base-200 text-base-content">
+    <div className="relative flex items-center justify-center min-h-screen px-4 py-10 text-base-content">
+      {/* 🔹 Fondo con la misma imagen que Home + overlay oscuro */}
+      <div className="absolute inset-0 -z-10">
+        <img
+          src="https://res.cloudinary.com/doxadkm4r/image/upload/v1763403943/art-1840481_1920_nvm7g6.jpg"
+          alt="Fondo abstracto"
+          className="object-cover w-full h-full"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-base-200/95 via-base-300/92 to-base-300/98" />
+      </div>
+
       <div className="w-full max-w-5xl">
         {/* Cabecera */}
         <div className="flex flex-col items-center mb-8 text-center">
-          <div className="p-2 mb-4 rounded-full shadow-xl bg-base-100 ring-2 ring-primary/30">
+          <div className="p-2 mb-4 rounded-full shadow-xl bg-base-100/95 ring-2 ring-primary/30">
             <img
               src="https://res.cloudinary.com/doxadkm4r/image/upload/v1752703043/icono_pedidos_sin_fondo_l6ssgq.png"
               alt="Icono del sistema"
@@ -50,9 +60,9 @@ export default function SeleccionarProvincia() {
                 onClick={() => seleccionar(p.id)}
                 className={[
                   "group relative w-full overflow-hidden rounded-2xl border transition-all focus:outline-none",
-                  "bg-base-100 border-base-300 hover:-translate-y-1 hover:shadow-2xl hover:border-primary/40",
+                  "bg-base-100/95 border-base-300 hover:-translate-y-1 hover:shadow-2xl hover:border-primary/40",
                   "focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-base-200",
-                  activa ? "ring-2 ring-primary/60" : "shadow-md",
+                  activa ? "ring-2 ring-primary/60 shadow-lg" : "shadow-md",
                 ].join(" ")}
                 style={{ animationDelay: `${i * 60}ms` }}
               >
@@ -98,7 +108,6 @@ export default function SeleccionarProvincia() {
             </span>
           </p>
 
-          {/* Botón alternativo para ir al Home si ya hay provincia (opcional) */}
           {provinciaId && (
             <button
               onClick={() => navigate("/home", { replace: true })}

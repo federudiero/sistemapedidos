@@ -42,7 +42,11 @@ function limpiarFirestoreData(value) {
   }
   if (value instanceof Date) return value.toISOString();
   if (value?.toDate && typeof value.toDate === "function") {
-    try { return value.toDate().toISOString(); } catch { return String(value); }
+    try {
+      return value.toDate().toISOString();
+    } catch {
+      return String(value);
+    }
   }
   if (
     (typeof value.latitude === "number" && typeof value.longitude === "number") ||
@@ -138,6 +142,7 @@ export default function CierreCaja() {
 
   const [busyByEmail, setBusyByEmail] = useState({});
   const [busyGlobal, setBusyGlobal] = useState(false);
+  const [busyPreview, setBusyPreview] = useState(false); // 👈 NUEVO
 
   const fechaStr = useMemo(
     () => format(fechaSeleccionada, "yyyy-MM-dd"),
@@ -172,59 +177,57 @@ export default function CierreCaja() {
 
   // ====== Carga pedidos del día y lista de repartidores del día ======
   useEffect(() => {
-  if (!provinciaId || !colPedidos || !colCierresRepartidor) return;
+    if (!provinciaId || !colPedidos || !colCierresRepartidor) return;
 
-  const cargarPedidosYRepartidores = async () => {
-    const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
-    const fin    = Timestamp.fromDate(endOfDay(fechaSeleccionada));
+    const cargarPedidosYRepartidores = async () => {
+      const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
+      const fin = Timestamp.fromDate(endOfDay(fechaSeleccionada));
 
-    // 1) Pedidos del día + set de repartidores
-    const qPedidos = query(colPedidos, where("fecha", ">=", inicio), where("fecha", "<=", fin));
-    const snap = await getDocs(qPedidos);
+      // 1) Pedidos del día + set de repartidores
+      const qPedidos = query(colPedidos, where("fecha", ">=", inicio), where("fecha", "<=", fin));
+      const snap = await getDocs(qPedidos);
 
-    const pedidosDelDia = [];
-    const repartidorSet = new Set();
+      const pedidosDelDia = [];
+      const repartidorSet = new Set();
 
-    snap.forEach((d) => {
-      const data = d.data();
-      const repartidor = Array.isArray(data.asignadoA) ? data.asignadoA[0] : data.repartidor;
-      if (typeof repartidor === "string" && repartidor.trim() !== "") {
-        repartidorSet.add(repartidor);
-        pedidosDelDia.push({ id: d.id, ...data, repartidor });
+      snap.forEach((d) => {
+        const data = d.data();
+        const repartidor = Array.isArray(data.asignadoA) ? data.asignadoA[0] : data.repartidor;
+        if (typeof repartidor === "string" && repartidor.trim() !== "") {
+          repartidorSet.add(repartidor);
+          pedidosDelDia.push({ id: d.id, ...data, repartidor });
+        }
+      });
+
+      setPedidos(pedidosDelDia);
+      const repartidoresArr = [...repartidorSet];
+      setRepartidores(repartidoresArr);
+
+      // 2) Traer cierres individuales existentes del día
+      const nuevos = {};
+      for (const email of repartidoresArr) {
+        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+        const ds = await getDoc(ref);
+        if (ds.exists()) nuevos[email] = ds.data();
       }
-    });
+      setCierres(nuevos);
 
-    setPedidos(pedidosDelDia);
-    const repartidoresArr = [...repartidorSet];
-    setRepartidores(repartidoresArr);
+      // 3) 🔁 Precargar estado `gastos` desde cierres
+      const precargados = {};
+      for (const [email, data] of Object.entries(nuevos)) {
+        const g = data?.gastos || {};
+        precargados[email] = {
+          repartidor: Number(g.repartidor ?? 0),
+          acompanante: Number(g.acompanante ?? 0),
+          combustible: Number(g.combustible ?? 0),
+          extra: Number(g.extra ?? 0),
+        };
+      }
+      setGastos(precargados);
+    };
 
-    // 2) Traer cierres individuales existentes del día
-    const nuevos = {};
-    for (const email of repartidoresArr) {
-      const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-      const ds  = await getDoc(ref);
-      if (ds.exists()) nuevos[email] = ds.data();
-    }
-    setCierres(nuevos);
-
-    // 3) 🔁 NUEVO: precargar estado `gastos` con lo guardado en cierres
-    //    (así la tarjeta por repartidor muestra el neto correcto sin tipear)
-    const precargados = {};
-    for (const [email, data] of Object.entries(nuevos)) {
-      const g = data?.gastos || {};
-      precargados[email] = {
-        repartidor:  Number(g.repartidor   ?? 0),
-        acompanante: Number(g.acompanante ?? 0),
-        combustible: Number(g.combustible ?? 0),
-        extra:       Number(g.extra       ?? 0),
-      };
-    }
-    setGastos(precargados);
-  };
-
-  cargarPedidosYRepartidores();
-}, [provinciaId, fechaSeleccionada, colPedidos, colCierresRepartidor, fechaStr]);
-
+    cargarPedidosYRepartidores();
+  }, [provinciaId, fechaSeleccionada, colPedidos, colCierresRepartidor, fechaStr]);
 
   // ====== Resumen global en vivo (incluye flag de stockDescontado) ======
   useEffect(() => {
@@ -234,10 +237,15 @@ export default function CierreCaja() {
     const refCierre = doc(colCierres, `global_${fechaStr}`);
 
     const unsubResumen = onSnapshot(refResumen, async (snap) => {
-      if (!snap.exists()) { setResumenGlobal(null); return; }
+      if (!snap.exists()) {
+        setResumenGlobal(null);
+        return;
+      }
       const base = snap.data();
       const cierreSnap = await getDoc(refCierre);
-      const stockDescontado = cierreSnap.exists() ? !!cierreSnap.data().stockDescontado : false;
+      const stockDescontado = cierreSnap.exists()
+        ? !!cierreSnap.data().stockDescontado
+        : false;
       setResumenGlobal({ ...base, stockDescontado });
     });
 
@@ -246,19 +254,25 @@ export default function CierreCaja() {
       setResumenGlobal((prev) => (prev ? { ...prev, stockDescontado: flag } : prev));
     });
 
-    return () => { unsubResumen(); unsubCierre(); };
+    return () => {
+      unsubResumen();
+      unsubCierre();
+    };
   }, [provinciaId, colResumenVentas, colCierres, fechaStr]);
 
   // ====== Totales (maneja mixto) ======
   const calcularTotales = (pedidosRepartidor) => {
-    let efectivo = 0, transferencia = 0, transferencia10 = 0;
+    let efectivo = 0,
+      transferencia = 0,
+      transferencia10 = 0;
     pedidosRepartidor.forEach((p) => {
       if (!p.entregado) return;
       const monto = Number(p.monto || 0);
       const metodo = p.metodoPago || "efectivo";
       if (metodo === "efectivo") efectivo += monto;
       else if (metodo === "transferencia") transferencia += monto;
-      else if (metodo === "transferencia10") transferencia10 += Math.round(monto * 1.1 * 100) / 100;
+      else if (metodo === "transferencia10")
+        transferencia10 += Math.round(monto * 1.1 * 100) / 100;
       else if (metodo === "mixto") {
         const ef = Number(p.pagoMixtoEfectivo || 0);
         const tr = Number(p.pagoMixtoTransferencia || 0);
@@ -272,24 +286,33 @@ export default function CierreCaja() {
   };
 
   const calcularCajaNeta = (tot, g) => {
-    const gastos = (g?.repartidor || 0) + (g?.acompanante || 0) + (g?.combustible || 0) + (g?.extra || 0);
-    return Math.round((tot.efectivo + tot.transferencia + tot.transferencia10 - gastos) * 100) / 100;
+    const gastos =
+      (g?.repartidor || 0) +
+      (g?.acompanante || 0) +
+      (g?.combustible || 0) +
+      (g?.extra || 0);
+    return (
+      Math.round((tot.efectivo + tot.transferencia + tot.transferencia10 - gastos) * 100) /
+      100
+    );
   };
 
   // ====== Handlers de gastos ======
   const handleGastoChange = (email, tipo, valor) => {
-    setGastos((prev) => ({ ...prev, [email]: { ...prev[email], [tipo]: Number(valor) } }));
+    setGastos((prev) => ({
+      ...prev,
+      [email]: { ...prev[email], [tipo]: Number(valor) },
+    }));
   };
 
-
   const calcularEfectivoRestante = (tot, g) => {
-  const gastos =
-    (g?.repartidor || 0) +
-    (g?.acompanante || 0) +
-    (g?.combustible || 0) +
-    (g?.extra || 0);
-  return Math.round((tot.efectivo - gastos) * 100) / 100;
-};
+    const gastos =
+      (g?.repartidor || 0) +
+      (g?.acompanante || 0) +
+      (g?.combustible || 0) +
+      (g?.extra || 0);
+    return Math.round((tot.efectivo - gastos) * 100) / 100;
+  };
 
   // ====== Cierre individual ======
   const normalizarCierreIndividual = (email, entregados, noEntregados, totales, g) => ({
@@ -314,18 +337,37 @@ export default function CierreCaja() {
     const noEntregados = pedidosRep.filter((p) => !p.entregado);
 
     const totales = calcularTotales(entregados);
-    const g = gastos[email] || { repartidor: 0, combustible: 0, acompanante: 0, extra: 0 };
+    const g = gastos[email] || {
+      repartidor: 0,
+      combustible: 0,
+      acompanante: 0,
+      extra: 0,
+    };
 
     try {
       const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
       const snap = await getDoc(ref);
-      const nuevo = normalizarCierreIndividual(email, entregados, noEntregados, totales, g);
+      const nuevo = normalizarCierreIndividual(
+        email,
+        entregados,
+        noEntregados,
+        totales,
+        g
+      );
 
       if (snap.exists()) {
         const anterior = snap.data();
-        const igual = JSON.stringify(limpiarFirestoreData(anterior)) === JSON.stringify(limpiarFirestoreData(nuevo));
+        const igual =
+          JSON.stringify(limpiarFirestoreData(anterior)) ===
+          JSON.stringify(limpiarFirestoreData(nuevo));
+
         if (igual) {
-          await Swal.fire("Sin cambios", `La caja de ${email} ya estaba guardada igual.`, "info");
+          setBusyByEmail((p) => ({ ...p, [email]: false }));
+          await Swal.fire(
+            "Sin cambios",
+            `La caja de ${email} ya estaba guardada igual.`,
+            "info"
+          );
           return;
         }
       }
@@ -334,7 +376,12 @@ export default function CierreCaja() {
 
       setCierres((prev) => ({
         ...prev,
-        [email]: { pedidosEntregados: entregados, pedidosNoEntregados: noEntregados, ...totales, gastos: g },
+        [email]: {
+          pedidosEntregados: entregados,
+          pedidosNoEntregados: noEntregados,
+          ...totales,
+          gastos: g,
+        },
       }));
 
       await Swal.fire("Caja cerrada", `Caja de ${email} cerrada correctamente.`, "success");
@@ -349,196 +396,32 @@ export default function CierreCaja() {
   // ====== 🔎 AUDITORÍA DE DESCUENTO (dry-run, no escribe nada) ======
   const auditarDescuentoDelDia = async () => {
     if (!provinciaId || !colCierresRepartidor || !colProductos) return;
-
-    const acumuladoPorPath = new Map(); // path -> {ref, qty}
-    const problemas = [];              // strings
-    const detalle = [];                // [{pedidoId, item, afectaciones:[{id,nombre,qty,tipo}]}]
-
-    // cache de producto por path
-    const cacheProducto = new Map();
-    const leerProducto = async (ref, pathStr) => {
-      const key = pathStr || ref.path;
-      if (cacheProducto.has(key)) return cacheProducto.get(key);
-      const snap = await getDoc(ref);
-      const data = snap.exists() ? { id: ref.id, ...snap.data() } : null;
-      cacheProducto.set(key, data);
-      return data;
-    };
-
-    // Recorro los cierres individuales del día (igual que en el cierre real)
-    for (const email of repartidores) {
-      let cierre = cierres[email];
-      if (!cierre?.pedidosEntregados) {
-        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-        const snap = await getDoc(ref);
-        if (snap.exists()) cierre = snap.data();
-      }
-      const entregados = cierre?.pedidosEntregados || [];
-
-      for (const pedido of entregados) {
-        const productos = pedido?.productos || [];
-        for (const item of productos) {
-          const cant = Number(item?.cantidad || 0);
-          if (!cant) continue;
-
-          const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
-          if (!ref || !pathStr) {
-            problemas.push(`Pedido ${pedido?.id || "?"}: item sin ID/ruta resoluble → "${item?.nombre || "SIN_NOMBRE"}"`);
-            continue;
-          }
-
-          const data = await leerProducto(ref, pathStr);
-          if (!data) {
-            problemas.push(`Producto inexistente: ${pathStr}`);
-            continue;
-          }
-
-          const fila = {
-            pedidoId: pedido?.id || "—",
-            item: data?.nombre || item?.nombre || "SIN_NOMBRE",
-            afectaciones: [],
-          };
-
-          // 🔄 REGLA NUEVA: NO descontar stock del "padre" si es combo; solo componentes
-          if (data?.esCombo && Array.isArray(data?.componentes)) {
-            // Informo que el PADRE se ignora
-            fila.afectaciones.push({ id: ref.id, nombre: data?.nombre || "—", qty: 0, tipo: "PADRE_IGNORADO" });
-
-            // Descuento únicamente los componentes = cantidad * multiplicador del componente
-            for (const comp of data.componentes) {
-              const compCant = cant * Number(comp?.cantidad || 0);
-              if (!compCant) continue;
-              if (!comp?.id) {
-                problemas.push(`Combo ${ref.id} tiene componente sin ID`);
-                continue;
-              }
-              const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
-              const compData = await leerProducto(compRef, `provincias/${provinciaId}/productos/${comp.id}`);
-              if (!compData) {
-                problemas.push(`Componente inexistente: ${compRef.path}`);
-                continue;
-              }
-              acumular(acumuladoPorPath, compRef, compRef.path, compCant);
-              fila.afectaciones.push({ id: compRef.id, nombre: compData?.nombre || "—", qty: compCant, tipo: "COMP" });
-            }
-          } else {
-            // Producto simple: sí descuenta su propio stock
-            acumular(acumuladoPorPath, ref, pathStr, cant);
-            fila.afectaciones.push({ id: ref.id, nombre: data?.nombre || "—", qty: cant, tipo: "SIMPLE" });
-          }
-
-          detalle.push(fila);
-        }
-      }
-    }
-
-    // Salida “resumen por producto”
-    const ops = Array.from(acumuladoPorPath.entries()).map(([path, { ref, qty }]) => {
-      const p = cacheProducto.get(path);
-      return { path, id: ref.id, nombre: p?.nombre || "—", cantidad: qty };
-    }).sort((a,b) => (a.nombre || "").localeCompare(b.nombre || ""));
-
-    // Log completo a consola para depurar
-    console.group("AUDITORÍA Cierre (dry-run)");
-    console.table(ops);
-    console.log("Detalle por pedido:", detalle);
-    if (problemas.length) console.warn("Problemas:", problemas);
-    console.groupEnd();
-
-    // Muestra amigable en modal
-    const top = ops.slice(0, 50);
-    const htmlTabla = `
-      <div style="max-height:50vh;overflow:auto;border:1px solid var(--fallback-bc, #ddd);border-radius:8px;">
-        <table style="width:100%;font-family:monospace;font-size:12px;border-collapse:collapse;">
-          <thead>
-            <tr>
-              <th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">Producto</th>
-              <th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">ID</th>
-              <th style="text-align:right;padding:6px;border-bottom:1px solid #ddd;">Cantidad</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${top.map(r => `
-              <tr>
-                <td style="padding:6px;border-bottom:1px solid #eee;">${r.nombre}</td>
-                <td style="padding:6px;border-bottom:1px solid #eee;">${r.id}</td>
-                <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;">${r.cantidad}</td>
-              </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>
-      <div style="margin-top:8px;opacity:.75">
-        <div>Regla aplicada: <b>combos NO descuentan stock del combo</b>; solo de sus <b>componentes</b>.</div>
-        ${ops.length > 50 ? `Mostrando 50 de ${ops.length} filas. Ver <b>console.table</b> para el listado completo.` : ""}
-        ${problemas.length ? `<br/><span style="color:#b45309">⚠ ${problemas.length} observación(es). Abrí la consola para ver detalles.</span>` : ""}
-      </div>
-    `;
-
-    const totalDocs = ops.length;
-    const totalUnidades = ops.reduce((a,b)=> a + (Number(b.cantidad)||0), 0);
-
-    await Swal.fire({
-      icon: problemas.length ? "warning" : "info",
-      title: "Previsualización de descuento (dry-run)",
-      html: `
-        <div style="text-align:left">
-          <div style="margin-bottom:6px">Fecha: <b>${fechaStr}</b> — Prov: <b>${provinciaId}</b></div>
-          <div style="margin-bottom:6px">Docs a actualizar: <b>${totalDocs}</b> — Unidades totales: <b>${totalUnidades}</b></div>
-          ${htmlTabla}
-        </div>
-      `,
-      confirmButtonText: "Entendido",
-    });
-  };
-
-  // ====== Cierre GLOBAL (por provincia y por día) ======
-  const cerrarGlobal = async () => {
-    if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas) return;
-    if (busyGlobal) return;
-    setBusyGlobal(true);
+    if (busyPreview || busyGlobal) return;
+    setBusyPreview(true);
 
     try {
-      // A) Bloquear si falta cerrar alguien (verificación **en Firestore**)
-      const faltan = [];
-      for (const email of repartidores) {
-        const snap = await getDoc(doc(colCierresRepartidor, `${fechaStr}_${email}`));
-        if (!snap.exists()) faltan.push(email);
-      }
-      if (faltan.length) {
-        await Swal.fire("Faltan cierres individuales", `No podés cerrar global. Restan: ${faltan.join(", ")}`, "warning");
-        return;
-      }
+      // Feedback inmediato
+      Swal.fire({
+        title: "Generando previsualización…",
+        text: "Esto puede tardar unos segundos según la cantidad de pedidos.",
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
 
-      // B) Guard transaccional: evita dos cierres en paralelo o repetidos
-      const cierreGlobalRef = doc(colCierres, `global_${fechaStr}`);
-      try {
-        await runTransaction(db, async (tx) => {
-          const snap = await tx.get(cierreGlobalRef);
-          const d = snap.exists() ? snap.data() : null;
-          if (d?.inProgress || d?.stockDescontado) {
-            throw new Error("YA_CERRADO_O_PROGRESO");
-          }
-          tx.set(cierreGlobalRef, { fechaStr, provinciaId, inProgress: true, timestamp: new Date() }, { merge: true });
-        });
-      } catch (e) {
-        if (String(e.message).includes("YA_CERRADO_O_PROGRESO")) {
-          await Swal.fire("Ya cerrado/en progreso", "Otro cierre global está en curso o ya finalizó.", "info");
-          return;
-        }
-        throw e;
-      }
+      const acumuladoPorPath = new Map();
+      const problemas = [];
+      const detalle = [];
 
-      // C) Recorrer cierres individuales **de la fecha** y acumular SOLO vendidos
-      const acumuladoPorPath = new Map(); // pathStr -> { ref, qty }
-      const resumenPorNombre = {};        // nombre visible -> cantidad (para tabla de “vendidos”)
-
-      // Cache lecturas de productos
       const cacheProducto = new Map();
       const leerProducto = async (ref, pathStr) => {
-        if (cacheProducto.has(pathStr)) return cacheProducto.get(pathStr);
+        const key = pathStr || ref.path;
+        if (cacheProducto.has(key)) return cacheProducto.get(key);
         const snap = await getDoc(ref);
         const data = snap.exists() ? { id: ref.id, ...snap.data() } : null;
-        cacheProducto.set(pathStr, data);
+        cacheProducto.set(key, data);
         return data;
       };
 
@@ -557,37 +440,321 @@ export default function CierreCaja() {
             const cant = Number(item?.cantidad || 0);
             if (!cant) continue;
 
-            const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
-            if (!ref || !pathStr) continue;
+            const { ref, pathStr } = await resolverRefDesdeProdItem(
+              item,
+              provinciaId,
+              colProductos,
+              db
+            );
+            if (!ref || !pathStr) {
+              problemas.push(
+                `Pedido ${pedido?.id || "?"}: item sin ID/ruta resoluble → "${
+                  item?.nombre || "SIN_NOMBRE"
+                }"`
+              );
+              continue;
+            }
 
-            // lee producto (por si es combo y para nombre)
             const data = await leerProducto(ref, pathStr);
-            if (!data) continue;
+            if (!data) {
+              problemas.push(`Producto inexistente: ${pathStr}`);
+              continue;
+            }
 
-            // Para el RESUMEN visible, seguimos contando el nombre del ítem vendido (combo o simple)
-            const nombreBase = data?.nombre || item?.nombre || "SIN_NOMBRE";
-            resumenPorNombre[nombreBase] = (resumenPorNombre[nombreBase] || 0) + cant;
+            const fila = {
+              pedidoId: pedido?.id || "—",
+              item: data?.nombre || item?.nombre || "SIN_NOMBRE",
+              afectaciones: [],
+            };
 
-            // 🔄 REGLA NUEVA: si es combo => NO descontar el combo; SÍ sus componentes
+            if (data?.esCombo && Array.isArray(data?.componentes)) {
+              fila.afectaciones.push({
+                id: ref.id,
+                nombre: data?.nombre || "—",
+                qty: 0,
+                tipo: "PADRE_IGNORADO",
+              });
+
+              for (const comp of data.componentes) {
+                const compCant = cant * Number(comp?.cantidad || 0);
+                if (!compCant) continue;
+                if (!comp?.id) {
+                  problemas.push(`Combo ${ref.id} tiene componente sin ID`);
+                  continue;
+                }
+                const compRef = doc(
+                  db,
+                  "provincias",
+                  provinciaId,
+                  "productos",
+                  comp.id
+                );
+                const compData = await leerProducto(
+                  compRef,
+                  `provincias/${provinciaId}/productos/${comp.id}`
+                );
+                if (!compData) {
+                  problemas.push(`Componente inexistente: ${compRef.path}`);
+                  continue;
+                }
+                acumular(acumuladoPorPath, compRef, compRef.path, compCant);
+                fila.afectaciones.push({
+                  id: compRef.id,
+                  nombre: compData?.nombre || "—",
+                  qty: compCant,
+                  tipo: "COMP",
+                });
+              }
+            } else {
+              acumular(acumuladoPorPath, ref, pathStr, cant);
+              fila.afectaciones.push({
+                id: ref.id,
+                nombre: data?.nombre || "—",
+                qty: cant,
+                tipo: "SIMPLE",
+              });
+            }
+
+            detalle.push(fila);
+          }
+        }
+      }
+
+      const ops = Array.from(acumuladoPorPath.entries())
+        .map(([path, { ref, qty }]) => {
+          const p = cacheProducto.get(path);
+          return { path, id: ref.id, nombre: p?.nombre || "—", cantidad: qty };
+        })
+        .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+
+      console.group("AUDITORÍA Cierre (dry-run)");
+      console.table(ops);
+      console.log("Detalle por pedido:", detalle);
+      if (problemas.length) console.warn("Problemas:", problemas);
+      console.groupEnd();
+
+      // Cierro el loading
+      Swal.close();
+
+      const totalDocs = ops.length;
+      const totalUnidades = ops.reduce(
+        (a, b) => a + (Number(b.cantidad) || 0),
+        0
+      );
+
+      if (totalDocs === 0 && problemas.length === 0) {
+        await Swal.fire({
+          icon: "info",
+          title: "Sin productos para descontar",
+          text: "No se detectaron productos a los que se les vaya a descontar stock para este día.",
+        });
+        return;
+      }
+
+      const top = ops.slice(0, 50);
+      const htmlTabla = `
+        <div style="max-height:50vh;overflow:auto;border:1px solid var(--fallback-bc, #ddd);border-radius:8px;">
+          <table style="width:100%;font-family:monospace;font-size:12px;border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">Producto</th>
+                <th style="text-align:left;padding:6px;border-bottom:1px solid #ddd;">ID</th>
+                <th style="text-align:right;padding:6px;border-bottom:1px solid #ddd;">Cantidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${top
+                .map(
+                  (r) => `
+                <tr>
+                  <td style="padding:6px;border-bottom:1px solid #eee;">${r.nombre}</td>
+                  <td style="padding:6px;border-bottom:1px solid #eee;">${r.id}</td>
+                  <td style="padding:6px;border-bottom:1px solid #eee;text-align:right;">${r.cantidad}</td>
+                </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:8px;opacity:.75">
+          <div>Regla aplicada: <b>combos NO descuentan stock del combo</b>; solo de sus <b>componentes</b>.</div>
+          ${
+            ops.length > 50
+              ? `Mostrando 50 de ${ops.length} filas. Ver <b>console.table</b> para el listado completo.`
+              : ""
+          }
+          ${
+            problemas.length
+              ? `<br/><span style="color:#b45309">⚠ ${problemas.length} observación(es). Abrí la consola para ver detalles.</span>`
+              : ""
+          }
+        </div>
+      `;
+
+      await Swal.fire({
+        icon: problemas.length ? "warning" : "info",
+        title: "Previsualización de descuento (dry-run)",
+        html: `
+          <div style="text-align:left">
+            <div style="margin-bottom:6px">Fecha: <b>${fechaStr}</b> — Prov: <b>${provinciaId}</b></div>
+            <div style="margin-bottom:6px">Docs a actualizar: <b>${totalDocs}</b> — Unidades totales: <b>${totalUnidades}</b></div>
+            ${htmlTabla}
+          </div>
+        `,
+        confirmButtonText: "Entendido",
+      });
+    } catch (e) {
+      console.error("Error en previsualización de descuento:", e);
+      Swal.close();
+      await Swal.fire(
+        "Error",
+        "Ocurrió un problema al generar la previsualización. Revisá la consola para más detalles.",
+        "error"
+      );
+    } finally {
+      setBusyPreview(false);
+    }
+  };
+
+  // ====== Cierre GLOBAL (por provincia y por día) ======
+  const cerrarGlobal = async () => {
+    if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas || !colProductos)
+      return;
+    if (busyGlobal) return;
+    setBusyGlobal(true);
+
+    try {
+      // A) Verificar que TODOS los repartidores tengan cierre individual
+      const faltan = [];
+      for (const email of repartidores) {
+        const snap = await getDoc(doc(colCierresRepartidor, `${fechaStr}_${email}`));
+        if (!snap.exists()) faltan.push(email);
+      }
+      if (faltan.length) {
+        await Swal.fire(
+          "Faltan cierres individuales",
+          `No podés cerrar global. Restan: ${faltan.join(", ")}`,
+          "warning"
+        );
+        return;
+      }
+
+      // B) Armar TODA la info primero (sin escribir nada)
+      const acumuladoPorPath = new Map(); // pathStr -> { ref, qty }
+      const resumenPorNombre = {}; // para tabla visible (ahora sin combos)
+      const problemas = []; // items que NO se van a descontar
+
+      // Cache de productos
+      const cacheProducto = new Map();
+      const leerProducto = async (ref, pathStr) => {
+        if (cacheProducto.has(pathStr)) return cacheProducto.get(pathStr);
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? { id: ref.id, ...snap.data() } : null;
+        cacheProducto.set(pathStr, data);
+        return data;
+      };
+
+      // B1) Recorrer cierres individuales y acumular stock a descontar
+      for (const email of repartidores) {
+        let cierre = cierres[email];
+        if (!cierre?.pedidosEntregados) {
+          const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+          const snap = await getDoc(ref);
+          if (snap.exists()) cierre = snap.data();
+        }
+        const entregados = cierre?.pedidosEntregados || [];
+
+        for (const pedido of entregados) {
+          const productos = pedido?.productos || [];
+          for (const item of productos) {
+            const cant = Number(item?.cantidad || 0);
+            if (!cant) continue;
+
+            const { ref, pathStr } = await resolverRefDesdeProdItem(
+              item,
+              provinciaId,
+              colProductos,
+              db
+            );
+            if (!ref || !pathStr) {
+              problemas.push(
+                `Pedido ${pedido?.id || "?"}: item "${
+                  item?.nombre || "SIN_NOMBRE"
+                }" sin producto asociado (no se descontará).`
+              );
+              continue;
+            }
+
+            const data = await leerProducto(ref, pathStr);
+            if (!data) {
+              problemas.push(
+                `Producto inexistente en ${pathStr} (pedido ${
+                  pedido?.id || "?"
+                }, "${item?.nombre || "SIN_NOMBRE"}").`
+              );
+              continue;
+            }
+
+            // 👉 Si es COMBO: NO lo sumamos como combo en totalPorProducto.
+            //     En cambio sumamos sus COMPONENTES por nombre y cantidad.
             if (data?.esCombo && Array.isArray(data?.componentes)) {
               for (const comp of data.componentes) {
                 const compCant = cant * Number(comp?.cantidad || 0);
                 if (!compCant) continue;
-                const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
+                if (!comp?.id) {
+                  problemas.push(
+                    `Combo ${ref.id} (${data?.nombre || "SIN_NOMBRE"}) tiene componente sin ID (pedido ${
+                      pedido?.id || "?"
+                    }).`
+                  );
+                  continue;
+                }
+
+                const compRef = doc(
+                  db,
+                  "provincias",
+                  provinciaId,
+                  "productos",
+                  comp.id
+                );
                 const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
-                await leerProducto(compRef, compPath);
+                const compData = await leerProducto(compRef, compPath);
+                if (!compData) {
+                  problemas.push(
+                    `Componente inexistente ${compPath} (combo ${ref.id}, pedido ${
+                      pedido?.id || "?"
+                    }).`
+                  );
+                  continue;
+                }
+
+                // 🔹 Stock: se descuenta del componente (lo que ya hacías).
                 acumular(acumuladoPorPath, compRef, compPath, compCant);
+
+                // 🔹 Resumen: sumamos el NOMBRE del componente, NO el combo.
+                const nombreComp = compData?.nombre || comp?.nombre || "SIN_NOMBRE";
+                resumenPorNombre[nombreComp] =
+                  (resumenPorNombre[nombreComp] || 0) + compCant;
               }
             } else {
-              // Producto simple: descontar su propio stock
+              // 👉 Producto simple: se cuenta normal
+              const nombreBase = data?.nombre || item?.nombre || "SIN_NOMBRE";
+
+              // 🔹 Stock: descuenta del propio producto
               acumular(acumuladoPorPath, ref, pathStr, cant);
+
+              // 🔹 Resumen: sumamos el nombre del producto simple
+              resumenPorNombre[nombreBase] =
+                (resumenPorNombre[nombreBase] || 0) + cant;
             }
           }
         }
       }
 
-      // D) Totales por método
-      let totalEfectivo = 0, totalTransferencia = 0, totalTransferencia10 = 0;
+      // B2) Totales por método de pago y gastos globales
+      let totalEfectivo = 0,
+        totalTransferencia = 0,
+        totalTransferencia10 = 0;
       for (const email of repartidores) {
         let cierre = cierres[email];
         if (!cierre?.pedidosEntregados) {
@@ -601,7 +768,8 @@ export default function CierreCaja() {
           const monto = Number(p?.monto || 0);
           if (metodo === "efectivo") totalEfectivo += monto;
           else if (metodo === "transferencia") totalTransferencia += monto;
-          else if (metodo === "transferencia10") totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
+          else if (metodo === "transferencia10")
+            totalTransferencia10 += Math.round(monto * 1.1 * 100) / 100;
           else if (metodo === "mixto") {
             const ef = Number(p?.pagoMixtoEfectivo || 0);
             const tr = Number(p?.pagoMixtoTransferencia || 0);
@@ -613,7 +781,6 @@ export default function CierreCaja() {
         }
       }
 
-      // 🔹 NUEVO: Total de gastos globales (suma de los cierres individuales)
       let totalGastos = 0;
       for (const email of repartidores) {
         let cierre = cierres[email];
@@ -630,54 +797,138 @@ export default function CierreCaja() {
           (Number(g.extra) || 0);
       }
 
-      // E) Confirmación con conteo real de escrituras
+      // B3) Preparar datos para confirmación
       const ops = Array.from(acumuladoPorPath.values());
       const totalDocsAActualizar = ops.length;
-      const totalUnidades = ops.reduce((a, b) => a + (Number(b.qty) || 0), 0);
+      const totalUnidades = ops.reduce(
+        (a, b) => a + (Number(b.qty) || 0),
+        0
+      );
+
+      const erroresHtml = problemas.length
+        ? `
+          <div style="margin-top:8px;color:#b45309;font-size:12px;text-align:left;">
+            ⚠ Se detectaron <b>${problemas.length}</b> ítems con problemas que <b>NO</b> se descontarán.
+            <br/>Ejemplos:
+            <ul style="margin-top:4px;padding-left:18px;">
+              ${problemas
+                .slice(0, 5)
+                .map((p) => `<li>${p}</li>`)
+                .join("")}
+            </ul>
+            ${problemas.length > 5 ? "..." : ""}
+          </div>
+        `
+        : "";
 
       const ok = await Swal.fire({
-        icon: "warning",
+        icon: problemas.length ? "warning" : "question",
         title: "Confirmar cierre global",
-        html: `Se actualizarán <b>${totalDocsAActualizar}</b> productos (<b>${totalUnidades}</b> unidades).<br/>Regla aplicada: combos no descuentan; solo componentes.<br/>¿Deseás continuar?`,
+        html: `
+          <div style="text-align:left;font-size:14px;">
+            <div>Fecha: <b>${fechaStr}</b> — Prov: <b>${provinciaId}</b></div>
+            <div style="margin:6px 0;">
+              Se actualizarán <b>${totalDocsAActualizar}</b> productos (<b>${totalUnidades}</b> unidades) en stock.
+              <br/>Regla aplicada: combos no descuentan; solo componentes.
+            </div>
+            <div style="margin:6px 0;">
+              <b>Totales ventas</b>:
+              <ul style="padding-left:18px;">
+                <li>Efectivo: <b>$${totalEfectivo.toFixed(0)}</b></li>
+                <li>Transferencia: <b>$${totalTransferencia.toFixed(0)}</b></li>
+                <li>Transferencia (10%): <b>$${totalTransferencia10.toFixed(
+                  0
+                )}</b></li>
+                <li>Gastos globales: <b>$${totalGastos.toFixed(0)}</b></li>
+              </ul>
+            </div>
+            ${erroresHtml}
+            <div style="margin-top:6px;font-size:12px;opacity:.75;">
+              Si confirmás, se descontará stock y se guardará el resumen del día.<br/>
+              Si cancelás, <b>no se modificará nada</b> en la base de datos.
+            </div>
+          </div>
+        `,
         showCancelButton: true,
-        confirmButtonText: "Sí, descontar stock",
+        confirmButtonText: "Sí, descontar stock y cerrar",
         cancelButtonText: "Cancelar",
       });
+
+      // 👉 Si CANCELA: no se toca NADA en Firestore
       if (!ok.isConfirmed) {
-        // liberar inProgress
-        await setDoc(cierreGlobalRef, { inProgress: false }, { merge: true });
         return;
       }
 
-      // F) Early exit: si no hay nada para descontar, sólo marcar cierre y escribir resumen
-     if (ops.length === 0) {
-  const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
-  const totalNeto = totalBruto - totalGastos;
+      // C) Recién AHORA se hace el lock transaccional (inProgress)
+      const cierreGlobalRef = doc(colCierres, `global_${fechaStr}`);
+      try {
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(cierreGlobalRef);
+          const d = snap.exists() ? snap.data() : null;
+          if (d?.inProgress || d?.stockDescontado) {
+            throw new Error("YA_CERRADO_O_PROGRESO");
+          }
+          tx.set(
+            cierreGlobalRef,
+            { fechaStr, provinciaId, inProgress: true, timestamp: new Date() },
+            { merge: true }
+          );
+        });
+      } catch (e) {
+        if (String(e.message).includes("YA_CERRADO_O_PROGRESO")) {
+          await Swal.fire(
+            "Ya cerrado/en progreso",
+            "Otro cierre global está en curso o ya finalizó.",
+            "info"
+          );
+          return;
+        }
+        throw e;
+      }
 
-  await setDoc(doc(colResumenVentas, fechaStr), {
-    fechaStr,
-    totalPorProducto: resumenPorNombre,
-    totalEfectivo,
-    totalTransferencia,
-    totalTransferencia10,
-    totalGastos,
-    totalNeto,
-    provinciaId,
-    timestamp: new Date(),
-  });
+      // D) Caso especial: no hay nada para descontar
+      if (ops.length === 0) {
+        const totalBruto =
+          totalEfectivo + totalTransferencia + totalTransferencia10;
+        const totalNeto = totalBruto - totalGastos;
 
-  // 👇 Agregá opsAplicadas: []
-  await setDoc(cierreGlobalRef, {
-    stockDescontado: true,
-    inProgress: false,
-    opsAplicadas: [],   // ← snapshot vacío para que la anulación NO reponga nada
-  }, { merge: true });
+        await setDoc(doc(colResumenVentas, fechaStr), {
+          fechaStr,
+          totalPorProducto: resumenPorNombre,
+          totalEfectivo,
+          totalTransferencia,
+          totalTransferencia10,
+          totalGastos,
+          totalNeto,
+          provinciaId,
+          timestamp: new Date(),
+        });
 
-  await Swal.fire("Cierre Global realizado", "No había stock para descontar.", "success");
-  return;
-}
+        await setDoc(
+          cierreGlobalRef,
+          {
+            fechaStr,
+            tipo: "global",
+            repartidores,
+            stockDescontado: true,
+            inProgress: false,
+            provinciaId,
+            ejecutadoPor: window?.__authEmail || null,
+            opsAplicadas: [],
+            timestamp: new Date(),
+          },
+          { merge: true }
+        );
 
-      // G) Saneamos tipo de stock **solo** en los productos a tocar y descontamos en chunks
+        await Swal.fire(
+          "Cierre Global realizado",
+          "No había stock para descontar. Se guardó el resumen de ventas.",
+          "success"
+        );
+        return;
+      }
+
+      // E) Saneamos y descontamos stock
       await sanearStocksSiNecesario(ops);
 
       const grupos = chunk(ops, 450);
@@ -689,11 +940,12 @@ export default function CierreCaja() {
           batch.set(ref, { stock: increment(-n) }, { merge: true });
         }
         await batch.commit();
-        await new Promise((r) => setTimeout(r, 120)); // respiro pequeño
+        await new Promise((r) => setTimeout(r, 120));
       }
 
-      // H) Guardar resumen visible (solo si realmente ejecutamos el cierre)
-      const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
+      // F) Guardar resumen de ventas
+      const totalBruto =
+        totalEfectivo + totalTransferencia + totalTransferencia10;
       const totalNeto = totalBruto - totalGastos;
 
       await setDoc(doc(colResumenVentas, fechaStr), {
@@ -702,36 +954,40 @@ export default function CierreCaja() {
         totalEfectivo,
         totalTransferencia,
         totalTransferencia10,
-        totalGastos,           // NUEVO
-        totalNeto,             // NUEVO
+        totalGastos,
+        totalNeto,
         provinciaId,
         timestamp: new Date(),
       });
-      // === Snapshot de operaciones aplicadas (para anulación 1:1) ===
-const opsAplicadas = ops.map(({ ref, qty }) => ({
-  path: ref.path,         // ej: "provincias/SF/productos/ABC123"
-  id: ref.id,
-  qty: Number(qty || 0),
-}));
 
-      // I) Marcar cierre global y liberar lock
-     await setDoc(
-  cierreGlobalRef,
-  {
-    fechaStr,
-    tipo: "global",
-    repartidores,
-    stockDescontado: true,
-    inProgress: false,
-    provinciaId,
-    ejecutadoPor: (window?.__authEmail) || null,
-    opsAplicadas,            // 👈 NUEVO: snapshot exacto aplicado
-    timestamp: new Date(),
-  },
-  { merge: true }
-);
+      // G) Guardar snapshot de operaciones aplicadas (para anulación 1:1)
+      const opsAplicadas = ops.map(({ ref, qty }) => ({
+        path: ref.path,
+        id: ref.id,
+        qty: Number(qty || 0),
+      }));
 
-      await Swal.fire("Cierre Global realizado", "Se descontó stock (solo componentes de combos) y se guardó el resumen.", "success");
+      await setDoc(
+        cierreGlobalRef,
+        {
+          fechaStr,
+          tipo: "global",
+          repartidores,
+          stockDescontado: true,
+          inProgress: false,
+          provinciaId,
+          ejecutadoPor: window?.__authEmail || null,
+          opsAplicadas,
+          timestamp: new Date(),
+        },
+        { merge: true }
+      );
+
+      await Swal.fire(
+        "Cierre Global realizado",
+        "Se descontó stock (solo componentes de combos) y se guardó el resumen.",
+        "success"
+      );
     } catch (e) {
       console.error("Error en cierre global:", e);
       Swal.fire("Error", "No se pudo ejecutar el cierre global.", "error");
@@ -762,15 +1018,17 @@ const opsAplicadas = ops.map(({ ref, qty }) => ({
     saveAs(blob, `CierreCaja_${provinciaId}_${fechaStr}.xlsx`);
   };
 
-  // ====== Anulación individual ======
+  // ====== Anulación individual (mantiene pedidos entregados) ======
   const anularCierreIndividual = async (email) => {
-    if (!provinciaId || !colCierresRepartidor || !colAnulaciones) return;
+    if (!provinciaId || !colCierresRepartidor || !colAnulaciones || !colPedidos) return;
 
     const confirm = await Swal.fire({
       title: "¿Anular cierre?",
       text: `¿Seguro que querés anular el cierre de ${email}?`,
-      icon: "warning", showCancelButton: true,
-      confirmButtonText: "Sí, anular", cancelButtonText: "Cancelar",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, anular",
+      cancelButtonText: "Cancelar",
     });
     if (!confirm.isConfirmed) return;
 
@@ -779,19 +1037,34 @@ const opsAplicadas = ops.map(({ ref, qty }) => ({
 
     try {
       const snap = await getDoc(ref);
+
       if (snap.exists()) {
+        const cierreData = snap.data();
+
         await addDoc(colAnulaciones, {
-          provinciaId, fechaStr, emailRepartidor: email,
-          timestamp: Timestamp.now(), tipo: "individual",
-          motivo: "Anulación manual desde panel",
+          provinciaId,
+          fechaStr,
+          emailRepartidor: email,
+          timestamp: Timestamp.now(),
+          tipo: "individual",
+          motivo: "Anulación manual desde panel (mantiene pedidos entregados)",
           docIdOriginal: docId,
-          datosAnulados: limpiarFirestoreData(snap.data()),
+          datosAnulados: limpiarFirestoreData(cierreData),
         });
       }
+
       await deleteDoc(ref);
 
-      Swal.fire("Anulado", `Cierre de ${email} anulado.`, "success");
-      setCierres((prev) => { const copia = { ...prev }; delete copia[email]; return copia; });
+      Swal.fire(
+        "Anulado",
+        `Cierre de ${email} anulado (pedidos entregados preservados).`,
+        "success"
+      );
+      setCierres((prev) => {
+        const copia = { ...prev };
+        delete copia[email];
+        return copia;
+      });
     } catch (e) {
       console.error("Error al anular cierre:", e);
       Swal.fire("Error", "No se pudo anular el cierre. Ver consola.", "error");
@@ -800,13 +1073,16 @@ const opsAplicadas = ops.map(({ ref, qty }) => ({
 
   // ====== Anulación global (restaura stock si corresponde) ======
   const anularCierreGlobal = async () => {
-    if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas || !colAnulaciones) return;
+    if (!provinciaId || !colCierres || !colCierresRepartidor || !colResumenVentas || !colAnulaciones)
+      return;
 
     const confirm = await Swal.fire({
       title: "¿Anular cierre global?",
       text: `¿Seguro que querés anular el cierre global del ${fechaStr}?`,
-      icon: "warning", showCancelButton: true,
-      confirmButtonText: "Sí, anular", cancelButtonText: "Cancelar",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, anular",
+      cancelButtonText: "Cancelar",
     });
     if (!confirm.isConfirmed) return;
 
@@ -819,93 +1095,107 @@ const opsAplicadas = ops.map(({ ref, qty }) => ({
       const resumenSnap = await getDoc(resumenRef);
       const yaDesconto = cierreSnap.exists() && !!cierreSnap.data()?.stockDescontado;
 
-     if (yaDesconto) {
-  // 1) Intentar restaurar usando el snapshot exacto guardado en el cierre
-  const opsAplicadas = cierreSnap.data()?.opsAplicadas;
+      if (yaDesconto) {
+        // 1) Intentar restaurar usando snapshot exacto
+        const opsAplicadas = cierreSnap.data()?.opsAplicadas;
 
-if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
-  const grupos = chunk(opsAplicadas, 450);
-  for (const grupo of grupos) {
-    const batch = writeBatch(db);
-    for (const { path, qty } of grupo) {
-      const n = Number(qty || 0);
-      if (!n || !path) continue;
-      const ref = doc(db, ...splitPathSegments(path));
-      batch.set(ref, { stock: increment(+n) }, { merge: true });
-    }
-    await batch.commit();
-  }
-} else {
-    // 🔁 Compatibilidad hacia atrás (legacy): recalcular como venías haciendo
-    //     (productos simples y componentes de combos; NO el combo padre).
-    const acumulado = new Map();
-
-    for (const email of repartidores) {
-      let cierreRep = cierres[email];
-      if (!cierreRep?.pedidosEntregados) {
-        const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-        const snap = await getDoc(ref);
-        if (snap.exists()) cierreRep = snap.data();
-      }
-
-      const entregados = cierreRep?.pedidosEntregados || [];
-      for (const pedido of entregados) {
-        const items = pedido?.productos || [];
-        for (const item of items) {
-          const cant = Number(item?.cantidad || 0);
-          if (!cant) continue;
-
-          const { ref, pathStr } = await resolverRefDesdeProdItem(item, provinciaId, colProductos, db);
-          if (!ref || !pathStr) continue;
-
-          const prodSnap = await getDoc(ref);
-          const isCombo = prodSnap.exists() && !!prodSnap.data()?.esCombo;
-
-          if (isCombo) {
-            const comps = (prodSnap.data().componentes || []);
-            for (const comp of comps) {
-              const compCant = cant * Number(comp?.cantidad || 0);
-              if (!compCant) continue;
-
-              const compRef = doc(db, "provincias", provinciaId, "productos", comp.id);
-              const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
-
-              // acumular(ref, path, qty) — usa tu helper existente
-              acumular(acumulado, compRef, compPath, compCant);
+        if (Array.isArray(opsAplicadas)) {
+          const grupos = chunk(opsAplicadas, 450);
+          for (const grupo of grupos) {
+            const batch = writeBatch(db);
+            for (const { path, qty } of grupo) {
+              const n = Number(qty || 0);
+              if (!n || !path) continue;
+              const ref = doc(db, ...splitPathSegments(path));
+              batch.set(ref, { stock: increment(+n) }, { merge: true });
             }
-          } else {
-            // Producto simple: se había descontado él mismo, se restaura él mismo
-            acumular(acumulado, ref, pathStr, cant);
+            await batch.commit();
+          }
+        } else {
+          // Compatibilidad legacy: recalcular afectaciones
+          const acumulado = new Map();
+
+          for (const email of repartidores) {
+            let cierreRep = cierres[email];
+            if (!cierreRep?.pedidosEntregados) {
+              const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
+              const snap = await getDoc(ref);
+              if (snap.exists()) cierreRep = snap.data();
+            }
+
+            const entregados = cierreRep?.pedidosEntregados || [];
+            for (const pedido of entregados) {
+              const items = pedido?.productos || [];
+              for (const item of items) {
+                const cant = Number(item?.cantidad || 0);
+                if (!cant) continue;
+
+                const { ref, pathStr } = await resolverRefDesdeProdItem(
+                  item,
+                  provinciaId,
+                  colProductos,
+                  db
+                );
+                if (!ref || !pathStr) continue;
+
+                const prodSnap = await getDoc(ref);
+                const isCombo = prodSnap.exists() && !!prodSnap.data()?.esCombo;
+
+                if (isCombo) {
+                  const comps = prodSnap.data().componentes || [];
+                  for (const comp of comps) {
+                    const compCant = cant * Number(comp?.cantidad || 0);
+                    if (!compCant) continue;
+
+                    const compRef = doc(
+                      db,
+                      "provincias",
+                      provinciaId,
+                      "productos",
+                      comp.id
+                    );
+                    const compPath = `provincias/${provinciaId}/productos/${comp.id}`;
+
+                    acumular(acumulado, compRef, compPath, compCant);
+                  }
+                } else {
+                  acumular(acumulado, ref, pathStr, cant);
+                }
+              }
+            }
+          }
+
+          const ops = Array.from(acumulado.values());
+          const grupos = chunk(ops, 450);
+          for (const grupo of grupos) {
+            const batch = writeBatch(db);
+            for (const { ref, qty } of grupo) {
+              const n = Number(qty || 0);
+              if (!n) continue;
+              batch.set(ref, { stock: increment(+n) }, { merge: true });
+            }
+            await batch.commit();
           }
         }
       }
-    }
 
-    const ops = Array.from(acumulado.values());
-    const grupos = chunk(ops, 450);
-    for (const grupo of grupos) {
-      const batch = writeBatch(db);
-      for (const { ref, qty } of grupo) {
-        const n = Number(qty || 0);
-        if (!n) continue;
-        batch.set(ref, { stock: increment(+n) }, { merge: true });
-      }
-      await batch.commit();
-    }
-  }
-}
-
-
-      // Auditoría + borrar registros
       await addDoc(
         colAnulaciones,
         limpiarFirestoreData({
-          provinciaId, fechaStr, tipo: "global", timestamp: new Date(),
-          motivo: "Anulación manual desde panel", docIdOriginal: docId,
+          provinciaId,
+          fechaStr,
+          tipo: "global",
+          timestamp: new Date(),
+          motivo: "Anulación manual desde panel",
+          docIdOriginal: docId,
           restauracionDeStock: !!yaDesconto,
           datosAnulados: {
             cierreGlobal: cierreSnap.exists()
-              ? { fechaStr, repartidores: cierreSnap.data().repartidores || [], stockDescontado: !!cierreSnap.data().stockDescontado }
+              ? {
+                  fechaStr,
+                  repartidores: cierreSnap.data().repartidores || [],
+                  stockDescontado: !!cierreSnap.data().stockDescontado,
+                }
               : null,
             resumenVentas: resumenSnap.exists()
               ? {
@@ -925,11 +1215,21 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
       batch.delete(resumenRef);
       await batch.commit();
 
-      Swal.fire("Cierre global anulado", yaDesconto ? "Se restauró el stock y se eliminaron los registros." : "No se había descontado stock; se eliminaron los registros.", "success");
+      Swal.fire(
+        "Cierre global anulado",
+        yaDesconto
+          ? "Se restauró el stock y se eliminaron los registros."
+          : "No se había descontado stock; se eliminaron los registros.",
+        "success"
+      );
       setResumenGlobal(null);
     } catch (e) {
       console.error("Error al anular cierre global:", e);
-      Swal.fire("Error", "No se pudo anular el cierre global. Ver consola.", "error");
+      Swal.fire(
+        "Error",
+        "No se pudo anular el cierre global. Ver consola.",
+        "error"
+      );
     }
   };
 
@@ -943,7 +1243,9 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">Cierre de Caja (Administrador)</h2>
-        <span className="font-mono badge badge-primary">Prov: {provinciaId || "—"}</span>
+        <span className="font-mono badge badge-primary">
+          Prov: {provinciaId || "—"}
+        </span>
       </div>
 
       <div className="mb-4">
@@ -964,9 +1266,16 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
         const totales = calcularTotales(pedidosRep);
 
         return (
-          <div key={email} className="p-4 mb-6 border shadow-lg rounded-xl bg-base-200 animate-fade-in-up">
+          <div
+            key={email}
+            className="p-4 mb-6 border shadow-lg rounded-xl bg-base-200 animate-fade-in-up"
+          >
             <h3 className="mb-2 text-xl font-bold">{email}</h3>
-            <p className={`font-semibold ${yaCerrado ? "text-success" : "text-error"}`}>
+            <p
+              className={`font-semibold ${
+                yaCerrado ? "text-success" : "text-error"
+              }`}
+            >
               Estado: {yaCerrado ? "Cerrado" : "Abierto"}
             </p>
 
@@ -976,21 +1285,32 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
                 <ul className="space-y-2">
                   {entregados.map((p) => (
                     <li key={p.id} className="pb-2 border-b border-base-300">
-                      <p className="font-semibold">{p.nombre} - ${p.monto || 0} ({p.metodoPago || "efectivo"})</p>
-                      <p className="text-sm text-base-content/80">{p.pedido}</p>
+                      <p className="font-semibold">
+                        {p.nombre} - ${p.monto || 0} (
+                        {p.metodoPago || "efectivo"})
+                      </p>
+                      <p className="text-sm text-base-content/80">
+                        {p.pedido}
+                      </p>
                     </li>
                   ))}
                 </ul>
               </div>
 
               <div className="p-4 rounded-lg shadow-inner bg-base-100">
-                <h4 className="mb-2 text-lg font-bold">❌ Pedidos NO entregados</h4>
+                <h4 className="mb-2 text-lg font-bold">
+                  ❌ Pedidos NO entregados
+                </h4>
                 <ul className="space-y-2">
                   {noEntregados.map((p) => (
                     <li key={p.id} className="pb-2 border-b border-base-300">
                       <p className="font-semibold">{p.nombre}</p>
-                      <p className="text-sm text-base-content/80">📍 {p.direccion}</p>
-                      <p className="text-sm text-base-content/80">🧾 {p.pedido}</p>
+                      <p className="text-sm text-base-content/80">
+                        📍 {p.direccion}
+                      </p>
+                      <p className="text-sm text-base-content/80">
+                        🧾 {p.pedido}
+                      </p>
                     </li>
                   ))}
                 </ul>
@@ -1001,69 +1321,100 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
               <h4 className="mb-2 font-bold">Totales (entregados):</h4>
               <p>💵 Efectivo: ${totales.efectivo.toFixed(0)}</p>
               <p>💳 Transferencia: ${totales.transferencia.toFixed(0)}</p>
-              <p>💳 Transferencia (+10%): ${totales.transferencia10.toFixed(0)}</p>
+              <p>
+                💳 Transferencia (+10%): $
+                {totales.transferencia10.toFixed(0)}
+              </p>
               {(() => {
-  const g = gastos[email] || {};
-  const subtotalGastos =
-    (g.repartidor || 0) +
-    (g.acompanante || 0) +
-    (g.combustible || 0) +
-    (g.extra || 0);
-  const netoPreview = calcularCajaNeta(totales, g);
-  const efectivoRestante = calcularEfectivoRestante(totales, g); // 👈 NUEVO
+                const g = gastos[email] || {};
+                const subtotalGastos =
+                  (g.repartidor || 0) +
+                  (g.acompanante || 0) +
+                  (g.combustible || 0) +
+                  (g.extra || 0);
+                const netoPreview = calcularCajaNeta(totales, g);
+                const efectivoRestante = calcularEfectivoRestante(
+                  totales,
+                  g
+                );
 
-  return (
-    <div className="mt-2 text-sm">
-      <div className="opacity-80">
-        🧾 Gastos cargados (incluye ⛽ combustible): ${subtotalGastos.toFixed(0)}
-      </div>
-      <div className="font-semibold">
-        = Neto estimado: ${netoPreview.toFixed(0)}
-      </div>
-      <div className="mt-1">
-        💵 <span className="font-semibold">Efectivo restante (después de gastos):</span>{" "}
-        ${efectivoRestante.toFixed(0)} {/* 👈 NUEVO */}
-      </div>
-    </div>
-  );
-})()}
+                return (
+                  <div className="mt-2 text-sm">
+                    <div className="opacity-80">
+                      🧾 Gastos cargados (incluye ⛽ combustible): $
+                      {subtotalGastos.toFixed(0)}
+                    </div>
+                    <div className="font-semibold">
+                      = Neto estimado: ${netoPreview.toFixed(0)}
+                    </div>
+                    <div className="mt-1">
+                      💵{" "}
+                      <span className="font-semibold">
+                        Efectivo restante (después de gastos):
+                      </span>{" "}
+                      ${efectivoRestante.toFixed(0)}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="mt-4">
               <h4 className="mb-2 font-bold">Gastos:</h4>
-              {["repartidor", "acompanante", "combustible", "extra"].map((tipo) => (
-                <div key={tipo} className="mb-2">
-                  <label className="mr-2 capitalize">{tipo}:</label>
-                  <input
-                    type="number"
-                    value={gastos[email]?.[tipo] || ""}
-                    onChange={(e) => handleGastoChange(email, tipo, e.target.value)}
-                    className="w-32 input input-sm input-bordered"
-                    disabled={yaCerrado || busyByEmail[email]}
-                  />
-                </div>
-              ))}
+              {["repartidor", "acompanante", "combustible", "extra"].map(
+                (tipo) => (
+                  <div key={tipo} className="mb-2">
+                    <label className="mr-2 capitalize">{tipo}:</label>
+                    <input
+                      type="number"
+                      value={gastos[email]?.[tipo] || ""}
+                      onChange={(e) =>
+                        handleGastoChange(email, tipo, e.target.value)
+                      }
+                      className="w-32 input input-sm input-bordered"
+                      disabled={yaCerrado || busyByEmail[email]}
+                    />
+                  </div>
+                )
+              )}
 
               <h4 className="mb-2 font-bold">💰 Total de Caja (neto):</h4>
               <p className="text-lg font-semibold">
-                ${calcularCajaNeta(totales, gastos[email] || {}).toFixed(0)}
+                $
+                {calcularCajaNeta(totales, gastos[email] || {}).toFixed(
+                  0
+                )}
               </p>
             </div>
 
             {!yaCerrado && (
-              <button onClick={() => cerrarCajaIndividual(email)} className={`mt-4 btn btn-success ${busyByEmail[email] ? "btn-disabled" : ""}`} disabled={!!busyByEmail[email]}>
-                {busyByEmail[email] ? "⏳ Cerrando…" : `Cerrar caja de ${email}`}
+              <button
+                onClick={() => cerrarCajaIndividual(email)}
+                className={`mt-4 btn btn-success ${
+                  busyByEmail[email] ? "btn-disabled" : ""
+                }`}
+                disabled={!!busyByEmail[email]}
+              >
+                {busyByEmail[email]
+                  ? "⏳ Cerrando…"
+                  : `Cerrar caja de ${email}`}
               </button>
             )}
 
-            {yaCerrado && (!resumenGlobal || !resumenGlobal.stockDescontado) && (
-              <button onClick={() => anularCierreIndividual(email)} className="mt-2 btn btn-warning">
-                🧨 Anular cierre de {email}
-              </button>
-            )}
+            {yaCerrado &&
+              (!resumenGlobal || !resumenGlobal.stockDescontado) && (
+                <button
+                  onClick={() => anularCierreIndividual(email)}
+                  className="mt-2 btn btn-warning"
+                >
+                  🧨 Anular cierre de {email}
+                </button>
+              )}
 
             {yaCerrado && resumenGlobal?.stockDescontado === true && (
-              <button disabled className="mt-2 btn btn-disabled">🔒 Cierre global realizado</button>
+              <button disabled className="mt-2 btn btn-disabled">
+                🔒 Cierre global realizado
+              </button>
             )}
           </div>
         );
@@ -1076,33 +1427,47 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
         <p>Cajas cerradas: {Object.keys(cierres).length}</p>
 
         <div className="flex flex-wrap gap-4 mt-4">
-          <button className="btn btn-primary" onClick={exportarExcel} disabled={repartidores.length === 0}>
+          <button
+            className="btn btn-primary"
+            onClick={exportarExcel}
+            disabled={repartidores.length === 0}
+          >
             📤 Exportar resumen a Excel
           </button>
 
-          {/* 🔎 Botón de previsualización (no escribe) */}
           <button
-            className="btn btn-outline"
+            className={`btn btn-outline ${
+              busyPreview ? "btn-disabled" : ""
+            }`}
             onClick={auditarDescuentoDelDia}
-            disabled={repartidores.length === 0 || busyGlobal}
+            disabled={repartidores.length === 0 || busyGlobal || busyPreview}
             title="Muestra qué productos (solo unitarios y componentes de combos) se descontarían hoy, sin escribir en Firestore."
           >
-            🔎 Previsualizar descuento (dry-run)
+            {busyPreview
+              ? "🔄 Previsualizando…"
+              : "🔎 Previsualizar descuento (dry-run)"}
           </button>
 
           {!resumenGlobal && (
             <button
-              className={`btn btn-accent ${busyGlobal ? "btn-disabled" : ""}`}
+              className={`btn btn-accent ${
+                busyGlobal ? "btn-disabled" : ""
+              }`}
               onClick={cerrarGlobal}
               disabled={repartidores.length === 0 || busyGlobal}
               title="Requiere que todos los repartidores hayan cerrado (se verifica en Firestore)."
             >
-              {busyGlobal ? "⏳ Cerrando global…" : "🔐 Cerrar caja global del día"}
+              {busyGlobal
+                ? "⏳ Cerrando global…"
+                : "🔐 Cerrar caja global del día"}
             </button>
           )}
 
           {resumenGlobal && (
-            <button className="btn btn-warning" onClick={anularCierreGlobal}>
+            <button
+              className="btn btn-warning"
+              onClick={anularCierreGlobal}
+            >
               🧨 Anular cierre global
             </button>
           )}
@@ -1112,54 +1477,86 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
       {/* Resumen Global */}
       {resumenGlobal && (
         <div className="p-4 mt-8 shadow-lg rounded-xl bg-base-200 animate-fade-in-up">
-          <h3 className="mb-4 text-2xl font-bold">📊 Resumen global de productos vendidos</h3>
+          <h3 className="mb-4 text-2xl font-bold">
+            📊 Resumen global de productos vendidos
+          </h3>
 
           <div className="overflow-x-auto">
             <table className="table w-full table-zebra">
               <thead>
-                <tr><th>Producto</th><th className="text-right">Cantidad</th></tr>
+                <tr>
+                  <th>Producto</th>
+                  <th className="text-right">Cantidad</th>
+                </tr>
               </thead>
               <tbody>
-                {resumenGlobal?.totalPorProducto
-                  ? Object.entries(resumenGlobal.totalPorProducto).map(([nombre, cantidad]) => (
-                      <tr key={nombre}><td>{nombre}</td><td className="text-right">{cantidad}</td></tr>
-                    ))
-                  : (
-                    <tr>
-                      <td colSpan="2" className="italic text-center text-base-content/50">
-                        No hay productos cargados.
-                      </td>
+                {resumenGlobal?.totalPorProducto ? (
+                  Object.entries(
+                    resumenGlobal.totalPorProducto
+                  ).map(([nombre, cantidad]) => (
+                    <tr key={nombre}>
+                      <td>{nombre}</td>
+                      <td className="text-right">{cantidad}</td>
                     </tr>
-                  )}
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan="2"
+                      className="italic text-center text-base-content/50"
+                    >
+                      No hay productos cargados.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
 
           <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-2">
             <div className="p-4 shadow-inner bg-base-100 rounded-xl">
-              <h4 className="mb-2 text-lg font-bold">💰 Totales por método de pago</h4>
-              <p>💵 Efectivo: ${resumenGlobal.totalEfectivo || 0}</p>
-              <p>💳 Transferencia: ${resumenGlobal.totalTransferencia || 0}</p>
-              <p>💳 Transferencia (10%): ${resumenGlobal.totalTransferencia10 || 0}</p>
+              <h4 className="mb-2 text-lg font-bold">
+                💰 Totales por método de pago
+              </h4>
+              <p>💵 Efectivo: {resumenGlobal.totalEfectivo || 0}</p>
+              <p>
+                💳 Transferencia:{" "}
+                {resumenGlobal.totalTransferencia || 0}
+              </p>
+              <p>
+                💳 Transferencia (10%):{" "}
+                {resumenGlobal.totalTransferencia10 || 0}
+              </p>
 
-               <div className="pt-2 mt-2 text-sm border-t border-base-300">
-    <span>🧾 Gastos del día (incluye ⛽ combustible): </span>
-    <strong>${(resumenGlobal.totalGastos || 0).toLocaleString("es-AR")}</strong>
-  </div>
+              <div className="pt-2 mt-2 text-sm border-t border-base-300">
+                <span>🧾 Gastos del día (incluye ⛽ combustible): </span>
+                <strong>
+                  $
+                  {(resumenGlobal.totalGastos || 0).toLocaleString(
+                    "es-AR"
+                  )}
+                </strong>
+              </div>
             </div>
 
             <div className="p-4 shadow-inner bg-base-100 rounded-xl">
-              <h4 className="mb-2 text-lg font-bold">🧾 Total Recaudado Neto</h4>
+              <h4 className="mb-2 text-lg font-bold">
+                🧾 Total Recaudado Neto
+              </h4>
               <p className="text-xl font-bold text-primary">
                 {(() => {
                   const bruto =
                     (resumenGlobal.totalEfectivo || 0) +
                     (resumenGlobal.totalTransferencia || 0) +
                     (resumenGlobal.totalTransferencia10 || 0);
-                  const neto = typeof resumenGlobal.totalNeto === "number"
-                    ? resumenGlobal.totalNeto
-                    : (bruto - (resumenGlobal.totalGastos || 0));
-                  return neto.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+                  const neto =
+                    typeof resumenGlobal.totalNeto === "number"
+                      ? resumenGlobal.totalNeto
+                      : bruto - (resumenGlobal.totalGastos || 0);
+                  return neto.toLocaleString("es-AR", {
+                    style: "currency",
+                    currency: "ARS",
+                  });
                 })()}
               </p>
             </div>
@@ -1168,13 +1565,21 @@ if (Array.isArray(opsAplicadas)) {   // ✅ usar solo Array.isArray(...)
               <h4 className="mb-2 text-lg font-bold">🕒 Timestamp</h4>
               <p>
                 {resumenGlobal?.timestamp?.seconds
-                  ? new Date(resumenGlobal.timestamp.seconds * 1000).toLocaleString()
+                  ? new Date(
+                      resumenGlobal.timestamp.seconds * 1000
+                    ).toLocaleString()
                   : "Sin fecha de cierre"}
               </p>
               <p className="mt-1">
-                {resumenGlobal?.stockDescontado
-                  ? <span className="font-semibold text-success">✔️ Stock descontado</span>
-                  : <span className="font-semibold text-error">⚠️ Stock NO descontado</span>}
+                {resumenGlobal?.stockDescontado ? (
+                  <span className="font-semibold text-success">
+                    ✔️ Stock descontado
+                  </span>
+                ) : (
+                  <span className="font-semibold text-error">
+                    ⚠️ Stock NO descontado
+                  </span>
+                )}
               </p>
             </div>
           </div>

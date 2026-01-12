@@ -1,4 +1,4 @@
-// src/components/AdminStock.jsx — agrega Exportar Excel (productos)
+// src/components/AdminStock.jsx — agrega Exportar Excel (productos) + Ajuste rápido de stock
 /* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -39,7 +39,11 @@ function AdminStock() {
 
   const cargarProductos = async () => {
     const snapshot = await getDocs(colProductos);
-    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const data = snapshot.docs.map((d) => ({
+      id: d.id,
+      _ajusteStock: "",
+      ...d.data(),
+    }));
     setProductos(data);
 
     const ori = {};
@@ -131,7 +135,7 @@ function AdminStock() {
       const id = nanoid();
       await setDoc(doc(db, "provincias", provinciaId, "productos", id), payload);
 
-      setProductos((prev) => [...prev, { id, ...payload }]);
+      setProductos((prev) => [...prev, { id, _ajusteStock: "", ...payload }]);
       setOriginales((prev) => ({ ...prev, [id]: payload }));
 
       setNuevoProducto({
@@ -200,6 +204,96 @@ function AdminStock() {
     )
     .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
 
+  // =============== AUDITORÍA DE COMBOS (no escribe nada) ===============
+  const auditarCombos = () => {
+    if (!provinciaId) {
+      return Swal.fire("Sin provincia", "Seleccioná una provincia primero.", "info");
+    }
+
+    const problemas = [];
+    let combosOk = 0;
+    let combosConProblemas = 0;
+
+    for (const p of productos) {
+      const esCombo =
+        !!p.esCombo ||
+        String(p.nombre || "").toLowerCase().includes("combo");
+
+      if (!esCombo) continue;
+
+      const nombreCombo = p.nombre || "(sin nombre)";
+      const comps = Array.isArray(p.componentes) ? p.componentes : [];
+
+      if (!comps.length) {
+        problemas.push(`⚠ Combo "${nombreCombo}" no tiene componentes cargados.`);
+        combosConProblemas++;
+        continue;
+      }
+
+      let comboTieneError = false;
+
+      for (const c of comps) {
+        const compId = c.id;
+        const cant = Number(c.cantidad || 0);
+        const nombreComp = idToNombre[compId];
+
+        if (!compId) {
+          problemas.push(`⚠ Combo "${nombreCombo}" tiene un componente sin ID.`);
+          comboTieneError = true;
+          continue;
+        }
+
+        if (!nombreComp) {
+          problemas.push(
+            `⚠ Combo "${nombreCombo}" referencia componente inexistente: ID ${compId}`
+          );
+          comboTieneError = true;
+        }
+
+        if (!cant || cant <= 0) {
+          problemas.push(
+            `⚠ Combo "${nombreCombo}" componente "${nombreComp || compId}" con cantidad inválida: ${cant}`
+          );
+          comboTieneError = true;
+        }
+      }
+
+      if (comboTieneError) combosConProblemas++;
+      else combosOk++;
+    }
+
+    const totalCombos = combosOk + combosConProblemas;
+
+    if (!totalCombos) {
+      return Swal.fire(
+        "Sin combos",
+        "No se detectaron productos marcados como combo en esta provincia.",
+        "info"
+      );
+    }
+
+    const html =
+      `<div style="text-align:left">` +
+      `<div><b>Provincia:</b> ${provinciaId}</div>` +
+      `<div><b>Combos totales:</b> ${totalCombos}</div>` +
+      `<div><b>Combos OK:</b> ${combosOk}</div>` +
+      `<div><b>Combos con problemas:</b> ${combosConProblemas}</div>` +
+      (problemas.length
+        ? `<hr/><div style="margin-top:8px;max-height:200px;overflow:auto;font-size:12px;">` +
+          problemas.map((p) => `<div>${p}</div>`).join("") +
+          `</div>`
+        : `<div style="margin-top:8px;color:#16a34a">✅ No se encontraron problemas.</div>`) +
+      `</div>`;
+
+    Swal.fire({
+      icon: problemas.length ? "warning" : "success",
+      title: "Auditoría de combos",
+      html,
+      width: 600,
+    });
+  };
+  // ============================================================
+
   /* =============== EXPORTAR EXCEL (NUEVO) =============== */
   const exportarExcel = () => {
     try {
@@ -261,9 +355,9 @@ function AdminStock() {
       ws["!cols"] = [
         { wch: 40 }, // Nombre
         { wch: 10 }, // Precio
-        { wch: 8 },  // Stock
+        { wch: 8 }, // Stock
         { wch: 12 }, // Stock mínimo
-        { wch: 9 },  // ¿Es combo?
+        { wch: 9 }, // ¿Es combo?
         { wch: 60 }, // Componentes
       ];
 
@@ -309,6 +403,27 @@ function AdminStock() {
   };
   /* ====================================================== */
 
+  // =============== APLICAR AJUSTE RÁPIDO DE STOCK ===============
+  const aplicarAjusteStock = (prod) => {
+    const raw = prod._ajusteStock;
+    const delta = parseInt(raw, 10);
+    if (isNaN(delta) || delta === 0) {
+      return;
+    }
+    setProductos((prev) =>
+      prev.map((p) =>
+        p.id === prod.id
+          ? {
+              ...p,
+              stock: (Number(p.stock) || 0) + delta,
+              _ajusteStock: "",
+            }
+          : p
+      )
+    );
+  };
+  // =============================================================
+
   return (
     <div className="min-h-screen p-6 bg-base-100 text-base-content">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
@@ -326,9 +441,16 @@ function AdminStock() {
             <button className="btn btn-outline btn-sm" onClick={cargarProductos}>
               Refrescar
             </button>
-            {/* ⬇️ NUEVO: Exportar Excel */}
             <button className="btn btn-accent btn-sm" onClick={exportarExcel}>
               📤 Exportar Excel
+            </button>
+            {/* 🧪 NUEVO: Auditoría de combos */}
+            <button
+              className="btn btn-warning btn-sm"
+              onClick={auditarCombos}
+              disabled={!productos.length}
+            >
+              🧪 Auditar combos
             </button>
           </div>
         </div>
@@ -535,6 +657,35 @@ function AdminStock() {
                   />
                 </div>
 
+                {/* Ajuste rápido de stock */}
+                <div className="flex flex-wrap items-center gap-2 mt-3 text-sm">
+                  <span className="font-semibold">Ajustar stock rápido:</span>
+                  <input
+                    type="number"
+                    className="w-24 input input-sm input-bordered"
+                    placeholder="+/-"
+                    value={prod._ajusteStock ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setProductos((prev) =>
+                        prev.map((p) =>
+                          p.id === prod.id ? { ...p, _ajusteStock: value } : p
+                        )
+                      );
+                    }}
+                  />
+                  <button
+                    className="btn btn-sm btn-outline"
+                    type="button"
+                    onClick={() => aplicarAjusteStock(prod)}
+                  >
+                    Aplicar
+                  </button>
+                  <span className="opacity-60">
+                    Ej: escribí 300 para sumar 300 unidades (o -50 para restar) , apretar guardar cuando se haya realizado el cambio de stock.
+                  </span>
+                </div>
+
                 {esCombo &&
                   Array.isArray(prod.componentes) &&
                   prod.componentes.length > 0 && (
@@ -567,7 +718,9 @@ function AdminStock() {
 
                 <div className="flex justify-end gap-2 mt-4">
                   <button
-                    className={`btn btn-warning btn-sm ${prod._busy ? "btn-disabled" : ""}`}
+                    className={`btn btn-warning btn-sm ${
+                      prod._busy ? "btn-disabled" : ""
+                    }`}
                     onClick={async () => {
                       setProductos((p) =>
                         p.map((pr) => (pr.id === prod.id ? { ...pr, _busy: true } : pr))
@@ -582,7 +735,9 @@ function AdminStock() {
                     💾 Guardar
                   </button>
                   <button
-                    className={`btn btn-error btn-sm ${prod._busy ? "btn-disabled" : ""}`}
+                    className={`btn btn-error btn-sm ${
+                      prod._busy ? "btn-disabled" : ""
+                    }`}
                     onClick={async () => {
                       setProductos((p) =>
                         p.map((pr) => (pr.id === prod.id ? { ...pr, _busy: true } : pr))

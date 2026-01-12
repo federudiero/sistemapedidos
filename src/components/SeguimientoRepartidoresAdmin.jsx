@@ -6,16 +6,50 @@ import { useProvincia } from "../hooks/useProvincia.js";
 import { PROVINCIAS } from "../constants/provincias";
 import AdminNavbar from "../components/AdminNavbar";
 
-/** Normaliza teléfonos AR a wa.me (agrega 54 y 9, quita 0 y 15) */
-const toWhatsAppAR = (raw) => {
-  let d = String(raw || "").replace(/\D/g, "");
+/**
+ * Helper universal para WhatsApp:
+ * - Si viene con +<pais>... o 00<pais>..., NO tocamos nada (internacional).
+ * - Si no trae país, asumimos AR: quita 54/0, quita 15 solo si venía con 0, agrega 9 y antepone 54.
+ * Devuelve E.164 SIN el "+" (para usar en wa.me/<num>).
+ */
+const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
+  if (!raw) return "";
+  let s = String(raw).trim();
+
+  // Internacional con + o 00
+  let intl = "";
+  if (s.startsWith("+")) intl = s.slice(1).replace(/\D/g, "");
+  else if (s.startsWith("00")) intl = s.slice(2).replace(/\D/g, "");
+  if (intl) return intl; // Ya incluye país
+
+  // Local (sin país)
+  let d = s.replace(/\D/g, "");
   if (!d) return "";
-  if (d.startsWith("54")) d = d.slice(2);
-  if (d.startsWith("0")) d = d.slice(1);
-  d = d.replace(/^(\d{2,4})15/, "$1");
-  if (!d.startsWith("9")) d = "9" + d;
-  return "54" + d;
+
+  if (defaultCountry === "AR") {
+    if (d.startsWith("54")) d = d.slice(2);
+
+    let hadTrunkZero = false;
+    if (d.startsWith("0")) {
+      hadTrunkZero = true;
+      d = d.slice(1);
+    }
+
+    if (hadTrunkZero) {
+      d = d
+        .replace(/^(\d{4})15(\d{5,7})$/, "$1$2")
+        .replace(/^(\d{3})15(\d{6,8})$/, "$1$2")
+        .replace(/^(\d{2})15(\d{7,8})$/, "$1$2");
+    }
+
+    if (!d.startsWith("9")) d = "9" + d;
+    return "54" + d;
+  }
+
+  // Si no es AR y vino local sin país, no adivinamos
+  return "";
 };
+
 const getPhones = (p) =>
   [p?.telefono, p?.telefonoAlt].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
@@ -190,7 +224,10 @@ export default function SeguimientoRepartidoresAdmin({
                 {g.proximo ? (
                   <div className="p-3 rounded-lg bg-base-100">
                     <p className="mb-1 text-sm opacity-70">
-                      Próxima parada (orden #{g.proximo.ordenRuta})
+                      {(() => {
+                        const n = Number.isFinite(g.proximo?.ordenRuta) ? g.proximo.ordenRuta + 1 : "—";
+                        return <>Próxima parada (orden #{n})</>;
+                      })()}
                     </p>
                     <p><strong>👤 {g.proximo.nombre}</strong></p>
                     <p>📍 {g.proximo.direccion}</p>
@@ -203,7 +240,7 @@ export default function SeguimientoRepartidoresAdmin({
                             {i === 0 ? "📱 " : "☎️ "}
                             <a
                               className="link link-accent"
-                              href={`https://wa.me/${toWhatsAppAR(ph)}`}
+                              href={`https://wa.me/${phoneToWaE164(ph, { defaultCountry: "AR" })}`}
                               target="_blank"
                               rel="noopener noreferrer"
                             >
@@ -227,8 +264,11 @@ export default function SeguimientoRepartidoresAdmin({
                 </summary>
                 <ul className="mt-2 text-sm">
                   {g.pedidos.map((p) => (
-                    <li key={p.id || `${g.repartidor}-${p.ordenRuta}-${p.nombre}`} className="py-1 border-b border-base-300">
-                      #{p.ordenRuta} — {p.nombre} — {p.entregado ? "✅ Entregado" : "⏳ Pendiente"}
+                    <li
+                      key={p.id || `${g.repartidor}-${p.ordenRuta}-${p.nombre}`}
+                      className="py-1 border-b border-base-300"
+                    >
+                      #{Number.isFinite(p.ordenRuta) ? p.ordenRuta + 1 : "—"} — {p.nombre} — {p.entregado ? "✅ Entregado" : "⏳ Pendiente"}
                     </li>
                   ))}
                 </ul>
