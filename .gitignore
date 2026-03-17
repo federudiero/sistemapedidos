@@ -23,11 +23,15 @@ dist-ssr
 *.sln
 *.sw?
 
-
 # Env files
 .env
-.env.*vite.config.zip
+.env.*
+!.env.example
 
 # grandes
 vite.config.zip
 *.zip
+
+# Secrets
+serviceAccountKey.json
+*.firebase-adminsdk*.json

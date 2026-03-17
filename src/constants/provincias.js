@@ -1,34 +1,34 @@
 // src/constants/provincias.js
 export const PROVINCIAS = [
-  { id: "BA",  nombre: "Buenos Aires", base: "Godoy Cruz 1225, La Tablada, Buenos Aires" },
-  { id: "CAT", nombre: "Catamarca",    base: "San Fernando del Valle de Catamarca, Catamarca" },
-  { id: "CHA", nombre: "Chaco",        base: "Resistencia, Chaco" },
-  { id: "CHU", nombre: "Chubut",       base: "Trelew, Chubut" },
-  { id: "CBA", nombre: "Córdoba",      base: "Marino Gabbarini 1330, Córdoba" },
- 
-  
-  { id: "COR", nombre: "Corrientes",   base: "Corrientes, Corrientes" },
-  { id: "ER",  nombre: "Entre Ríos",   base: "Paraná, Entre Ríos" },
-  { id: "FOR", nombre: "Formosa",      base: "Formosa, Formosa" },
-  { id: "JUJ", nombre: "Jujuy",        base: "San Salvador de Jujuy, Jujuy" },
-  { id: "LP",  nombre: "La Pampa",     base: "Santa Rosa, La Pampa" },
-  { id: "LR",  nombre: "La Rioja",     base: "La Rioja, La Rioja" },
-  { id: "MZA", nombre: "Mendoza",      base: "25 de Mayo, M5525 Rodeo de la Cruz, Mendoza" , baseName: "EXPRESO DIEMAR",  baseLink: "https://maps.app.goo.gl/Sc1pZbuzcYUZuptL8?g_st=aw" },
-  { id: "MIS", nombre: "Misiones",     base: "Posadas, Misiones" },
-  { id: "NEU", nombre: "Neuquén",      base: "Neuquén Capital, Neuquén" },
-  { id: "RN",  nombre: "Río Negro",    base: "General Roca, Río Negro" },
-  { id: "SAL", nombre: "Salta",        base: "Salta, Salta" },
-  { id: "SJ",  nombre: "San Juan",     base: "San Juan, San Juan" },
-  { id: "SL",  nombre: "San Luis",     base: "San Luis, San Luis" },
-  { id: "SC",  nombre: "Santa Cruz",   base: "Río Gallegos, Santa Cruz" },
-  { id: "SF",  nombre: "Santa Fe",     base: "Alsina 2380, S2000 Rosario, Santa Fe" },
+  { id: "BA", nombre: "Buenos Aires", base: "Godoy Cruz 1225, La Tablada, Buenos Aires" },
+  { id: "CAT", nombre: "Catamarca", base: "San Fernando del Valle de Catamarca, Catamarca" },
+  { id: "CHA", nombre: "Chaco", base: "Resistencia, Chaco" },
+  { id: "CHU", nombre: "Chubut", base: "Trelew, Chubut" },
+  { id: "CBA", nombre: "Córdoba", base: "Marino Gabbarini 1330, Córdoba" },
+
+
+  { id: "COR", nombre: "Corrientes", base: "Corrientes, Corrientes" },
+  { id: "ER", nombre: "Entre Ríos", base: "Paraná, Entre Ríos" },
+  { id: "FOR", nombre: "Formosa", base: "Formosa, Formosa" },
+  { id: "JUJ", nombre: "Jujuy", base: "San Salvador de Jujuy, Jujuy" },
+  { id: "LP", nombre: "La Pampa", base: "Santa Rosa, La Pampa" },
+  { id: "LR", nombre: "La Rioja", base: "La Rioja, La Rioja" },
+  { id: "MZA", nombre: "Mendoza", base: "25 de Mayo, M5525 Rodeo de la Cruz, Mendoza", baseName: "EXPRESO DIEMAR", baseLink: "https://maps.app.goo.gl/Sc1pZbuzcYUZuptL8?g_st=aw" },
+  { id: "MIS", nombre: "Misiones", base: "Posadas, Misiones" },
+  { id: "NEU", nombre: "Neuquén", base: "Neuquén Capital, Neuquén" },
+  { id: "RN", nombre: "Río Negro", base: "Alem 3489, Córdoba Capital" },
+  { id: "SAL", nombre: "Salta", base: "Salta, Salta" },
+  { id: "SJ", nombre: "San Juan", base: "San Juan, San Juan" },
+  { id: "SL", nombre: "San Luis", base: "San Luis, San Luis" },
+  { id: "SC", nombre: "Santa Cruz", base: "Río Gallegos, Santa Cruz" },
+  { id: "SF", nombre: "Santa Fe", base: "Alsina 2380, S2000 Rosario, Santa Fe" },
   { id: "SDE", nombre: "Santiago del Estero", base: "Santiago del Estero, SDE" },
   { id: "TDF", nombre: "Tierra del Fuego, Antártida e Islas del Atlántico Sur", base: "Ushuaia, TDF" },
-  { id: "TUC", nombre: "Tucumán",      base: "San Miguel de Tucumán, Tucumán" },
+  { id: "TUC", nombre: "Tucumán", base: "San Miguel de Tucumán, Tucumán" },
 ];
 
 export const DEFAULT_PROV = "BA";
-export const STORAGE_KEY  = "provinciaId";
+export const STORAGE_KEY = "provinciaId";
 
 // ===== Overrides en memoria (opcionales) =====
 let BASE_OVERRIDES =

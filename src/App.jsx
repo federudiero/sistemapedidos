@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import VendedorView from "./views/VendedorView";
+import VendedorCRM from "./views/VendedorCRM";
 import AdminLogin from "./views/AdminLogin";
 import AdminPedidos from "./views/AdminPedidos";
 import LoginVendedor from "./views/LoginVendedor";
@@ -14,15 +15,13 @@ import PanelStock from "./components/PanelStock";
 import ResumenFinancieroMensual from "./components/ResumenFinancieroMensual";
 import LiquidacionesComisiones from "./components/LiquidacionesComisiones";
 import RepartidorView from "./views/RepartidorView";
-import SeleccionarProvincia from "./views/SeleccionarProvincia";
 import AdminDepositoPedidos from "./views/AdminDepositoPedidos";
-
-// 🆕 Historial de movimientos de stock
-import HistorialMovimientosStock from "../src/components/HistorialMovimientosStock.jsx";
-
-// Utilidad para replicar catálogo (import corregido)
-// import CopiarCatalogoATodas from "./utils/CopiarCatalogoATodas.jsx";
-// import GeneradorPedidosTest from "./views/GeneradorPedidosTest";
+import HistorialMovimientosStock from "./components/HistorialMovimientosStock";
+import SeleccionarProvincia from "./views/SeleccionarProvincia";
+import AdminCRMPanel from "./views/AdminCRMPanel";
+import AdminControlCierres from "./views/AdminControlCierres";
+import AuditoriaProductos from "./views/AuditoriaProductos";
+import AdminPreCargaProductos from "./views/AdminPreCargaProductos";
 
 function App() {
   return (
@@ -33,6 +32,8 @@ function App() {
 
         <Route path="/login-vendedor" element={<LoginVendedor />} />
         <Route path="/vendedor" element={<VendedorView />} />
+        <Route path="/vendedor/crm" element={<VendedorCRM />} />
+        <Route path="/vendedor/crm/:convId" element={<VendedorCRM />} />
 
         <Route path="/admin" element={<AdminLogin />} />
         <Route path="/admin/deposito" element={<AdminDepositoPedidos />} />
@@ -41,17 +42,21 @@ function App() {
         <Route path="/admin/hoja-de-ruta" element={<AdminHojaRuta />} />
         <Route path="/admin/stock" element={<AdminStock />} />
         <Route path="/admin/cierre-caja" element={<CierreCaja />} />
+        <Route path="/admin/AdminCRMPanel" element={<AdminCRMPanel />} />
         <Route path="/admin/panel-stock" element={<PanelStock />} />
-        <Route path="/admin/estadisticas" element={<ResumenFinancieroMensual />} />
+        <Route path="/admin/AdminControlCierres" element={<AdminControlCierres />} />
+        <Route path="/admin/AuditoriaProductos" element={<AuditoriaProductos />} />
+        <Route path="/admin/AdminPreCargaProductos" element={<AdminPreCargaProductos />} />
         <Route
-          path="/admin/LiquidacionesComisiones"
+          path="/admin/resumen-financiero"
+          element={<ResumenFinancieroMensual />}
+        />
+        <Route
+          path="/admin/liquidaciones-comisiones"
           element={<LiquidacionesComisiones />}
         />
-        {/* 🆕 Nueva ruta: Historial de movimientos de stock */}
-        <Route
-          path="/admin/historial-stock"
-          element={<HistorialMovimientosStock />}
-        />
+        
+        <Route path="/admin/historial-stock" element={<HistorialMovimientosStock />} />
 
         <Route path="/login-repartidor" element={<LoginRepartidor />} />
         <Route path="/repartidor" element={<RepartidorView />} />

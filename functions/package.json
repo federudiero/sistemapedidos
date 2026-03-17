@@ -1,0 +1,16 @@
+{
+  "name": "pinturas-crm-functions",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^4.7.0"
+  }
+}

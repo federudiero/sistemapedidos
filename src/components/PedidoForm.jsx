@@ -2,33 +2,23 @@
 import React, { useRef, useState, useEffect, useMemo } from "react";
 import Swal from "sweetalert2";
 import { format } from "date-fns";
-import { collection, getDocs } from "firebase/firestore";
-import { db, auth } from "../firebase/firebase"; // 👈 uso auth para vendedorEmail
+import { collection, getDocs, getDoc, doc } from "firebase/firestore";
+import { db, auth } from "../firebase/firebase";
 import { useLoadScript, GoogleMap } from "@react-google-maps/api";
 import { useProvincia } from "../hooks/useProvincia.js";
 
 const LIBRARIES = ["places", "marker"];
 
-/**
- * Helper universal para WhatsApp:
- * - Si viene con +<pais>... o 00<pais>..., NO tocamos nada (internacional).
- * - Si no trae país, asumimos AR: quita 54/0, quita 15 solo si venía con 0, agrega 9 y antepone 54.
- * Devuelve E.164 SIN el "+" (para usar en wa.me/<num>).
- */
 const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
   if (!raw) return "";
   let s = String(raw).trim();
 
-  // Internacional con + o 00
   let intl = "";
   if (s.startsWith("+")) intl = s.slice(1).replace(/\D/g, "");
   else if (s.startsWith("00")) intl = s.slice(2).replace(/\D/g, "");
 
-  if (intl) {
-    return intl; // ya incluye país
-  }
+  if (intl) return intl;
 
-  // Local
   let d = s.replace(/\D/g, "");
   if (!d) return "";
 
@@ -56,7 +46,14 @@ const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
   return "";
 };
 
-const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
+const PedidoForm = ({
+  onAgregar,
+  onActualizar,
+  pedidoAEditar,
+  bloqueado,
+  prefillDraft,
+  onPrefillConsumed,
+}) => {
   const { provinciaId } = useProvincia();
 
   const pacHostRef = useRef(null);
@@ -77,7 +74,12 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
   const [telefonoAlt, setTelefonoAlt] = useState("");
   const [errorTelefonoAlt, setErrorTelefonoAlt] = useState("");
   const [busqueda, setBusqueda] = useState("");
-  const [linkUbicacion, setLinkUbicacion] = useState(""); // 👈 NUEVO
+  const [linkUbicacion, setLinkUbicacion] = useState("");
+
+  // ✅ vendedor opcional: selector por provincia + nombre manual
+  const [vendedoresProvincia, setVendedoresProvincia] = useState([]);
+  const [vendedorEmailSeleccionado, setVendedorEmailSeleccionado] = useState("");
+  const [vendedorNombreManual, setVendedorNombreManual] = useState("");
 
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
@@ -109,13 +111,220 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
 
   const [pacRefresh, setPacRefresh] = useState(0);
 
-  // 👉 Helper: sumar/restar cantidad con mínimo 1
+  const lastPrefillTokenRef = useRef(null);
+
+  // =======================
+  // HELPERS
+  // =======================
+  const norm = (s) => String(s || "").trim().toLowerCase();
+
+  const esEnvioNombre = (nombreProd) => {
+    const n = norm(nombreProd);
+    return n === "envios" || n.startsWith("envio") || n.startsWith("envío");
+  };
+
+  const productosById = useMemo(() => {
+    const m = {};
+    for (const p of productosFirestore) {
+      if (p?.id) m[p.id] = p;
+    }
+    return m;
+  }, [productosFirestore]);
+
+  const productosByNombreNorm = useMemo(() => {
+    const m = {};
+    for (const p of productosFirestore) {
+      const k = norm(p?.nombre);
+      if (k && !m[k]) m[k] = p;
+    }
+    return m;
+  }, [productosFirestore]);
+
+  const getComponentesFromProducto = (prod) => {
+    if (!prod) return [];
+    const cand =
+      prod.componentes ??
+      prod.comboComponentes ??
+      prod.componentesCombo ??
+      prod.items ??
+      prod.productos ??
+      prod.combo ??
+      prod.componentesItems ??
+      null;
+
+    if (Array.isArray(cand)) return cand;
+
+    if (cand && typeof cand === "object") {
+      return Object.entries(cand).map(([k, v]) => ({
+        productoId: k,
+        cantidad: v,
+      }));
+    }
+
+    return [];
+  };
+
+  const getCompId = (c) => {
+    if (!c) return null;
+    if (typeof c === "string") return c;
+
+    const pid =
+      c.productoId ??
+      c.id ??
+      c.productId ??
+      c.refId ??
+      c.ref ??
+      c.producto ??
+      null;
+
+    if (pid) return String(pid);
+
+    const n = norm(c.nombre);
+    if (n && productosByNombreNorm[n]?.id) return productosByNombreNorm[n].id;
+
+    return null;
+  };
+
+  const getCompQty = (c) => {
+    if (!c) return 0;
+    if (typeof c === "number") return Number.isFinite(c) ? c : 0;
+    if (typeof c === "string") return 1;
+
+    const q =
+      c.cantidad ??
+      c.qty ??
+      c.cant ??
+      c.cantidadPorCombo ??
+      c.unidades ??
+      c.cantidadCombo ??
+      1;
+
+    const n = Number(q);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+
+  const esComboRealPorId = (id) => {
+    const prod = id ? productosById[id] : null;
+    if (!prod) return false;
+    const comps = getComponentesFromProducto(prod);
+    return comps.length > 0;
+  };
+
+  const expandComboToBaseMap = (comboId, visited = new Set()) => {
+    if (!comboId) return {};
+    if (visited.has(comboId)) return {};
+    visited.add(comboId);
+
+    const prod = productosById[comboId];
+    if (!prod) {
+      visited.delete(comboId);
+      return {};
+    }
+
+    const comps = getComponentesFromProducto(prod);
+    const isComboReal = comps.length > 0;
+
+    if (!isComboReal) {
+      visited.delete(comboId);
+      return { [comboId]: 1 };
+    }
+
+    const acc = {};
+    for (const c of comps) {
+      const id = getCompId(c);
+      const qty = getCompQty(c);
+      if (!id || !qty) continue;
+
+      const subMap = expandComboToBaseMap(id, visited);
+      for (const [baseId, baseQty] of Object.entries(subMap)) {
+        acc[baseId] = (acc[baseId] || 0) + baseQty * qty;
+      }
+    }
+
+    visited.delete(comboId);
+    return acc;
+  };
+
+  const costoUnitarioPorId = (id) => {
+    if (!id) return 0;
+    const prod = productosById[id];
+    if (!prod) return 0;
+
+    const comps = getComponentesFromProducto(prod);
+    const isComboReal = comps.length > 0;
+
+    if (!isComboReal) {
+      return Number(prod?.costo ?? 0) || 0;
+    }
+
+    const baseMap = expandComboToBaseMap(id);
+    let total = 0;
+    for (const [baseId, qty] of Object.entries(baseMap)) {
+      const baseProd = productosById[baseId];
+      const costoBase = Number(baseProd?.costo ?? 0) || 0;
+      total += costoBase * Number(qty || 0);
+    }
+    return Number(total || 0);
+  };
+
+  const costoUnitarioDeLinea = (p) => {
+    const n = norm(p?.nombre);
+    const esDev = n.startsWith("devolución de");
+    const esEnvio = esEnvioNombre(p?.nombre);
+
+    if (esDev || esEnvio) return 0;
+
+    const pid = p?.id ?? p?.productoId ?? null;
+
+    if (pid && esComboRealPorId(pid)) {
+      const calc = costoUnitarioPorId(pid);
+      if (Number.isFinite(calc)) return Number(calc || 0);
+    }
+
+    return Number(p?.costo ?? 0) || 0;
+  };
+
+  const comboComponentesSnapshot = (comboId, cantidadCombosLinea) => {
+    const baseMap = expandComboToBaseMap(comboId);
+    const lineQty = Number(cantidadCombosLinea || 1);
+
+    return Object.entries(baseMap).map(([baseId, cantPorCombo]) => {
+      const baseProd = productosById[baseId] || {};
+      const costoBaseUnit = Number(baseProd?.costo ?? 0) || 0;
+      const cantPC = Number(cantPorCombo || 0);
+      const cantidadTotal = cantPC * lineQty;
+      return {
+        productoId: baseId,
+        nombre: baseProd?.nombre || "Producto",
+        cantidadPorCombo: cantPC,
+        cantidadTotal,
+        costoUnit: costoBaseUnit,
+        costoTotal: costoBaseUnit * cantidadTotal,
+      };
+    });
+  };
+
+  const setPacValue = (val) => {
+    try {
+      if (!pacInstanceRef.current) return;
+      pacInstanceRef.current.value = val ?? "";
+      if ("inputValue" in pacInstanceRef.current) {
+        pacInstanceRef.current.inputValue = val ?? "";
+      }
+    } catch (e) {console.error("Error al setear valor del autocomplete:", e);
+      // silencioso
+    }
+  };
+
   const cambiarCantidad = (nombreProd, delta) => {
     if (bloqueado) return;
     setProductosSeleccionados((prev) =>
       prev.map((p) =>
         p.nombre === nombreProd
-          ? { ...p, cantidad: Math.max(1, (parseInt(p.cantidad, 10) || 1) + delta) }
+          ? {
+              ...p,
+              cantidad: Math.max(1, (parseInt(p.cantidad, 10) || 1) + delta),
+            }
           : p
       )
     );
@@ -186,7 +395,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, mapReady, coordenadas, nombre, direccion]);
+  }, [isLoaded, mapReady, coordenadas, nombre, direccion, MAP_ID]);
 
   // =============== AUTOCOMPLETE ===============
   useEffect(() => {
@@ -202,6 +411,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
         });
         const dir = place.formattedAddress || place.displayName?.text || "";
         setDireccion(dir);
+        setPacValue(dir);
         const loc = place.location;
         if (loc) setCoordenadas({ lat: loc.lat(), lng: loc.lng() });
       } catch (e) {
@@ -222,19 +432,14 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       pacHostRef.current.appendChild(el);
 
       pacInstanceRef.current = el;
-      try {
-        pacInstanceRef.current.value = "";
-        if ("inputValue" in pacInstanceRef.current) {
-          pacInstanceRef.current.inputValue = "";
-        }
-      } catch (e) {
-        console.error(e);
-      }
+
+      setPacValue(direccion || "");
     })();
 
     return () => {
       if (el) el.removeEventListener("gmp-select", onSelect);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, bloqueado, pacRefresh]);
 
   // =============== CARGA DE PRODUCTOS ===============
@@ -243,7 +448,15 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       if (!provinciaId) return;
       try {
         const snapshot = await getDocs(collection(db, "provincias", provinciaId, "productos"));
-        const lista = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const lista = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() || {};
+          return {
+            id: docSnap.id,
+            ...data,
+            costo: Number(data?.costo ?? 0),
+            precio: Number(data?.precio ?? 0),
+          };
+        });
 
         const regexEnvio = /^(envio|envío)/i;
         const regexCombo = /^combo/i;
@@ -275,7 +488,61 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
         Swal.fire("❌ Error al cargar productos desde Firestore.");
       }
     };
+
     cargarProductos();
+  }, [provinciaId]);
+
+  // =============== CARGA VENDEDORES DE LA PROVINCIA ===============
+  useEffect(() => {
+    const cargarVendedoresProvincia = async () => {
+      if (!provinciaId) {
+        setVendedoresProvincia([]);
+        return;
+      }
+
+      try {
+        const snap = await getDoc(doc(db, "provincias", provinciaId, "config", "usuarios"));
+        if (!snap.exists()) {
+          setVendedoresProvincia([]);
+          return;
+        }
+
+        const data = snap.data() || {};
+
+        const vendedoresRaw = Array.isArray(data.vendedores)
+          ? data.vendedores
+          : data.vendedores && typeof data.vendedores === "object"
+            ? Object.keys(data.vendedores)
+            : [];
+
+        const nombresRaw = data.nombres || {};
+
+        const nombresMap = Object.fromEntries(
+          Object.entries(nombresRaw).map(([k, v]) => [
+            String(k || "").trim().toLowerCase(),
+            String(v || "").trim(),
+          ])
+        );
+
+        const lista = Array.from(
+          new Set(
+            vendedoresRaw
+              .map((email) => String(email || "").trim().toLowerCase())
+              .filter(Boolean)
+          )
+        ).map((email) => ({
+          email,
+          label: nombresMap[email] || email.split("@")[0] || email,
+        }));
+
+        setVendedoresProvincia(lista);
+      } catch (error) {
+        console.error("Error al cargar vendedores de la provincia:", error);
+        setVendedoresProvincia([]);
+      }
+    };
+
+    cargarVendedoresProvincia();
   }, [provinciaId]);
 
   // =============== EDITAR PEDIDO ===============
@@ -284,19 +551,45 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       setNombre(pedidoAEditar.nombre || "");
       setTelefono(pedidoAEditar.telefono || "");
       setDireccion(pedidoAEditar.direccion || "");
+      setPacValue(pedidoAEditar.direccion || "");
       setEntreCalles(pedidoAEditar.entreCalles || "");
       setPartido(pedidoAEditar.partido || "");
       setTelefonoAlt(pedidoAEditar.telefonoAlt || "");
-      setLinkUbicacion(pedidoAEditar.linkUbicacion || ""); // 👈 NUEVO
+      setLinkUbicacion(pedidoAEditar.linkUbicacion || "");
+      setVendedorEmailSeleccionado(
+        String(pedidoAEditar.vendedorEmail || "").trim().toLowerCase()
+      );
+      setVendedorNombreManual(pedidoAEditar.vendedorNombreManual || "");
 
       if (pedidoAEditar.coordenadas) setCoordenadas(pedidoAEditar.coordenadas);
 
       const nuevosProductos = (pedidoAEditar.productos || [])
         .map((pedidoProd) => {
           const productoOriginal = productosFirestore.find((p) => p.nombre === pedidoProd.nombre);
+
+          const costoFinal =
+            pedidoProd?.costo === 0 || pedidoProd?.costo
+              ? Number(pedidoProd.costo) || 0
+              : Number(productoOriginal?.costo ?? 0) || 0;
+
           return productoOriginal
-            ? { ...productoOriginal, cantidad: pedidoProd.cantidad, precio: productoOriginal.precio }
-            : { ...pedidoProd, cantidad: pedidoProd.cantidad, precio: pedidoProd.precio };
+            ? {
+                ...productoOriginal,
+                cantidad: pedidoProd.cantidad,
+                precio: Number(pedidoProd.precio ?? productoOriginal.precio),
+                costo: costoFinal,
+                componentes: pedidoProd.componentes ?? pedidoProd.componentesSnap ?? undefined,
+                esCombo: pedidoProd.esCombo ?? undefined,
+              }
+            : {
+                ...pedidoProd,
+                cantidad: pedidoProd.cantidad,
+                precio: Number(pedidoProd.precio || 0),
+                costo: Number(pedidoProd?.costo ?? 0),
+                id: pedidoProd.productoId || null,
+                componentes: pedidoProd.componentes ?? pedidoProd.componentesSnap ?? undefined,
+                esCombo: pedidoProd.esCombo ?? undefined,
+              };
         })
         .filter(Boolean);
 
@@ -305,15 +598,120 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       }
 
       setProductosSeleccionados(nuevosProductos);
+      setMostrarDevolucion(
+        nuevosProductos.some((p) => String(p.nombre || "").toLowerCase().startsWith("devolución de"))
+      );
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoAEditar, productosFirestore]);
+
+  // =============== PREFILL DESDE CRM ===============
+  useEffect(() => {
+    if (!prefillDraft) return;
+    if (pedidoAEditar) return;
+
+    const token = prefillDraft.__prefillToken || JSON.stringify(prefillDraft);
+    if (lastPrefillTokenRef.current === token) return;
+
+    if (productosFirestore.length === 0) return;
+
+    lastPrefillTokenRef.current = token;
+
+    const d = prefillDraft || {};
+
+    setNombre(d.nombre || "");
+    setTelefono(String(d.telefono || "").replace(/\D/g, ""));
+    setTelefonoAlt(String(d.telefonoAlt || "").replace(/\D/g, ""));
+    setDireccion(d.direccion || "");
+    setEntreCalles(d.entreCalles || "");
+    setPartido(d.partido || d.localidad || "");
+    setLinkUbicacion(d.linkUbicacion || "");
+    setCoordenadas(d.coordenadas || null);
+    setVendedorEmailSeleccionado(
+      String(d.vendedorEmail || "").trim().toLowerCase()
+    );
+    setVendedorNombreManual(d.vendedorNombreManual || "");
+
+    setTimeout(() => setPacValue(d.direccion || ""), 0);
+
+    const draftProductos = Array.isArray(d.productos) ? d.productos : [];
+    const mapped = draftProductos
+      .map((it) => {
+        const name = String(it?.nombre || "").trim();
+        if (!name) return null;
+
+        const cat = productosFirestore.find((p) => String(p.nombre || "") === name);
+
+        if (cat) {
+          const precioDraft = it?.precio;
+          const precioFinal =
+            precioDraft === 0 || precioDraft ? Number(precioDraft) : Number(cat.precio || 0);
+
+          const costoDraft = it?.costo;
+          const costoFinal =
+            costoDraft === 0 || costoDraft ? Number(costoDraft) || 0 : Number(cat.costo ?? 0) || 0;
+
+          return {
+            ...cat,
+            cantidad: Math.max(1, Number(it?.cantidad || 1)),
+            precio: precioFinal,
+            costo: costoFinal,
+          };
+        }
+
+        return {
+          id: it?.productoId || null,
+          productoId: it?.productoId || null,
+          nombre: name,
+          cantidad: Math.max(1, Number(it?.cantidad || 1)),
+          precio: Number(it?.precio || 0),
+          costo: Number(it?.costo ?? 0),
+        };
+      })
+      .filter(Boolean);
+
+    if (mapped.length !== draftProductos.length) {
+      Swal.fire(
+        "⚠️ Atención",
+        "Algunos productos del CRM no están en el catálogo actual. Quedaron cargados igual para que no se pierdan.",
+        "warning"
+      );
+    }
+
+    setProductosSeleccionados(mapped);
+    setMostrarDevolucion(
+      mapped.some((p) => String(p.nombre || "").toLowerCase().startsWith("devolución de"))
+    );
+
+    setBusqueda("");
+  }, [prefillDraft, pedidoAEditar, productosFirestore]);
 
   const calcularResumenPedido = () => {
     const resumen = productosSeleccionados
-      .map((p) => `${p.nombre} x${p.cantidad} ($${p.precio * p.cantidad})`)
+      .map((p) => {
+        const cant = Number(p.cantidad || 1);
+        const precioUnit = Number(p.precio || 0);
+        const costoUnit = costoUnitarioDeLinea(p);
+
+        const sub = precioUnit * cant;
+        const subCosto = costoUnit * cant;
+
+        return `${p.nombre} x${cant} ($${sub.toLocaleString()}) (costo $${subCosto.toLocaleString()})`;
+      })
       .join(" - ");
-    const total = productosSeleccionados.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
-    return { resumen, total };
+
+    const total = productosSeleccionados.reduce(
+      (sum, p) => sum + Number(p.precio || 0) * Number(p.cantidad || 1),
+      0
+    );
+
+    const costoTotal = productosSeleccionados.reduce((sum, p) => {
+      const cant = Number(p.cantidad || 1);
+      const costoUnit = costoUnitarioDeLinea(p);
+      return sum + costoUnit * cant;
+    }, 0);
+
+    return { resumen, total, costoTotal };
   };
 
   const resetFormulario = () => {
@@ -325,9 +723,14 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     setProductosSeleccionados([]);
     setTelefonoAlt("");
     setErrorTelefonoAlt("");
-    setLinkUbicacion(""); // 👈 NUEVO
-
+    setLinkUbicacion("");
     setCoordenadas(null);
+    setMostrarDevolucion(false);
+    setBusqueda("");
+    setErrorNombre("");
+    setErrorTelefono("");
+    setVendedorEmailSeleccionado("");
+    setVendedorNombreManual("");
 
     try {
       if (pacInstanceRef.current) {
@@ -337,6 +740,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     } catch (e) {
       console.error(e);
     }
+
     setPacRefresh((k) => k + 1);
 
     try {
@@ -344,6 +748,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     } catch (e) {
       console.error(e);
     }
+
+    lastPrefillTokenRef.current = null;
+    onPrefillConsumed?.();
   };
 
   const onSubmit = () => {
@@ -361,30 +768,66 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
       return Swal.fire("❌ Por favor completá todos los campos requeridos y agregá al menos un producto.");
     }
 
-    const { resumen, total } = calcularResumenPedido();
-    const pedidoFinal = `${resumen} | TOTAL: $${total}`;
+    const { resumen, total, costoTotal } = calcularResumenPedido();
 
-    const vendedorEmail = String(auth?.currentUser?.email || "").toLowerCase();
+    const pedidoFinal = `${resumen} | TOTAL: $${total.toLocaleString()} | COSTO: $${costoTotal.toLocaleString()}`;
+
+    const vendedorEmailAuth = String(auth?.currentUser?.email || "").toLowerCase();
+
+    const vendedorElegido = vendedoresProvincia.find(
+      (v) => v.email === String(vendedorEmailSeleccionado || "").trim().toLowerCase()
+    );
+
+    const vendedorEmailFinal =
+      String(vendedorEmailSeleccionado || "").trim().toLowerCase() || vendedorEmailAuth;
+
+    const vendedorNombreManualFinal =
+      String(vendedorNombreManual || "").trim() ||
+      vendedorElegido?.label ||
+      null;
+
+    const productosDb = productosSeleccionados.map((p) => {
+      const pid = p.id ?? p.productoId ?? null;
+      const cant = Number(p.cantidad || 1);
+
+      const costoUnitReal = costoUnitarioDeLinea(p);
+
+      const base = {
+        productoId: pid,
+        nombre: p.nombre,
+        cantidad: cant,
+        precio: Number(p.precio || 0),
+        costo: Number(costoUnitReal || 0),
+      };
+
+      if (pid && esComboRealPorId(pid)) {
+        const componentes = comboComponentesSnapshot(pid, cant);
+        return {
+          ...base,
+          esCombo: true,
+          componentes,
+        };
+      }
+
+      return base;
+    });
 
     const pedidoConProductos = {
-      vendedorEmail,
+      vendedorEmail: vendedorEmailFinal,
+      vendedorNombreManual: vendedorNombreManualFinal,
       nombre,
       telefono,
       telefonoAlt: telefonoAlt?.trim() ? telefonoAlt : null,
       partido,
       direccion,
       entreCalles,
-      linkUbicacion: linkUbicacion?.trim() || null, // 👈 NUEVO
+      linkUbicacion: linkUbicacion?.trim() || null,
       pedido: pedidoFinal,
       coordenadas,
-      productos: productosSeleccionados.map((p) => ({
-        productoId: p.id ?? p.productoId ?? null,
-        nombre: p.nombre,
-        cantidad: p.cantidad,
-        precio: p.precio,
-      })),
+      productos: productosDb,
+      costoTotal: Number(costoTotal || 0),
       fecha: ahora,
-      fechaStr: fechaStr,
+      fechaStr,
       monto: total,
       entregado: false,
       asignadoA: [],
@@ -406,15 +849,27 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     });
   };
 
-  // 🔍 Vista previa en tiempo real del link de WhatsApp
-  const e164Principal = useMemo(() => phoneToWaE164(telefono, { defaultCountry: "AR" }), [telefono]);
-  const e164Alt = useMemo(() => phoneToWaE164(telefonoAlt, { defaultCountry: "AR" }), [telefonoAlt]);
+  const e164Principal = useMemo(
+    () => phoneToWaE164(telefono, { defaultCountry: "AR" }),
+    [telefono]
+  );
+
+  const e164Alt = useMemo(
+    () => phoneToWaE164(telefonoAlt, { defaultCountry: "AR" }),
+    [telefonoAlt]
+  );
 
   return isLoaded ? (
     <div className="px-4 py-6">
       {bloqueado && (
         <div className="p-4 mb-4 text-center text-warning-content bg-warning rounded-xl">
           🛑 El día fue cerrado. Solo podés visualizar el formulario.
+        </div>
+      )}
+
+      {!bloqueado && !pedidoAEditar && prefillDraft?.__fromCrm && (
+        <div className="p-3 mb-4 border rounded-xl border-info bg-info/10">
+          ✅ Datos precargados desde el CRM. Revisá y tocá <b>Agregar pedido</b>.
         </div>
       )}
 
@@ -470,11 +925,8 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                 </div>
               )}
 
-              {/* NUEVO: link de ubicación manual */}
               <label className="label">
-                <span className="label-text">
-                  📍 Link ubicación (WhatsApp / Google Maps) (opcional)
-                </span>
+                <span className="label-text">📍 Link ubicación (WhatsApp / Google Maps) (opcional)</span>
               </label>
               <input
                 type="text"
@@ -523,7 +975,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               />
               {errorTelefono && <p className="text-sm text-error">{errorTelefono}</p>}
 
-              {/* 🔗 Vista previa del link de WhatsApp para el teléfono principal */}
               {telefono ? (
                 e164Principal ? (
                   <a
@@ -559,7 +1010,6 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               />
               {errorTelefonoAlt && <p className="text-sm text-error">{errorTelefonoAlt}</p>}
 
-              {/* 🔗 Vista previa WhatsApp alternativo */}
               {telefonoAlt ? (
                 e164Alt ? (
                   <a
@@ -576,6 +1026,41 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                   </span>
                 )
               ) : null}
+
+              <label className="mt-4 label">
+                <span className="label-text">🧑‍💼 Vendedor de la provincia (opcional)</span>
+              </label>
+              <select
+                className="w-full select select-bordered"
+                value={vendedorEmailSeleccionado}
+                onChange={(e) =>
+                  setVendedorEmailSeleccionado(String(e.target.value || "").trim().toLowerCase())
+                }
+                disabled={bloqueado}
+              >
+                <option value="">(Usar usuario actual / sin seleccionar)</option>
+                {vendedoresProvincia.map((v) => (
+                  <option key={v.email} value={v.email}>
+                    {v.label} — {v.email}
+                  </option>
+                ))}
+              </select>
+
+              <label className="mt-4 label">
+                <span className="label-text">✍️ Nombre del vendedor manual (opcional)</span>
+              </label>
+              <input
+                type="text"
+                className="w-full input input-bordered"
+                value={vendedorNombreManual}
+                onChange={(e) => setVendedorNombreManual(e.target.value)}
+                placeholder="Ej: Agus / Juan / Mostrador"
+                disabled={bloqueado}
+              />
+
+              <p className="mt-1 text-xs opacity-70">
+                Si elegís un vendedor de la provincia y no escribís nombre manual, se guarda automáticamente su nombre visible.
+              </p>
             </div>
           </div>
 
@@ -597,9 +1082,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {productosFirestore
-                .filter((prod) =>
-                  (prod.nombre || "").toLowerCase().includes(busqueda.toLowerCase())
-                )
+                .filter((prod) => (prod.nombre || "").toLowerCase().includes(busqueda.toLowerCase()))
                 .map((prod, idx) => {
                   const seleccionado = productosSeleccionados.find((p) => p.nombre === prod.nombre);
                   const cantidad = seleccionado?.cantidad || 0;
@@ -617,12 +1100,15 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                             if (e.target.checked) {
                               setProductosSeleccionados((prev) => [
                                 ...prev,
-                                { ...prod, cantidad: 1 },
+                                {
+                                  ...prod,
+                                  cantidad: 1,
+                                  costo: Number(prod?.costo ?? 0),
+                                  precio: Number(prod?.precio ?? 0),
+                                },
                               ]);
                             } else {
-                              setProductosSeleccionados((prev) =>
-                                prev.filter((p) => p.nombre !== prod.nombre)
-                              );
+                              setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== prod.nombre));
                             }
                           }}
                           disabled={bloqueado}
@@ -630,9 +1116,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                         />
                         <div>
                           <p className="font-semibold">{prod.nombre}</p>
-                          <p className="text-sm text-gray-500">
-                            ${(prod.precio || 0).toLocaleString()}
-                          </p>
+                          <p className="text-sm text-gray-500">${Number(prod.precio || 0).toLocaleString()}</p>
                         </div>
                       </div>
 
@@ -653,14 +1137,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                             min="1"
                             value={cantidad}
                             onChange={(e) => {
-                              const cant = Math.max(
-                                1,
-                                parseInt(e.target.value || "1", 10)
-                              );
+                              const cant = Math.max(1, parseInt(e.target.value || "1", 10));
                               setProductosSeleccionados((prev) =>
-                                prev.map((p) =>
-                                  p.nombre === prod.nombre ? { ...p, cantidad: cant } : p
-                                )
+                                prev.map((p) => (p.nombre === prod.nombre ? { ...p, cantidad: cant } : p))
                               );
                             }}
                             className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
@@ -704,9 +1183,7 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                 <div className="pr-1 overflow-x-hidden overflow-y-auto max-h-64">
                   {productosFirestore.map((prod, idx) => {
                     const nombreDevolucion = `Devolución de ${prod.nombre}`;
-                    const seleccionado = productosSeleccionados.find(
-                      (p) => p.nombre === nombreDevolucion
-                    );
+                    const seleccionado = productosSeleccionados.find((p) => p.nombre === nombreDevolucion);
                     const cantidad = seleccionado?.cantidad || 1;
                     const estaSeleccionado = !!seleccionado;
 
@@ -728,24 +1205,19 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                                     precio: -Math.abs(prod.precio || 0),
                                     cantidad: 1,
                                     productoId: null,
+                                    costo: 0,
                                   },
                                 ]);
                               } else {
-                                setProductosSeleccionados((prev) =>
-                                  prev.filter((p) => p.nombre !== nombreDevolucion)
-                                );
+                                setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== nombreDevolucion));
                               }
                             }}
                             className="checkbox checkbox-error"
                             disabled={bloqueado}
                           />
                           <div>
-                            <p className="font-semibold text-error">
-                              {nombreDevolucion}
-                            </p>
-                            <p className="text-sm text-error">
-                              ${(prod.precio || 0).toLocaleString()}
-                            </p>
+                            <p className="font-semibold text-error">{nombreDevolucion}</p>
+                            <p className="text-sm text-error">${(prod.precio || 0).toLocaleString()}</p>
                           </div>
                         </div>
 
@@ -765,16 +1237,9 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
                               min="1"
                               value={cantidad}
                               onChange={(e) => {
-                                const cant = Math.max(
-                                  1,
-                                  parseInt(e.target.value || "1", 10)
-                                );
+                                const cant = Math.max(1, parseInt(e.target.value || "1", 10));
                                 setProductosSeleccionados((prev) =>
-                                  prev.map((p) =>
-                                    p.nombre === nombreDevolucion
-                                      ? { ...p, cantidad: cant }
-                                      : p
-                                  )
+                                  prev.map((p) => (p.nombre === nombreDevolucion ? { ...p, cantidad: cant } : p))
                                 );
                               }}
                               className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
@@ -820,17 +1285,24 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
               className="w-full textarea textarea-bordered"
               value={
                 productosSeleccionados.length
-                  ? productosSeleccionados
-                      .map(
-                        (p) =>
-                          `${p.nombre} x${p.cantidad} ($${(
-                            p.precio * p.cantidad
-                          ).toLocaleString()})`
-                      )
-                      .join(" - ") +
-                    ` | TOTAL: $${productosSeleccionados
-                      .reduce((sum, p) => sum + p.precio * p.cantidad, 0)
-                      .toLocaleString()}`
+                  ? (() => {
+                      const total = productosSeleccionados.reduce(
+                        (sum, p) => sum + Number(p.precio || 0) * Number(p.cantidad || 1),
+                        0
+                      );
+
+                      return (
+                        productosSeleccionados
+                          .map((p) => {
+                            const cant = Number(p.cantidad || 1);
+                            const sub = Number(p.precio || 0) * cant;
+                            const costoUnit = costoUnitarioDeLinea(p);
+                            const subCosto = costoUnit * cant;
+                            return `${p.nombre} x${cant} ($${sub.toLocaleString()}) (costo $${subCosto.toLocaleString()})`;
+                          })
+                          .join(" - ") + ` | TOTAL: $${total.toLocaleString()} `
+                      );
+                    })()
                   : ""
               }
             />
@@ -842,5 +1314,4 @@ const PedidoForm = ({ onAgregar, onActualizar, pedidoAEditar, bloqueado }) => {
     <p className="text-center">Cargando Google Maps...</p>
   );
 };
-
 export default PedidoForm;

@@ -209,7 +209,7 @@ function AdminDivisionPedidos() {
         <AdminNavbar />
       </div>
       <div className="h-16" />
-      <br/>
+      <br />
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold">División de Pedidos por Repartidor</h2>
         <div className="font-mono badge badge-primary badge-lg">Prov: {provinciaId}</div>
@@ -289,11 +289,11 @@ function AdminDivisionPedidos() {
                             disabled={disabled}
                             title={
                               !soyAdminProv ? "Solo administradores" :
-                              cierreGlobal ? "Día cerrado globalmente" :
-                              repartidorCerrado ? "Este repartidor ya cerró el día" :
-                              bloqueadoPorCierre ? "El repartidor asignado ya cerró" :
-                              entregado ? "Pedido entregado" :
-                              ""
+                                cierreGlobal ? "Día cerrado globalmente" :
+                                  repartidorCerrado ? "Este repartidor ya cerró el día" :
+                                    bloqueadoPorCierre ? "El repartidor asignado ya cerró" :
+                                      entregado ? "Pedido entregado" :
+                                        ""
                             }
                           />
                         </td>
@@ -307,10 +307,10 @@ function AdminDivisionPedidos() {
         </div>
       )}
 
-     <MapaPedidos
-       pedidos={pedidos.filter(p => !Array.isArray(p.asignadoA) || p.asignadoA.length === 0)}
-       onAsignarRepartidor={handleAsignar}
-     />
+      <MapaPedidos
+        pedidos={pedidos.filter(p => !Array.isArray(p.asignadoA) || p.asignadoA.length === 0)}
+        onAsignarRepartidor={handleAsignar}
+      />
     </div>
   );
 }

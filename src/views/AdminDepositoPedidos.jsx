@@ -1,9 +1,14 @@
 // src/views/AdminDepositoPedidos.jsx
 // Panel exclusivo para trabajar los pedidos del "Depósito" sin entrar al usuario repartidor.
-// - Lista SOLO los pedidos asignados al email de depósito (array-contains o string)
+// - Lista pedidos del usuario seleccionado (array-contains o string)
 // - Permite marcar Entregado / No entregado
 // - Permite seleccionar método de pago + soporte Mixto
 // - Se actualiza en tiempo real (onSnapshot)
+// - ✅ Permite CREAR pedidos SOLO cuando el seleccionado es el DEPÓSITO OFICIAL
+// - ✅ Permite seleccionar VENDEDOR REAL (email) + nombre visible manual
+//    - vendedorEmail (para que "cuente" la venta al vendedor)
+//    - vendedorNombreManual (texto visible)
+// - ✅ FIX: addDoc() NO puede usar deleteField() -> se omiten esos campos en el alta
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +16,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Swal from "sweetalert2";
 
-import { db } from "../firebase/firebase";
+import { auth, db } from "../firebase/firebase";
 import {
   collection,
   query,
@@ -21,13 +26,19 @@ import {
   updateDoc,
   Timestamp,
   getDoc,
+  getDocs,
   deleteField,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { format, startOfDay, addDays } from "date-fns";
 
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia";
 import { baseDireccion } from "../constants/provincias";
+
+/* ===== helpers ===== */
+const lo = (x) => String(x || "").trim().toLowerCase();
 
 /* ===== colecciones / docs ===== */
 const colPedidos = (prov) => collection(db, "provincias", prov, "pedidos");
@@ -142,7 +153,11 @@ export default function AdminDepositoPedidos() {
 
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [repartidores, setRepartidores] = useState([]); // [{email,label}]
-  const [depositoEmail, setDepositoEmail] = useState("");
+  const [vendedores, setVendedores] = useState([]); // [{email,label}]
+
+  // ✅ Depósito oficial (auto-detectado) + usuario seleccionado (vista/gestión)
+  const [depositoOficialEmail, setDepositoOficialEmail] = useState("");
+  const [usuarioEmail, setUsuarioEmail] = useState("");
 
   const [bloqueado, setBloqueado] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -151,13 +166,38 @@ export default function AdminDepositoPedidos() {
   const [pedidos, setPedidos] = useState([]);
   const [filtro, setFiltro] = useState("");
 
+  const [mostrarForm, setMostrarForm] = useState(false);
+
+  // ✅ vendedor REAL (email) + nombre visible manual (en alta)
+  const [vendedorEmailNuevo, setVendedorEmailNuevo] = useState("");
+  const [vendedorManualNuevo, setVendedorManualNuevo] = useState("");
+
+  const setLocalField = (pedidoId, field, value) => {
+    setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, [field]: value } : p)));
+  };
+
+  const repLabelByEmail = useMemo(() => {
+    const m = new Map();
+    (repartidores || []).forEach((r) => m.set(lo(r.email), r.label));
+    return (email) => m.get(lo(email)) || String(email || "");
+  }, [repartidores]);
+
+  const esDepositoSeleccionado =
+    !!depositoOficialEmail && !!usuarioEmail && lo(usuarioEmail) === lo(depositoOficialEmail);
+
+  // Si cambiás a un usuario que NO es depósito, cerramos el form (porque no se puede crear)
+  useEffect(() => {
+    if (!esDepositoSeleccionado && mostrarForm) setMostrarForm(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esDepositoSeleccionado, usuarioEmail, depositoOficialEmail]);
+
   // ===== auth mínima (igual a otras pantallas admin)
   useEffect(() => {
     const adminAuth = localStorage.getItem("adminAutenticado");
     if (!adminAuth) navigate("/admin");
   }, [navigate]);
 
-  // ===== cargar repartidores + autoseleccionar “deposito”
+  // ===== cargar repartidores + vendedores + autoseleccionar “deposito”
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -175,27 +215,50 @@ export default function AdminDepositoPedidos() {
           ])
         );
 
-        const reps = toArr(data.repartidores).map((email, i) => {
-          const em = String(email || "");
-          const emLower = em.toLowerCase();
-          const label = nombresMap[emLower] || em.split("@")[0] || `R${i + 1}`;
-          return { email: em, label };
+        const uniqEmails = (arr) =>
+          Array.from(
+            new Set(
+              (arr || [])
+                .map((e) => String(e || "").trim().toLowerCase())
+                .filter(Boolean)
+            )
+          );
+
+        const reps = uniqEmails(toArr(data.repartidores)).map((email, i) => {
+          const label = nombresMap[email] || email.split("@")[0] || `R${i + 1}`;
+          return { email, label };
+        });
+
+        const vends = uniqEmails(toArr(data.vendedores)).map((email, i) => {
+          const label = nombresMap[email] || email.split("@")[0] || `V${i + 1}`;
+          return { email, label };
         });
 
         if (!mounted) return;
         setRepartidores(reps);
+        setVendedores(vends);
 
-        // Auto: buscar “deposito” por email o por label.
         const dep =
           reps.find((r) => String(r.email).toLowerCase().includes("deposito")) ||
           reps.find((r) => String(r.label).toLowerCase().includes("deposito")) ||
           reps[0];
-        setDepositoEmail(dep?.email ? String(dep.email).trim() : "");
+
+        const depEmail = dep?.email ? String(dep.email).trim().toLowerCase() : "";
+        setDepositoOficialEmail(depEmail);
+
+        // ✅ por defecto, la vista queda en Depósito; si ya había selección, la respetamos
+        setUsuarioEmail((prev) => {
+          const p = lo(prev);
+          if (p) return p;
+          return depEmail;
+        });
       } catch (e) {
         console.error("Error leyendo config/usuarios:", e);
         if (mounted) {
           setRepartidores([]);
-          setDepositoEmail("");
+          setVendedores([]);
+          setDepositoOficialEmail("");
+          setUsuarioEmail("");
         }
       }
     })();
@@ -204,17 +267,17 @@ export default function AdminDepositoPedidos() {
     };
   }, [provinciaId]);
 
-  // ===== bloquear si cierre individual del depósito existe
+  // ===== bloquear si cierre individual del usuario seleccionado existe
   useEffect(() => {
     let active = true;
     (async () => {
-      if (!provinciaId || !depositoEmail) {
+      if (!provinciaId || !usuarioEmail) {
         if (active) setBloqueado(false);
         return;
       }
       try {
         const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
-        const snap = await getDoc(docCierreRepartidor(provinciaId, fechaStr, depositoEmail));
+        const snap = await getDoc(docCierreRepartidor(provinciaId, fechaStr, lo(usuarioEmail)));
         if (active) setBloqueado(!!snap.exists());
       } catch {
         if (active) setBloqueado(false);
@@ -223,7 +286,7 @@ export default function AdminDepositoPedidos() {
     return () => {
       active = false;
     };
-  }, [provinciaId, depositoEmail, fechaSeleccionada]);
+  }, [provinciaId, usuarioEmail, fechaSeleccionada]);
 
   // ===== normalizador (misma semántica que RepartidorView)
   const normalizeDoc = (id, raw) => {
@@ -235,9 +298,17 @@ export default function AdminDepositoPedidos() {
     const pagoMixtoTransferencia =
       typeof raw.pagoMixtoTransferencia === "number" ? raw.pagoMixtoTransferencia : 0;
     const pagoMixtoCon10 = typeof raw.pagoMixtoCon10 === "boolean" ? raw.pagoMixtoCon10 : true;
+
+    const vendedorNombreManual =
+      typeof raw.vendedorNombreManual === "string" ? raw.vendedorNombreManual : "";
+    const vendedorEmail = typeof raw.vendedorEmail === "string" ? raw.vendedorEmail : "";
+
     const direccion =
       raw.direccion ||
-      (raw.coordenadas && typeof raw.coordenadas.direccion === "string" ? raw.coordenadas.direccion : "");
+      (raw.coordenadas && typeof raw.coordenadas.direccion === "string"
+        ? raw.coordenadas.direccion
+        : "");
+
     return {
       ...raw,
       id,
@@ -248,13 +319,15 @@ export default function AdminDepositoPedidos() {
       pagoMixtoEfectivo,
       pagoMixtoTransferencia,
       pagoMixtoCon10,
+      vendedorNombreManual,
+      vendedorEmail,
       direccion,
     };
   };
 
-  // ===== listener en tiempo real (2 queries para soportar array|string)
+  // ===== listener en tiempo real (2 queries para soportar array|string) según usuario seleccionado
   useEffect(() => {
-    if (!provinciaId || !depositoEmail) return;
+    if (!provinciaId || !usuarioEmail) return;
 
     setLoading(true);
     setErrorMsg("");
@@ -262,17 +335,18 @@ export default function AdminDepositoPedidos() {
     const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
     const finExcl = Timestamp.fromDate(startOfDay(addDays(fechaSeleccionada, 1)));
     const ref = colPedidos(provinciaId);
+    const emailSel = lo(usuarioEmail);
 
     const qArray = query(
       ref,
-      where("asignadoA", "array-contains", depositoEmail),
+      where("asignadoA", "array-contains", emailSel),
       where("fecha", ">=", inicio),
       where("fecha", "<", finExcl)
     );
 
     const qString = query(
       ref,
-      where("asignadoA", "==", depositoEmail),
+      where("asignadoA", "==", emailSel),
       where("fecha", ">=", inicio),
       where("fecha", "<", finExcl)
     );
@@ -300,12 +374,12 @@ export default function AdminDepositoPedidos() {
         updateState();
       },
       (err) => {
-        console.error("onSnapshot depósito (array)", err);
+        console.error("onSnapshot (array)", err);
         setLoading(false);
         setErrorMsg(
           err?.code === "permission-denied"
-            ? "Permiso denegado por reglas para ver pedidos del depósito."
-            : "No se pudieron cargar los pedidos del depósito."
+            ? "Permiso denegado por reglas para ver estos pedidos."
+            : "No se pudieron cargar los pedidos."
         );
       }
     );
@@ -317,12 +391,12 @@ export default function AdminDepositoPedidos() {
         updateState();
       },
       (err) => {
-        console.error("onSnapshot depósito (string)", err);
+        console.error("onSnapshot (string)", err);
         setLoading(false);
         setErrorMsg(
           err?.code === "permission-denied"
-            ? "Permiso denegado por reglas para ver pedidos del depósito."
-            : "No se pudieron cargar los pedidos del depósito."
+            ? "Permiso denegado por reglas para ver estos pedidos."
+            : "No se pudieron cargar los pedidos."
         );
       }
     );
@@ -331,7 +405,307 @@ export default function AdminDepositoPedidos() {
       unsubA();
       unsubB();
     };
-  }, [provinciaId, depositoEmail, fechaSeleccionada]);
+  }, [provinciaId, usuarioEmail, fechaSeleccionada]);
+
+  // ===== base (depósito)
+  const BASE_DIRECCION = baseDireccion(provinciaId);
+  const baseContext = useMemo(() => {
+    const parts = String(BASE_DIRECCION || "Córdoba, Argentina")
+      .split(",")
+      .map((t) => t.trim());
+    return parts.slice(-3).join(", ");
+  }, [BASE_DIRECCION]);
+
+  // ==================================================
+  // ✅ NUEVO ALTA DE PEDIDOS (SIN PedidoForm) - SOLO DEPÓSITO OFICIAL
+  // ==================================================
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoTelefono, setNuevoTelefono] = useState("");
+  const [nuevoTelefonoAlt, setNuevoTelefonoAlt] = useState("");
+  const [nuevoEntreCalles, setNuevoEntreCalles] = useState("");
+  const [nuevoLinkUbicacion, setNuevoLinkUbicacion] = useState("");
+  const [nuevoObs, setNuevoObs] = useState("");
+
+  const [productosFirestore, setProductosFirestore] = useState([]);
+  const [busquedaProd, setBusquedaProd] = useState("");
+  const [productoSelId, setProductoSelId] = useState("");
+  const [cantidadSel, setCantidadSel] = useState(1);
+  const [productosSeleccionados, setProductosSeleccionados] = useState([]);
+
+  // cargar productos (para selector)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!provinciaId) return;
+      try {
+        const snap = await getDocs(collection(db, "provincias", provinciaId, "productos"));
+        let list = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((p) => p && p.nombre);
+
+        // orden sugerido (envío primero, luego alfabético)
+        const rxEnvio = /\b(envio|envío)\b/i;
+        list.sort((a, b) => {
+          const an = String(a.nombre || "");
+          const bn = String(b.nombre || "");
+          const ae = rxEnvio.test(an);
+          const be = rxEnvio.test(bn);
+          if (ae !== be) return ae ? -1 : 1;
+          return an.localeCompare(bn, "es");
+        });
+
+        if (!active) return;
+        setProductosFirestore(list);
+      } catch (e) {
+        console.error("Error cargando productos:", e);
+        if (active) setProductosFirestore([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [provinciaId]);
+
+  const productosFiltrados = useMemo(() => {
+    const q = lo(busquedaProd);
+    if (!q) return productosFirestore;
+    return productosFirestore.filter((p) => lo(p.nombre).includes(q));
+  }, [productosFirestore, busquedaProd]);
+
+  const productoSel = useMemo(
+    () => productosFirestore.find((p) => String(p.id) === String(productoSelId)) || null,
+    [productosFirestore, productoSelId]
+  );
+
+  const addProducto = () => {
+    if (bloqueado) return;
+    if (!productoSel) return;
+    const cant = Math.max(1, parseInt(String(cantidadSel || 1), 10) || 1);
+    const precio = Number(productoSel.precio || 0);
+
+    setProductosSeleccionados((prev) => {
+      const idx = prev.findIndex((x) => String(x.productoId) === String(productoSel.id));
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], cantidad: Number(copy[idx].cantidad || 0) + cant };
+        return copy;
+      }
+      return [
+        ...prev,
+        {
+          productoId: String(productoSel.id),
+          nombre: String(productoSel.nombre || ""),
+          cantidad: cant,
+          precio,
+        },
+      ];
+    });
+
+    setCantidadSel(1);
+  };
+
+  const setCantidadProducto = (productoId, cantidadNueva) => {
+    const cant = Math.max(1, parseInt(String(cantidadNueva || 1), 10) || 1);
+    setProductosSeleccionados((prev) =>
+      prev.map((p) =>
+        String(p.productoId) === String(productoId) ? { ...p, cantidad: cant } : p
+      )
+    );
+  };
+
+  const removeProducto = (productoId) => {
+    setProductosSeleccionados((prev) =>
+      prev.filter((p) => String(p.productoId) !== String(productoId))
+    );
+  };
+
+  const { resumenPedido, totalPedido } = useMemo(() => {
+    const total = productosSeleccionados.reduce(
+      (sum, p) => sum + Number(p.precio || 0) * Number(p.cantidad || 0),
+      0
+    );
+
+    const resumen = productosSeleccionados
+      .map((p) => {
+        const sub = Number(p.precio || 0) * Number(p.cantidad || 0);
+        return `${p.nombre} x${p.cantidad} ($${Math.round(sub)})`;
+      })
+      .join(" - ");
+
+    return { resumenPedido: resumen, totalPedido: total };
+  }, [productosSeleccionados]);
+
+  const phoneDigits = (x) => String(x || "").replace(/\D+/g, "");
+  const isValidPhone = (x) => {
+    const d = phoneDigits(x);
+    return d.length >= 6 && d.length <= 15;
+  };
+
+  const submitAltaDeposito = async () => {
+    if (bloqueado) return;
+    if (!provinciaId) return;
+
+    // ✅ hard-stop: solo depósito oficial
+    if (!esDepositoSeleccionado) {
+      Swal.fire("Solo Depósito", "La carga de pedidos está habilitada únicamente para el usuario Depósito.", "info");
+      return;
+    }
+
+    const nombre = String(nuevoNombre || "").trim();
+    if (!nombre) {
+      Swal.fire("Falta nombre", "Ingresá el nombre del cliente.", "warning");
+      return;
+    }
+
+    if (!isValidPhone(nuevoTelefono)) {
+      Swal.fire("Teléfono inválido", "Ingresá un teléfono válido (solo números).", "warning");
+      return;
+    }
+
+    if (nuevoTelefonoAlt && !isValidPhone(nuevoTelefonoAlt)) {
+      Swal.fire("Teléfono alternativo inválido", "Revisá el teléfono alternativo.", "warning");
+      return;
+    }
+
+    if (!productosSeleccionados.length) {
+      Swal.fire("Sin productos", "Agregá al menos un producto.", "warning");
+      return;
+    }
+
+    const now = new Date();
+
+    // ✅ vendedorEmail = vendedor elegido (si hay), si no: admin actual (mantiene lógica previa)
+    const vendedorEmailAdmin = lo(auth?.currentUser?.email || "");
+    const vendedorEmailFinal = vendedorEmailNuevo ? lo(vendedorEmailNuevo) : vendedorEmailAdmin;
+
+    const direccion = String(BASE_DIRECCION || "").trim();
+    const partido = String(baseContext || "").trim();
+    const pedidoTxt = resumenPedido
+      ? `${resumenPedido} | TOTAL: $${Math.round(totalPedido)}`
+      : "";
+
+    const payload = {
+      vendedorEmail: vendedorEmailFinal,
+      nombre,
+      telefono: phoneDigits(nuevoTelefono),
+      telefonoAlt: nuevoTelefonoAlt ? phoneDigits(nuevoTelefonoAlt) : "",
+      partido,
+      direccion,
+      entreCalles: String(nuevoEntreCalles || "").trim(),
+      linkUbicacion: String(nuevoLinkUbicacion || "").trim(),
+      pedido: pedidoTxt,
+      productos: productosSeleccionados,
+      monto: Number(totalPedido || 0),
+      fecha: now,
+      fechaStr: format(now, "yyyy-MM-dd"),
+      // Estos se fuerzan/ajustan en agregarPedidoDeposito()
+      asignadoA: [],
+      entregado: false,
+      metodoPago: "",
+      // extras opcionales
+      observacion: String(nuevoObs || "").trim(),
+    };
+
+    await agregarPedidoDeposito(payload);
+
+    setNuevoNombre("");
+    setNuevoTelefono("");
+    setNuevoTelefonoAlt("");
+    setNuevoEntreCalles("");
+    setNuevoLinkUbicacion("");
+    setNuevoObs("");
+    setBusquedaProd("");
+    setProductoSelId("");
+    setCantidadSel(1);
+    setProductosSeleccionados([]);
+  };
+
+  // ===== ✅ CREAR pedido para depósito - SOLO DEPÓSITO OFICIAL
+  const agregarPedidoDeposito = async (pedidoConProductos) => {
+    if (bloqueado) {
+      Swal.fire("Día cerrado", "Este usuario ya está cerrado para esa fecha.", "info");
+      return;
+    }
+    if (!provinciaId) return;
+
+    // ✅ hard-stop: solo depósito oficial
+    if (!esDepositoSeleccionado) {
+      Swal.fire("Solo Depósito", "La carga de pedidos está habilitada únicamente para el usuario Depósito.", "info");
+      return;
+    }
+
+    if (!depositoOficialEmail) {
+      Swal.fire("Falta depósito", "No se detectó el usuario Depósito. Revisá config/usuarios.", "warning");
+      return;
+    }
+
+    try {
+      // Forzamos fecha/fechaStr para que caiga en el día seleccionado
+      const fechaForzada = new Date(fechaSeleccionada);
+      // hora al mediodía para evitar bordes por TZ
+      fechaForzada.setHours(12, 0, 0, 0);
+      const fechaStrForzada = format(fechaSeleccionada, "yyyy-MM-dd");
+
+      const payload = {
+        ...pedidoConProductos,
+        fecha: fechaForzada,
+        fechaStr: fechaStrForzada,
+        asignadoA: [lo(depositoOficialEmail)], // ✅ SIEMPRE al depósito oficial
+        entregado: false,
+        metodoPago: "",
+        ordenRuta: 999,
+        bloqueadoVendedor: false,
+        createdAt: serverTimestamp(),
+        origen: "deposito",
+      };
+
+      const vendNom = String(vendedorManualNuevo || "").trim();
+      if (vendNom) payload.vendedorNombreManual = vendNom;
+
+      await addDoc(colPedidos(provinciaId), payload);
+
+      Swal.fire("✅ Listo", "Pedido cargado para el depósito.", "success");
+      setMostrarForm(false);
+      setVendedorManualNuevo("");
+      setVendedorEmailNuevo("");
+    } catch (e) {
+      console.error("Error creando pedido depósito:", e);
+      Swal.fire(
+        "Error",
+        e?.code === "permission-denied" ? "No tenés permiso (reglas)." : "No se pudo crear el pedido.",
+        "error"
+      );
+    }
+  };
+
+  // ===== ✅ Guardar vendedor (email real + nombre visible) (solo si NO está entregado y NO está bloqueado)
+  const guardarVendedorManual = async (pedido) => {
+    if (bloqueado) return;
+    if (!provinciaId) return;
+    if (!pedido?.id) return;
+
+    if (pedido.entregado) {
+      Swal.fire("Bloqueado", "El pedido ya está entregado. No se puede cambiar el vendedor.", "info");
+      return;
+    }
+
+    const nombre = String(pedido.vendedorNombreManual || "").trim();
+    const email = lo(pedido.vendedorEmail || "");
+
+    try {
+      await updateDoc(doc(db, "provincias", provinciaId, "pedidos", pedido.id), {
+        vendedorNombreManual: nombre ? nombre : deleteField(),
+        vendedorEmail: email ? email : deleteField(),
+      });
+      Swal.fire("✅ Guardado", "Vendedor actualizado.", "success");
+    } catch (e) {
+      const msg =
+        e?.code === "permission-denied"
+          ? "No tenés permiso (reglas)."
+          : "No se pudo guardar el vendedor.";
+      Swal.fire("Error", msg, "error");
+    }
+  };
 
   // ===== acciones
   const toggleEntregado = async (pedido) => {
@@ -339,7 +713,6 @@ export default function AdminDepositoPedidos() {
     try {
       await updateDoc(doc(db, "provincias", provinciaId, "pedidos", pedido.id), {
         entregado: nuevoEstado,
-        // al marcar entregado, bloquea edición vendedor (misma semántica que RepartidorView)
         bloqueadoVendedor: nuevoEstado,
         editLockByCourierAt: nuevoEstado ? Timestamp.now() : deleteField(),
       });
@@ -429,9 +802,12 @@ export default function AdminDepositoPedidos() {
   const pedidosFiltrados = useMemo(() => {
     const f = filtro.trim().toLowerCase();
     if (!f) return pedidos;
-    return pedidos.filter((p) =>
-      (p.nombre || "").toLowerCase().includes(f) ||
-      (p.direccion || "").toLowerCase().includes(f)
+    return pedidos.filter(
+      (p) =>
+        (p.nombre || "").toLowerCase().includes(f) ||
+        (p.direccion || "").toLowerCase().includes(f) ||
+        (p.vendedorNombreManual || "").toLowerCase().includes(f) ||
+        (p.vendedorEmail || "").toLowerCase().includes(f)
     );
   }, [pedidos, filtro]);
 
@@ -439,9 +815,11 @@ export default function AdminDepositoPedidos() {
     let efectivo = 0,
       transferencia10 = 0,
       transferencia0 = 0;
+
     pedidos.forEach((p) => {
       if (!p.entregado) return;
       const monto = Number(p.monto || 0);
+
       switch (p.metodoPago || "efectivo") {
         case "efectivo":
           efectivo += monto;
@@ -464,6 +842,7 @@ export default function AdminDepositoPedidos() {
           break;
       }
     });
+
     return {
       efectivo,
       transferencia10,
@@ -471,13 +850,6 @@ export default function AdminDepositoPedidos() {
       total: efectivo + transferencia10 + transferencia0,
     };
   }, [pedidos]);
-
-  // Contexto base coherente con tus provincias (igual que RepartidorView).
-  const BASE_DIRECCION = baseDireccion(provinciaId);
-  const baseContext = useMemo(() => {
-    const parts = String(BASE_DIRECCION || "Córdoba, Argentina").split(",").map((t) => t.trim());
-    return parts.slice(-3).join(", ");
-  }, [BASE_DIRECCION]);
 
   return (
     <div className="max-w-5xl px-4 py-6 mx-auto text-base-content">
@@ -488,10 +860,12 @@ export default function AdminDepositoPedidos() {
 
       <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">🏬 Depósito — Pedidos del día</h2>
+          <h2 className="text-2xl font-bold">🏬 Depósito / Repartidores — Pedidos del día</h2>
           <div className="mt-1 text-sm opacity-70">
-            Acá podés marcar <strong>entregados</strong> y <strong>método de pago</strong> sin entrar al usuario
-            repartidor.
+            Podés <strong>gestionar</strong> pedidos del usuario seleccionado (entregado / pago / vendedor).
+            <div className="mt-1 opacity-70">
+              ✅ La <strong>carga de pedidos</strong> está habilitada <strong>solo</strong> cuando el usuario seleccionado es <strong>Depósito</strong>.
+            </div>
           </div>
         </div>
 
@@ -503,9 +877,22 @@ export default function AdminDepositoPedidos() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <span className={`badge ${esDepositoSeleccionado ? "badge-success" : "badge-info"}`}>
+          {esDepositoSeleccionado ? "✅ Modo Depósito (con alta)" : "👀 Modo Repartidor (sin alta)"}
+        </span>
+        {depositoOficialEmail ? (
+          <span className="badge badge-outline">
+            Depósito oficial: {repLabelByEmail(depositoOficialEmail) || "Depósito"} — {depositoOficialEmail}
+          </span>
+        ) : (
+          <span className="badge badge-warning">No se detectó Depósito oficial (revisá config/usuarios)</span>
+        )}
+      </div>
+
       {bloqueado && (
         <div className="mb-3 alert alert-warning">
-          El día del depósito está <strong>cerrado</strong> para esta fecha. Edición deshabilitada.
+          El día del usuario seleccionado está <strong>cerrado</strong> para esta fecha. Edición deshabilitada.
         </div>
       )}
 
@@ -521,11 +908,11 @@ export default function AdminDepositoPedidos() {
         </div>
 
         <div>
-          <label className="block mb-1 font-semibold">👤 Usuario Depósito</label>
+          <label className="block mb-1 font-semibold">👤 Ver / gestionar pedidos de</label>
           <select
             className="w-full select select-bordered"
-            value={depositoEmail}
-            onChange={(e) => setDepositoEmail(String(e.target.value || "").trim())}
+            value={usuarioEmail}
+            onChange={(e) => setUsuarioEmail(String(e.target.value || "").trim().toLowerCase())}
           >
             {repartidores.length === 0 && <option value="">(Sin repartidores)</option>}
             {repartidores.map((r) => (
@@ -535,8 +922,14 @@ export default function AdminDepositoPedidos() {
             ))}
           </select>
           <div className="mt-1 text-xs opacity-60">
-            Tip: renombrá en <code>config/usuarios</code> el nombre del repartidor como “Depósito” para auto-detectarlo.
+            Tip: en <code>config/usuarios</code> poné el nombre “Depósito” para auto-detectarlo.
           </div>
+
+          {!esDepositoSeleccionado && depositoOficialEmail && (
+            <div className="mt-2 text-xs alert alert-info">
+              Estás viendo pedidos de <strong>{repLabelByEmail(usuarioEmail) || usuarioEmail}</strong>. La carga de pedidos está habilitada solo si seleccionás el Depósito oficial.
+            </div>
+          )}
         </div>
 
         <div>
@@ -545,17 +938,294 @@ export default function AdminDepositoPedidos() {
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
             className="w-full input input-bordered"
-            placeholder="Cliente o dirección"
+            placeholder="Cliente, dirección o vendedor"
           />
         </div>
+      </div>
+
+      {/* ✅ CARGA DE PEDIDOS (SOLO DEPÓSITO OFICIAL) */}
+      <div className="mb-6">
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => setMostrarForm((v) => !v)}
+          disabled={bloqueado || !usuarioEmail || !esDepositoSeleccionado}
+          title={
+            !usuarioEmail
+              ? "Seleccioná un usuario"
+              : !esDepositoSeleccionado
+                ? "La carga de pedidos solo está habilitada para Depósito"
+                : ""
+          }
+        >
+          {mostrarForm ? "✖️ Cerrar carga" : "➕ Cargar pedido (solo Depósito)"}
+        </button>
+
+        {mostrarForm && !bloqueado && esDepositoSeleccionado && (
+          <div className="p-4 mt-3 border shadow rounded-xl bg-base-200 border-base-300">
+            <h3 className="mb-2 text-lg font-semibold">🧾 Nuevo pedido (Depósito)</h3>
+            <div className="text-sm opacity-70 mb-3">
+              Se asigna automáticamente al <strong>Depósito oficial</strong> y se fuerza la fecha seleccionada.
+              <div className="mt-1">
+                📍 La <strong>dirección</strong> queda fija al depósito (no se pide dirección en este alta).
+              </div>
+            </div>
+
+            {/* ✅ VENDEDOR REAL (email) + nombre visible */}
+            <div className="p-3 mb-4 border rounded-xl bg-base-100 border-base-300">
+              <label className="block mb-1 font-semibold">🧑‍💼 Asignar venta a vendedor</label>
+
+              <select
+                className="w-full select select-bordered"
+                value={vendedorEmailNuevo}
+                onChange={(e) => {
+                  const em = lo(e.target.value);
+                  setVendedorEmailNuevo(em);
+
+                  if (!em) {
+                    setVendedorManualNuevo("");
+                    return;
+                  }
+                  const found = vendedores.find((v) => lo(v.email) === em);
+                  if (found?.label) setVendedorManualNuevo(found.label);
+                }}
+                disabled={bloqueado}
+              >
+                <option value="">(Admin actual / Mostrador)</option>
+                {vendedores.map((v) => (
+                  <option key={v.email} value={lo(v.email)}>
+                    {v.label} — {v.email}
+                  </option>
+                ))}
+              </select>
+
+              <label className="block mt-3 mb-1 text-sm font-semibold opacity-80">
+                Nombre visible (opcional)
+              </label>
+              <input
+                className="w-full input input-bordered"
+                placeholder="Ej: Agus / Juan / Mostrador"
+                value={vendedorManualNuevo}
+                onChange={(e) => setVendedorManualNuevo(e.target.value)}
+                disabled={bloqueado}
+              />
+
+              <div className="mt-1 text-xs opacity-70">
+                Se guarda:
+                <ul className="list-disc ml-5">
+                  <li>
+                    <code>vendedorEmail</code> (para que “cuente” la venta al vendedor)
+                  </li>
+                  <li>
+                    <code>vendedorNombreManual</code> (solo texto para mostrar)
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* ===== Alta interna (sin PedidoForm) ===== */}
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="md:col-span-3">
+                <label className="block mb-1 font-semibold">🏬 Depósito</label>
+                <input
+                  className="w-full input input-bordered"
+                  value={String(BASE_DIRECCION || "").trim() || "(Sin dirección base configurada)"}
+                  readOnly
+                />
+                <div className="mt-1 text-xs opacity-70">
+                  Se toma como <code>direccion</code> del pedido.
+                </div>
+              </div>
+
+              <div>
+                <label className="block mb-1 font-semibold">🧍 Nombre</label>
+                <input
+                  className="w-full input input-bordered"
+                  value={nuevoNombre}
+                  onChange={(e) => setNuevoNombre(e.target.value)}
+                  placeholder="Nombre y apellido"
+                  disabled={bloqueado}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-semibold">📞 Teléfono</label>
+                <input
+                  className="w-full input input-bordered"
+                  value={nuevoTelefono}
+                  onChange={(e) => setNuevoTelefono(e.target.value)}
+                  placeholder="Solo números"
+                  disabled={bloqueado}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-semibold">📞 Teléfono alt (opcional)</label>
+                <input
+                  className="w-full input input-bordered"
+                  value={nuevoTelefonoAlt}
+                  onChange={(e) => setNuevoTelefonoAlt(e.target.value)}
+                  placeholder="Solo números"
+                  disabled={bloqueado}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block mb-1 font-semibold">↔️ Entre calles (opcional)</label>
+                <input
+                  className="w-full input input-bordered"
+                  value={nuevoEntreCalles}
+                  onChange={(e) => setNuevoEntreCalles(e.target.value)}
+                  placeholder="Ej: Esquina X / Y"
+                  disabled={bloqueado}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-semibold">🔗 Link ubicación (opcional)</label>
+                <input
+                  className="w-full input input-bordered"
+                  value={nuevoLinkUbicacion}
+                  onChange={(e) => setNuevoLinkUbicacion(e.target.value)}
+                  placeholder="Link de Google Maps"
+                  disabled={bloqueado}
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block mb-1 font-semibold">📝 Observación (opcional)</label>
+                <textarea
+                  className="w-full textarea textarea-bordered"
+                  rows={3}
+                  value={nuevoObs}
+                  onChange={(e) => setNuevoObs(e.target.value)}
+                  placeholder="Notas internas"
+                  disabled={bloqueado}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 border rounded-xl bg-base-100 border-base-300">
+              <h4 className="font-semibold">📦 Productos</h4>
+
+              <div className="grid gap-2 mt-2 md:grid-cols-4 md:items-end">
+                <div className="md:col-span-2">
+                  <label className="block mb-1 text-sm font-semibold">Buscar</label>
+                  <input
+                    className="w-full input input-bordered input-sm"
+                    value={busquedaProd}
+                    onChange={(e) => setBusquedaProd(e.target.value)}
+                    placeholder="Ej: blanca, gris, envio…"
+                    disabled={bloqueado}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block mb-1 text-sm font-semibold">Producto</label>
+                  <select
+                    className="w-full select select-bordered select-sm"
+                    value={productoSelId}
+                    onChange={(e) => setProductoSelId(e.target.value)}
+                    disabled={bloqueado}
+                  >
+                    <option value="">-- Seleccionar --</option>
+                    {productosFiltrados.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre} — ${Number(p.precio || 0).toFixed(0)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm font-semibold">Cant.</label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    className="w-full input input-bordered input-sm"
+                    value={cantidadSel}
+                    onChange={(e) => setCantidadSel(e.target.value)}
+                    disabled={bloqueado}
+                  />
+                </div>
+
+                <div>
+                  <button
+                    className="w-full btn btn-primary btn-sm"
+                    onClick={addProducto}
+                    disabled={bloqueado || !productoSel}
+                    title={!productoSel ? "Seleccioná un producto" : ""}
+                  >
+                    ➕ Agregar
+                  </button>
+                </div>
+              </div>
+
+              {productosSeleccionados.length === 0 ? (
+                <div className="mt-3 text-sm opacity-70">Todavía no agregaste productos.</div>
+              ) : (
+                <div className="mt-3 grid gap-2">
+                  {productosSeleccionados.map((p) => (
+                    <div key={p.productoId} className="p-2 border rounded-xl border-base-300">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <div className="font-semibold">{p.nombre}</div>
+                          <div className="text-xs opacity-70">
+                            ${Number(p.precio || 0).toFixed(0)} c/u
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            className="w-24 input input-bordered input-sm"
+                            value={p.cantidad}
+                            onChange={(e) => setCantidadProducto(p.productoId, e.target.value)}
+                            disabled={bloqueado}
+                          />
+                          <span className="badge badge-outline">
+                            ${Math.round(Number(p.precio || 0) * Number(p.cantidad || 0))}
+                          </span>
+                          <button
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => removeProducto(p.productoId)}
+                            disabled={bloqueado}
+                          >
+                            ✖️
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-3 p-3 rounded-xl bg-base-200">
+                <div className="text-sm opacity-80 whitespace-pre-wrap">
+                  <strong>Resumen:</strong> {resumenPedido || "—"}
+                </div>
+                <div className="mt-1">
+                  <strong>Total:</strong> ${Math.round(totalPedido || 0)}
+                </div>
+              </div>
+
+              <button className="mt-3 btn btn-success" onClick={submitAltaDeposito} disabled={bloqueado}>
+                ✅ Cargar pedido
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {errorMsg && <div className="mb-4 alert alert-error">{errorMsg}</div>}
 
       {loading ? (
-        <div className="p-6 text-center bg-base-200 rounded-xl">Cargando pedidos del depósito…</div>
+        <div className="p-6 text-center bg-base-200 rounded-xl">Cargando pedidos…</div>
       ) : pedidosFiltrados.length === 0 ? (
-        <div className="p-6 text-center bg-base-200 rounded-xl">No hay pedidos asignados al depósito para esa fecha.</div>
+        <div className="p-6 text-center bg-base-200 rounded-xl">
+          No hay pedidos asignados al usuario seleccionado para esa fecha.
+        </div>
       ) : (
         <ul className="grid gap-4">
           {pedidosFiltrados.map((p, idx) => {
@@ -593,6 +1263,84 @@ export default function AdminDepositoPedidos() {
                   </div>
                 </div>
 
+                {/* ✅ Vendedor (email real + nombre visible) */}
+                <div className="mt-3">
+                  <strong>🧑‍💼 Vendedor:</strong>{" "}
+                  {bloqueado || p.entregado ? (
+                    <span className="opacity-80">
+                      {p.vendedorNombreManual?.trim()
+                        ? p.vendedorNombreManual
+                        : p.vendedorEmail?.trim()
+                          ? p.vendedorEmail
+                          : "—"}
+                    </span>
+                  ) : (
+                    <div className="grid gap-2 mt-2 md:grid-cols-3 md:items-center">
+                      <div className="md:col-span-1">
+                        <label className="block mb-1 text-xs font-semibold opacity-70">Vendedor (email)</label>
+                        <select
+                          className="w-full select select-sm select-bordered"
+                          value={lo(p.vendedorEmail || "")}
+                          onChange={(e) => {
+                            const em = lo(e.target.value);
+                            setLocalField(p.id, "vendedorEmail", em);
+
+                            if (!em) {
+                              setLocalField(p.id, "vendedorNombreManual", "");
+                              return;
+                            }
+                            const found = vendedores.find((v) => lo(v.email) === em);
+                            if (found?.label) setLocalField(p.id, "vendedorNombreManual", found.label);
+                          }}
+                          disabled={bloqueado}
+                        >
+                          <option value="">(Mostrador / Sin vendedor)</option>
+                          {vendedores.map((v) => (
+                            <option key={v.email} value={lo(v.email)}>
+                              {v.label} — {v.email}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block mb-1 text-xs font-semibold opacity-70">
+                          Nombre visible (opcional)
+                        </label>
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                          <input
+                            className="w-full input input-sm input-bordered"
+                            placeholder="Ej: Agus / Juan / Mostrador"
+                            value={p.vendedorNombreManual || ""}
+                            onChange={(e) => setLocalField(p.id, "vendedorNombreManual", e.target.value)}
+                            disabled={bloqueado}
+                          />
+                          <button
+                            className="btn btn-xs btn-primary"
+                            onClick={() => guardarVendedorManual(p)}
+                            disabled={bloqueado}
+                          >
+                            💾 Guardar vendedor
+                          </button>
+                          <button
+                            className="btn btn-xs btn-ghost"
+                            onClick={() => {
+                              setLocalField(p.id, "vendedorNombreManual", "");
+                              setLocalField(p.id, "vendedorEmail", "");
+                            }}
+                            disabled={bloqueado}
+                          >
+                            Limpiar
+                          </button>
+                        </div>
+                        <div className="mt-1 text-xs opacity-60">
+                          Para que “cuente” al vendedor, lo importante es <code>vendedorEmail</code>.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <p className="mt-2">
                   <strong>📍 Dirección:</strong> {p.direccion || "—"}{" "}
                   <a
@@ -616,7 +1364,8 @@ export default function AdminDepositoPedidos() {
                 )}
 
                 {(() => {
-                  const obs = p?.observacion || p?.["observación"] || p?.observaciones || p?.nota || p?.notas || "";
+                  const obs =
+                    p?.observacion || p?.["observación"] || p?.observaciones || p?.nota || p?.notas || "";
                   return obs.trim() ? (
                     <p className="mt-1">
                       <strong>📝 Observación:</strong> {obs}
@@ -652,7 +1401,12 @@ export default function AdminDepositoPedidos() {
                     className="select select-sm select-bordered"
                     value={p.metodoPago || ""}
                     onChange={(e) => actualizarPago(p.id, e.target.value)}
-                    disabled={bloqueado}
+                    disabled={bloqueado || p.entregado}
+                    title={
+                      p.entregado
+                        ? "Si necesitás corregir, primero desmarcá entregado (si tus reglas lo permiten)."
+                        : ""
+                    }
                   >
                     <option value="">-- Seleccionar --</option>
                     <option value="efectivo">Efectivo</option>
@@ -684,7 +1438,7 @@ export default function AdminDepositoPedidos() {
                           className={`w-full input input-sm ${inputClass}`}
                           value={Number.isFinite(ef) ? ef : 0}
                           onChange={(e) => setMixtoLocal(p.id, "pagoMixtoEfectivo", e.target.value)}
-                          disabled={bloqueado}
+                          disabled={bloqueado || p.entregado}
                         />
                       </div>
                       <div>
@@ -697,7 +1451,7 @@ export default function AdminDepositoPedidos() {
                           className={`w-full input input-sm ${inputClass}`}
                           value={Number.isFinite(tr) ? tr : 0}
                           onChange={(e) => setMixtoLocal(p.id, "pagoMixtoTransferencia", e.target.value)}
-                          disabled={bloqueado}
+                          disabled={bloqueado || p.entregado}
                         />
                       </div>
                       <label className="flex items-center gap-2">
@@ -706,7 +1460,7 @@ export default function AdminDepositoPedidos() {
                           className="toggle toggle-sm"
                           checked={!!p.pagoMixtoCon10}
                           onChange={(e) => setMixtoLocal(p.id, "pagoMixtoCon10", e.target.checked)}
-                          disabled={bloqueado}
+                          disabled={bloqueado || p.entregado}
                         />
                         <span className="text-sm">Aplicar +10% a la transferencia</span>
                       </label>
@@ -721,7 +1475,8 @@ export default function AdminDepositoPedidos() {
                         <strong>Transferencia = ${trRestanteSugerida.toFixed(0)}</strong>
                         {p.pagoMixtoCon10 ? (
                           <>
-                            {" "}→ <strong>+10%:</strong> ${extra10MixtoSugerido} —{" "}
+                            {" "}
+                            → <strong>+10%:</strong> ${extra10MixtoSugerido} —{" "}
                             <strong>Total transf. con 10%:</strong> ${trCon10Sugerida}
                           </>
                         ) : null}
@@ -744,7 +1499,7 @@ export default function AdminDepositoPedidos() {
                     <button
                       className="mt-3 btn btn-xs btn-primary"
                       onClick={() => guardarPagoMixto(p)}
-                      disabled={bloqueado || !(ef + tr === monto) || ef < 0 || tr < 0}
+                      disabled={bloqueado || p.entregado || !(ef + tr === monto) || ef < 0 || tr < 0}
                       title="La suma debe coincidir con el monto."
                     >
                       💾 Guardar pago mixto
@@ -768,7 +1523,7 @@ export default function AdminDepositoPedidos() {
       )}
 
       <div className="p-4 mt-8 rounded-xl bg-base-200">
-        <h3 className="mb-2 text-lg font-semibold">💰 Resumen Depósito (entregados)</h3>
+        <h3 className="mb-2 text-lg font-semibold">💰 Resumen (entregados)</h3>
         <p>
           <strong>Total efectivo:</strong> ${Math.round(efectivo)}
         </p>

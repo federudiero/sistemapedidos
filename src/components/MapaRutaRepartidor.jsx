@@ -30,7 +30,9 @@ const sanitizeDireccion = (s) => {
 const ensureARContext = (addr, base) => {
   const s = String(addr || "");
   if (/argentina/i.test(s)) return s;
-  const parts = String(base || "").split(",").map((t) => t.trim());
+  const parts = String(base || "")
+    .split(",")
+    .map((t) => t.trim());
   const ctx = parts.slice(-3).join(", "); // "Ciudad, Provincia, Argentina"
   return `${s}, ${ctx}`;
 };
@@ -44,10 +46,136 @@ const chunkArray = (arr, size) => {
   return out;
 };
 
+/* ===== helpers vendedor / teléfonos (para listado de tramos) ===== */
+const toWhatsAppAR = (raw) => {
+  let d = String(raw || "").replace(/\D+/g, "");
+  if (!d) return "";
+
+  if (d.startsWith("00")) d = d.replace(/^00+/, "");
+  if (d.startsWith("54")) d = d.slice(2);
+  if (d.startsWith("0")) d = d.slice(1);
+
+  if (/^15\d{6,8}$/.test(d)) return "";
+
+  const L = d.length;
+  const has15After = (areaLen) =>
+    L >= areaLen + 2 + 6 &&
+    L <= areaLen + 2 + 8 &&
+    d.slice(areaLen, areaLen + 2) === "15";
+
+  let had15 = false;
+  let areaLen = null;
+
+  if (has15After(4)) {
+    had15 = true;
+    areaLen = 4;
+  } else if (has15After(3)) {
+    had15 = true;
+    areaLen = 3;
+  } else if (d.startsWith("11") && has15After(2)) {
+    had15 = true;
+    areaLen = 2;
+  }
+
+  if (had15) {
+    d = d.slice(0, areaLen) + d.slice(areaLen + 2);
+  }
+
+  const has9Area = /^9\d{2,4}\d{6,8}$/.test(d);
+
+  const core = has9Area ? d.slice(1) : d;
+  if (core.length < 8 || core.length > 12) return "";
+
+  let national = d;
+  if (had15 && !has9Area) national = "9" + d;
+
+  return "54" + national;
+};
+
+const formatPhoneARDisplay = (raw) => {
+  let d = String(raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("54")) d = d.slice(2);
+  if (d.startsWith("0")) d = d.slice(1);
+  d = d.replace(/^(\d{2,4})15/, "$1");
+  if (!d.startsWith("9")) d = "9" + d;
+
+  const rest = d.slice(1);
+  let areaLen = 3;
+  if (rest.length === 10) areaLen = 2;
+  else if (rest.length === 11) areaLen = 3;
+  else if (rest.length === 12) areaLen = 4;
+
+  const area = rest.slice(0, areaLen);
+  const local = rest.slice(areaLen);
+  const localPretty =
+    local.length > 4
+      ? `${local.slice(0, local.length - 4)}-${local.slice(-4)}`
+      : local;
+
+  return `+54 9 ${area} ${localPretty}`;
+};
+
+const getPhones = (p) =>
+  [p.telefono, p.telefonoAlt]
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
+
+const getVendedorLabel = (p) => {
+  // caso objeto {nombre,email}
+  if (p?.vendedor && typeof p.vendedor === "object") {
+    const n = p.vendedor?.nombre || p.vendedor?.name || "";
+    const e = p.vendedor?.email || p.vendedor?.mail || "";
+    const out = String(n || e || "").trim();
+    if (out) return out;
+  }
+
+  const candidates = [
+    p?.vendedorNombre,
+    p?.vendedor,
+    p?.vendedora,
+    p?.vendedorEmail,
+    p?.emailVendedor,
+    p?.vendedorMail,
+    p?.asignadoPor,
+    p?.seller,
+    p?.sellerName,
+    p?.sellerEmail,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return "";
+};
+
+// ✅ Copiar al portapapeles (con fallback)
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export default function MapaRutaRepartidor({
   pedidos = [],
   onReindex,
-  readOnly = false, // 👈 NUEVO: modo solo lectura
+  readOnly = false, // 👈 modo solo lectura
 }) {
   const { provinciaId } = useProvincia();
   const BASE_DIRECCION = baseDireccion(provinciaId);
@@ -64,6 +192,9 @@ export default function MapaRutaRepartidor({
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
+  // ✅ mensaje corto para feedback de copiado
+  const [copyMsg, setCopyMsg] = useState("");
+
   // 👇 Estado del “modal” (InfoWindow) de edición
   const [editor, setEditor] = useState(null);
   // editor = { index: number (0-based), pedidoId: string, position: LatLngLiteral, value: number }
@@ -74,7 +205,7 @@ export default function MapaRutaRepartidor({
     libraries: ["places"],
   });
 
-  // Orden actual (ya viene de AdminHojaRuta por ordenRuta / drag&drop)
+  // Orden actual
   const pedidosValidos = useMemo(
     () =>
       pedidos.filter(
@@ -141,7 +272,6 @@ export default function MapaRutaRepartidor({
         setError("");
         setSegments([]);
 
-        // Troceamos pedidos (para listar nombre/dirección) y locations (para route)
         const pedidosChunks = chunkArray(pedidosValidos, MAX_WAYPOINTS);
         const locChunks = chunkArray(locations, MAX_WAYPOINTS);
         setChunkPedidos(pedidosChunks);
@@ -154,20 +284,16 @@ export default function MapaRutaRepartidor({
           const isFirst = i === 0;
           const isLast = i === locChunks.length - 1;
 
-          // Origen encadenado
           const origin = isFirst
             ? sanitizeDireccion(ensureARContext(BASE_DIRECCION, baseContext))
             : previousLastLoc || sanitizeDireccion(ensureARContext(BASE_DIRECCION, baseContext));
 
-          // Última parada del chunk actual
           const lastOfChunk = chunkLocs[chunkLocs.length - 1]?.location;
 
-          // Destino (último tramo vuelve a base)
           const destination = isLast
             ? sanitizeDireccion(ensureARContext(BASE_DIRECCION, baseContext))
             : lastOfChunk;
 
-          // Waypoints: intermedios = todas menos la última; último = TODAS
           let innerWaypoints = isLast ? chunkLocs : chunkLocs.slice(0, -1);
 
           if (innerWaypoints.length > MAX_WAYPOINTS) innerWaypoints.length = MAX_WAYPOINTS;
@@ -194,7 +320,6 @@ export default function MapaRutaRepartidor({
           previousLastLoc = lastOfChunk;
         }
 
-        // Stats de verificación (visual)
         let totalLegs = 0;
         results.forEach((r) => (totalLegs += r?.routes?.[0]?.legs?.length || 0));
         const nStops = locations.length;
@@ -246,7 +371,6 @@ export default function MapaRutaRepartidor({
 
   // ===== Handlers del editor (InfoWindow) =====
   const openEditor = (markerIdx) => {
-    // 👇 En modo solo lectura o sin callback, NO abrimos editor
     if (readOnly || !onReindex) return;
 
     const pedidoId = markerIndexToPedidoId[markerIdx];
@@ -255,20 +379,55 @@ export default function MapaRutaRepartidor({
       index: markerIdx,
       pedidoId,
       position,
-      value: markerIdx + 1, // default visible
+      value: markerIdx + 1,
     });
   };
 
   const closeEditor = () => setEditor(null);
 
   const saveEditor = () => {
-    if (!editor || !onReindex || readOnly) return; // 👈 también respeta readonly
+    if (!editor || !onReindex || readOnly) return;
     const total = pedidosValidos.length;
     let to = parseInt(editor.value, 10);
     if (Number.isNaN(to)) return;
-    to = Math.max(1, Math.min(total, to)) - 1; // 1..N -> 0..N-1
+    to = Math.max(1, Math.min(total, to)) - 1;
     if (to !== editor.index) onReindex(editor.pedidoId, to);
     closeEditor();
+  };
+
+  // ✅ Arma el texto del tramo para copiar
+  const buildTramoText = (chunk, tramoIndex) => {
+    const lines = [];
+    lines.push(`TRAMO ${tramoIndex + 1} (${chunk.length} paradas)`);
+    lines.push("—".repeat(28));
+
+    chunk.forEach((p, j) => {
+      const globalN = tramoIndex * MAX_WAYPOINTS + j + 1;
+      const cliente = String(p?.nombre || "Sin nombre").trim();
+      const vendedor = getVendedorLabel(p) || "No informado";
+      const direccion = String(p?.direccion || "").trim();
+
+      const phones = getPhones(p);
+const phonesDisp = phones.length
+  ? phones.map((x) => formatPhoneARDisplay(x)).filter(Boolean).join(" / ")
+  : "No informado";
+
+lines.push(
+  `${globalN}) ${cliente} | Tel: ${phonesDisp}` +
+    ` | Vendedor: ${vendedor}` +
+    (direccion ? ` | Dir: ${direccion}` : "")
+);
+    });
+
+    return lines.join("\n");
+  };
+
+  const copiarTramo = async (chunk, tramoIndex) => {
+    const text = buildTramoText(chunk, tramoIndex);
+    const ok = await copyToClipboard(text);
+    setCopyMsg(ok ? `✅ Tramo ${tramoIndex + 1} copiado` : "❌ No se pudo copiar");
+    window.clearTimeout(copiarTramo._t);
+    copiarTramo._t = window.setTimeout(() => setCopyMsg(""), 2500);
   };
 
   if (!isLoaded) return <p>Cargando mapa…</p>;
@@ -277,6 +436,7 @@ export default function MapaRutaRepartidor({
   return (
     <div className="mt-4">
       {msg && <div className="mb-2 text-sm badge badge-outline">{msg}</div>}
+      {copyMsg && <div className="mb-2 text-sm badge badge-success">{copyMsg}</div>}
       {error && <div className="mb-2 text-error">{error}</div>}
 
       <GoogleMap mapContainerStyle={mapContainerStyle} center={center} zoom={12} options={options}>
@@ -300,36 +460,26 @@ export default function MapaRutaRepartidor({
           />
         ))}
 
-        {/* Pines numerados 1..N (click = abrir editor SOLO si no es readOnly) */}
+        {/* Pines numerados 1..N */}
         {numberedMarkers.map((m, i) => (
           <Marker
             key={`pin-${i}`}
             position={m.position}
             label={m.label}
-            title={
-              readOnly
-                ? m.title
-                : `${m.title} — click para editar`
-            }
-            onClick={() => openEditor(i)} // openEditor ya respeta readOnly
+            title={readOnly ? m.title : `${m.title} — click para editar`}
+            onClick={() => openEditor(i)}
           />
         ))}
 
-        {/* InfoWindow “modalito” para editar el # */}
+        {/* InfoWindow editor */}
         {editor && editor.position && (
-          <InfoWindow
-            position={editor.position}
-            onCloseClick={closeEditor}
-            options={{ maxWidth: 240 }}
-          >
+          <InfoWindow position={editor.position} onCloseClick={closeEditor} options={{ maxWidth: 240 }}>
             <div className="p-2 space-y-2 text-sm rounded-lg shadow-md bg-base-200">
               <div className="font-semibold text-base-content/90">Editar posición</div>
 
               <div className="flex items-center gap-2">
                 <span className="opacity-70">Actual:</span>
-                <span className="font-mono badge badge-success badge-sm">
-                  #{editor.index + 1}
-                </span>
+                <span className="font-mono badge badge-success badge-sm">#{editor.index + 1}</span>
               </div>
 
               <label className="w-full form-control">
@@ -339,9 +489,7 @@ export default function MapaRutaRepartidor({
                   min={1}
                   max={pedidosValidos.length}
                   value={editor.value}
-                  onChange={(e) =>
-                    setEditor((prev) => ({ ...prev, value: e.target.value }))
-                  }
+                  onChange={(e) => setEditor((prev) => ({ ...prev, value: e.target.value }))}
                   className="w-24 text-center input input-sm input-bordered bg-base-100"
                 />
               </label>
@@ -350,10 +498,7 @@ export default function MapaRutaRepartidor({
                 <button className="btn btn-xs btn-ghost" onClick={closeEditor}>
                   ✖ Cancelar
                 </button>
-                <button
-                  className="flex items-center gap-1 btn btn-xs btn-primary"
-                  onClick={saveEditor}
-                >
+                <button className="flex items-center gap-1 btn btn-xs btn-primary" onClick={saveEditor}>
                   <span>💾</span> Guardar
                 </button>
               </div>
@@ -366,32 +511,64 @@ export default function MapaRutaRepartidor({
       {chunkPedidos.length > 0 && (
         <div className="mt-4">
           {chunkPedidos.map((chunk, i) => (
-            <div
-              key={i}
-              className="p-3 mb-3 border rounded-lg border-base-300 bg-base-100"
-            >
-              <div className="flex items-center gap-2 mb-2">
+            <div key={i} className="p-3 mb-3 border rounded-lg border-base-300 bg-base-100">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
                 <div
                   className="w-3 h-3 rounded"
                   style={{ backgroundColor: COLOR_PALETTE[i % COLOR_PALETTE.length] }}
                   title={`Color del tramo ${i + 1}`}
                 />
-                <strong>Tramo {i + 1}</strong>{" "}
+                <strong>Tramo {i + 1}</strong>
                 <span className="opacity-70">({chunk.length} paradas)</span>
+
+                {/* ✅ BOTÓN COPIAR TRAMO */}
+                <button
+                  type="button"
+                  className="ml-auto btn btn-xs btn-outline"
+                  onClick={() => copiarTramo(chunk, i)}
+                  title="Copia todo el tramo con: nro + cliente + teléfono + vendedor + dirección"
+                >
+                  📋 Copiar tramo
+                </button>
               </div>
+
               <ul className="text-sm list-disc list-inside">
-                {chunk.map((p, j) => (
-                  <li key={p.id || j}>
-                    <span className="opacity-70">
-                      #{i * MAX_WAYPOINTS + j + 1} —{" "}
-                    </span>
-                    <span className="font-medium">
-                      {p.nombre || "Sin nombre"}
-                    </span>
-                    {" · "}
-                    <span>{p.direccion}</span>
-                  </li>
-                ))}
+                {chunk.map((p, j) => {
+                  const vendedorLabel = getVendedorLabel(p) || "No informado";
+                  const phones = getPhones(p);
+                  const phoneMain = phones?.[0] || "";
+                  const phoneDisplay = phoneMain ? formatPhoneARDisplay(phoneMain) : "No informado";
+                  const waPhone = phoneMain ? toWhatsAppAR(phoneMain) : "";
+
+                  return (
+                    <li key={p.id || j} className="py-1">
+                      <div>
+                        <span className="opacity-70">#{i * MAX_WAYPOINTS + j + 1} — </span>
+                        <span className="font-medium">{p.nombre || "Sin nombre"}</span>
+                        {" · "}
+                        <span>{p.direccion}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span className="badge badge-info badge-xs">🧑‍💼 {vendedorLabel}</span>
+
+                        {waPhone ? (
+                          <a
+                            className="badge badge-outline badge-xs link link-accent"
+                            href={`https://wa.me/${waPhone}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`WhatsApp a ${phoneDisplay}`}
+                          >
+                            📞 {phoneDisplay}
+                          </a>
+                        ) : (
+                          <span className="badge badge-outline badge-xs opacity-80">📞 {phoneDisplay}</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}

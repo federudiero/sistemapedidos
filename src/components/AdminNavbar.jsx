@@ -35,24 +35,27 @@ const AdminNavbar = () => {
             <li><Link to="/admin/pedidos">Pedidos</Link></li>
             <li><Link to="/admin/dividir-pedidos">División de Pedidos</Link></li>
             <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
+            <li><Link to="/admin/AdminCRMPanel">Admin CRM Panel</Link></li>
 
-            {/* ✅ NUEVO: Depósito */}
             <li><Link to="/admin/deposito">Depósito</Link></li>
 
-            <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
-            <li><Link to="/admin/LiquidacionesComisiones">LiquidacionesComisiones</Link></li>
+            {/* ✅ FIX: rutas reales */}
+            <li><Link to="/admin/resumen-financiero">Estadísticas</Link></li>
+            <li><Link to="/admin/liquidaciones-comisiones">LiquidacionesComisiones</Link></li>
+
             <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
             <li><Link to="/admin/stock">Agregar Stock</Link></li>
             <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
+            <li><Link to="/admin/AdminControlCierres">Control de Cierres</Link></li>
+            <li><Link to="/admin/AuditoriaProductos">AuditoriaProductos</Link></li>
+             <li><Link to="/admin/historial-stock">Historial de stock</Link></li>
 
-            {/* 🆕 Historial de movimientos de stock */}
-            <li><Link to="/admin/historial-stock">Historial Stock</Link></li>
+
 
             <li><button onClick={handleLogout}>Cerrar Sesión</button></li>
           </ul>
         </div>
 
-        {/* Título opcional (si querés mostrarlo) */}
         <div className="items-center hidden gap-2 ml-2 lg:flex">
           <Warehouse className="w-5 h-5 opacity-70" />
           <span className="font-semibold">Admin</span>
@@ -65,18 +68,23 @@ const AdminNavbar = () => {
           <li><Link to="/admin/pedidos">Pedidos</Link></li>
           <li><Link to="/admin/dividir-pedidos">División</Link></li>
           <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
+          <li><Link to="/admin/AdminCRMPanel">Admin CRM Panel</Link></li>
 
-          {/* ✅ NUEVO: Depósito */}
           <li><Link to="/admin/deposito">Depósito</Link></li>
 
-          <li><Link to="/admin/estadisticas">Estadísticas</Link></li>
-          <li><Link to="/admin/LiquidacionesComisiones">LiquidacionesComisiones</Link></li>
+          {/* ✅ FIX: rutas reales */}
+          <li><Link to="/admin/resumen-financiero">Estadísticas</Link></li>
+          <li><Link to="/admin/liquidaciones-comisiones">LiquidacionesComisiones</Link></li>
+
           <li><Link to="/admin/cierre-caja">Cierre de Caja</Link></li>
           <li><Link to="/admin/stock">Agregar Stock</Link></li>
           <li><Link to="/admin/panel-stock">Control de Stock</Link></li>
+          <li><Link to="/admin/AdminControlCierres">Control de Cierres</Link></li>
+          <li><Link to="/admin/AuditoriaProductos">AuditoriaProductos</Link></li>
+            <li><Link to="/admin/historial-stock">Historial de stock</Link></li>
+         
 
-          {/* 🆕 Historial de movimientos de stock */}
-          <li><Link to="/admin/historial-stock">Historial Stock</Link></li>
+
         </ul>
       </div>
 

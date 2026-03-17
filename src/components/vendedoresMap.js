@@ -22,6 +22,7 @@ export const VENDEDORES = {
   "ayelenyamile97@gmail.com": "AYELEN1",
   "yanel.hogar@gmail.com": "YANEL",
   "lucianogabrielluduena@gmail.com": "LUCIANO",
+  "erikacorreatec29@gmail.com": "ERIKA CORREA",
 };
 
 // helper: parte ANTES del @

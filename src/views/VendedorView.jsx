@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import { format, startOfDay, addDays } from "date-fns";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import DatePicker, { registerLocale } from "react-datepicker";
 import es from "date-fns/locale/es";
 import "react-datepicker/dist/react-datepicker.css";
@@ -30,6 +30,7 @@ registerLocale("es", es);
 function VendedorView() {
   const { provinciaId } = useProvincia();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [emailVendedor, setEmailVendedor] = useState("");
   const [soyVendedorProv, setSoyVendedorProv] = useState(false);
@@ -38,6 +39,10 @@ function VendedorView() {
   const [cantidadPedidos, setCantidadPedidos] = useState(0);
   const [pedidos, setPedidos] = useState([]);
   const [pedidoAEditar, setPedidoAEditar] = useState(null);
+
+  // ✅ NUEVO: draft que viene del CRM modal
+  const [prefillDraft, setPrefillDraft] = useState(null);
+  const formTopRef = useRef(null);
 
   const isAliveRef = useRef(true);
   useEffect(() => {
@@ -59,6 +64,90 @@ function VendedorView() {
     return () => unsubscribe();
   }, [navigate]);
 
+  // ✅ helper: intentar leer fecha desde draft (opcional)
+  const parseFechaDesdeDraft = (d) => {
+    if (!d) return null;
+
+    // yyyy-MM-dd -> Date local
+    const fs = d.fechaStr;
+    if (typeof fs === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fs)) {
+      const dd = new Date(`${fs}T00:00:00`);
+      if (!isNaN(dd.getTime())) return dd;
+    }
+
+    // Firestore Timestamp
+    const f = d.fecha;
+    if (f?.toDate) {
+      const dd = f.toDate();
+      if (!isNaN(dd.getTime())) return dd;
+    }
+
+    // millis
+    if (typeof f === "number") {
+      const dd = new Date(f);
+      if (!isNaN(dd.getTime())) return dd;
+    }
+
+    // string date
+    if (typeof f === "string") {
+      const dd = new Date(f);
+      if (!isNaN(dd.getTime())) return dd;
+    }
+
+    return null;
+  };
+
+  // ✅ NUEVO: capturar draft desde navigate(..., { state: { pedidoDraft } })
+  // y pasarlo a PedidoForm para prellenar.
+  useEffect(() => {
+    const draft =
+      location?.state?.pedidoDraft ||
+      location?.state?.draft ||
+      location?.state?.prefillDraft ||
+      location?.state?.prefillPedido || // ✅ COMPAT: si el CRM manda esto
+      null;
+
+    if (!draft) return;
+
+    // ✅ Si el día está cerrado, igual prellenamos.
+    // Así el vendedor puede cambiar la fecha y luego guardar.
+    if (estaCerrado) {
+      Swal.fire(
+        "Día cerrado",
+        "El día seleccionado está cerrado. Podés cambiar la fecha en el selector y luego cargar el pedido.",
+        "info"
+      );
+    }
+
+    // cancelar edición si venías editando
+    setPedidoAEditar(null);
+
+    // ✅ si el draft trae fecha, la aplicamos (opcional; no rompe nada)
+    const fechaDraft = parseFechaDesdeDraft(draft);
+    if (fechaDraft) setFechaSeleccionada(fechaDraft);
+
+    // guardar draft para prefill
+    setPrefillDraft({
+      ...draft,
+      __prefillToken: Date.now(), // fuerza re-aplicar en PedidoForm
+      __fromCrm: true,
+    });
+
+    // limpiar state para evitar re-aplicarlo al volver atrás/adelante
+    navigate(location.pathname, { replace: true, state: {} });
+
+    // scroll suave al formulario
+    setTimeout(() => {
+      try {
+        formTopRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      } catch { }
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location?.state, navigate, location?.pathname, estaCerrado]);
+
   // ===== Chequear pertenencia a "vendedores" de la provincia (coincidir con reglas)
   useEffect(() => {
     const checkVendedor = async () => {
@@ -71,8 +160,8 @@ function VendedorView() {
         const arr = Array.isArray(data.vendedores)
           ? data.vendedores
           : data.vendedores
-          ? Object.keys(data.vendedores)
-          : [];
+            ? Object.keys(data.vendedores)
+            : [];
 
         const ok = arr.some(
           (v) =>
@@ -100,9 +189,7 @@ function VendedorView() {
 
   const colPedidos = useMemo(
     () =>
-      provinciaId
-        ? collection(db, "provincias", provinciaId, "pedidos")
-        : null,
+      provinciaId ? collection(db, "provincias", provinciaId, "pedidos") : null,
     [provinciaId]
   );
 
@@ -165,6 +252,9 @@ function VendedorView() {
       await setDoc(ref, nuevo);
       setPedidos((prev) => [nuevo, ...prev]);
       setCantidadPedidos((n) => n + 1);
+
+      // ✅ si venía desde CRM, consumimos el prefill al guardar
+      setPrefillDraft(null);
     } catch (e) {
       Swal.fire("Error", e?.message || "No se pudo agregar el pedido.", "error");
     }
@@ -175,7 +265,6 @@ function VendedorView() {
     const previo = pedidos.find((p) => p.id === pedidoActualizado.id);
     if (!previo) return;
 
-    // Reglas/UI: no entregado; dueño; vendedor de provincia; sin cierre global
     if (previo.entregado) {
       await Swal.fire(
         "Bloqueado",
@@ -196,7 +285,6 @@ function VendedorView() {
       return;
     }
 
-    // Chequear cierre global ANTES
     try {
       const refCierre = doc(
         db,
@@ -216,7 +304,6 @@ function VendedorView() {
         return;
       }
 
-      // 1) excluir campos no editables del update
       const {
         provinciaId: _prov,
         vendedorEmail: _vend,
@@ -225,16 +312,15 @@ function VendedorView() {
         ...editables
       } = pedidoActualizado;
 
-      // 2) quitar undefined (Firestore no lo acepta)
       const sanitize = (obj) =>
         Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 
-      // 3) normalizar estructuras
       if (Array.isArray(editables.productos)) {
         editables.productos = editables.productos.map((p) => ({
           nombre: p?.nombre ?? "",
           cantidad: Number(p?.cantidad ?? 0),
           precio: Number(p?.precio ?? 0),
+          productoId: p?.productoId ?? null,
         }));
       }
       if (editables.coordenadas) {
@@ -245,7 +331,6 @@ function VendedorView() {
       }
       if (editables.telefonoAlt === "") editables.telefonoAlt = null;
 
-      // 4) limitar a llaves válidas
       const ALLOWED_KEYS = new Set([
         "nombre",
         "telefono",
@@ -253,8 +338,9 @@ function VendedorView() {
         "partido",
         "direccion",
         "entreCalles",
-        "pedido",
+        "linkUbicacion",
         "coordenadas",
+        "pedido",
         "productos",
         "monto",
         "asignadoA",
@@ -268,10 +354,9 @@ function VendedorView() {
         "pagoMixtoTransferencia",
         "pagoMixtoCon10",
       ]);
+
       const editablesFiltrados = sanitize(
-        Object.fromEntries(
-          Object.entries(editables).filter(([k]) => ALLOWED_KEYS.has(k))
-        )
+        Object.fromEntries(Object.entries(editables).filter(([k]) => ALLOWED_KEYS.has(k)))
       );
 
       if (Object.keys(editablesFiltrados).length === 0) {
@@ -384,13 +469,20 @@ function VendedorView() {
     <div className="min-h-screen bg-base-200 text-base-content">
       <div className="max-w-screen-xl px-4 py-6 mx-auto">
         <div className="flex flex-col items-center justify-between gap-4 mb-8 md:flex-row">
-          <h2 className="text-2xl font-bold">
-            🎨 Sistema de Pedidos - Pinturería
-          </h2>
+          <h2 className="text-2xl font-bold">🎨 Sistema de Pedidos - Pinturería</h2>
+
           <div className="flex items-center gap-2">
-            <span className="font-mono badge badge-primary">
-              Prov: {provinciaId}
-            </span>
+            <span className="font-mono badge badge-primary">Prov: {provinciaId}</span>
+
+            {soyVendedorProv && (
+              <button
+                className="btn btn-info"
+                onClick={() => navigate("/vendedor/crm")}
+              >
+                💬 CRM
+              </button>
+            )}
+
             <button className="btn btn-error" onClick={handleLogout}>
               Cerrar sesión
             </button>
@@ -413,12 +505,18 @@ function VendedorView() {
           </div>
         </div>
 
+        {/* ✅ Ancla para scroll */}
+        <div ref={formTopRef} />
+
         <div className="p-0 mb-6 overflow-hidden border shadow md:p-6 bg-base-100 border-base-300 rounded-xl animate-fade-in-up">
           <PedidoForm
             onAgregar={agregarPedido}
             onActualizar={actualizarPedido}
             pedidoAEditar={pedidoAEditar}
             bloqueado={estaCerrado}
+            // ✅ NUEVO: prefill desde CRM
+            prefillDraft={prefillDraft}
+            onPrefillConsumed={() => setPrefillDraft(null)}
           />
 
           {!estaCerrado && pedidoAEditar && (
@@ -443,8 +541,8 @@ function VendedorView() {
             onEditar={setPedidoAEditar}
             onEliminar={eliminarPedido}
             bloqueado={estaCerrado}
-            currentUserEmail={emailVendedor} // ← reglas de dueño
-            provinciaId={provinciaId}        // ✅ NUEVO: para SeguimientoPedidoButton
+            currentUserEmail={emailVendedor}
+            provinciaId={provinciaId}
           />
         </div>
 
