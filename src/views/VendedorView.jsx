@@ -143,7 +143,9 @@ function VendedorView() {
           behavior: "smooth",
           block: "start",
         });
-      } catch { }
+      } catch (e) {
+        console.error("Error al scrollear al formulario:", e);
+      }
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location?.state, navigate, location?.pathname, estaCerrado]);
@@ -330,6 +332,8 @@ function VendedorView() {
         };
       }
       if (editables.telefonoAlt === "") editables.telefonoAlt = null;
+      if (editables.vendedorNombreManual === "") editables.vendedorNombreManual = null;
+      if (editables.vendedorReferenciaEmail === "") editables.vendedorReferenciaEmail = null;
 
       const ALLOWED_KEYS = new Set([
         "nombre",
@@ -339,6 +343,8 @@ function VendedorView() {
         "direccion",
         "entreCalles",
         "linkUbicacion",
+        "vendedorNombreManual",
+        "vendedorReferenciaEmail",
         "coordenadas",
         "pedido",
         "productos",

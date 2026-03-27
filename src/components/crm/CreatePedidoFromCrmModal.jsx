@@ -14,6 +14,21 @@ import { format } from "date-fns";
 registerLocale("es", es);
 
 const digits = (s) => String(s || "").replace(/\D/g, "");
+const norm = (s) => String(s || "").trim().toLowerCase();
+const safeNumber = (value, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+function getProductoKey(item) {
+    const productoId = item?.productoId ?? item?.id ?? null;
+    if (productoId) return `id:${String(productoId)}`;
+
+    const nombreNorm = norm(item?.nombre);
+    if (nombreNorm) return `name:${nombreNorm}`;
+
+    return `tmp:${String(item?.nombre || "sin-nombre")}`;
+}
 
 function parseFechaDefault(defaults) {
     if (!defaults) return null;
@@ -79,6 +94,58 @@ export default function CreatePedidoFromCrmModal({
     // Productos seleccionados
     const [productosSeleccionados, setProductosSeleccionados] = useState([]);
 
+    const productosById = useMemo(() => {
+        const map = {};
+        for (const prod of productosFirestore) {
+            if (prod?.id) map[String(prod.id)] = prod;
+        }
+        return map;
+    }, [productosFirestore]);
+
+    const productosByNombreNorm = useMemo(() => {
+        const map = {};
+        for (const prod of productosFirestore) {
+            const key = norm(prod?.nombre);
+            if (key && !map[key]) map[key] = prod;
+        }
+        return map;
+    }, [productosFirestore]);
+
+    const buildSelectedProduct = (prod, overrides = {}) => ({
+        id: prod?.id ?? overrides?.id ?? overrides?.productoId ?? null,
+        productoId: overrides?.productoId ?? prod?.id ?? null,
+        nombre: overrides?.nombre ?? prod?.nombre ?? "",
+        precio:
+            overrides?.precio === 0 || overrides?.precio
+                ? safeNumber(overrides.precio, 0)
+                : safeNumber(prod?.precio, 0),
+        cantidad: Math.max(1, safeNumber(overrides?.cantidad, 1)),
+    });
+
+    const normalizeSelectedProducts = (items = []) => {
+        return (Array.isArray(items) ? items : [])
+            .map((item) => {
+                const productoId = item?.productoId ?? item?.id ?? null;
+                const byId = productoId ? productosById[String(productoId)] : null;
+                const byName = !byId ? productosByNombreNorm[norm(item?.nombre)] : null;
+                const source = byId || byName;
+
+                if (source) return buildSelectedProduct(source, item);
+
+                const nombre = String(item?.nombre || "").trim();
+                if (!nombre) return null;
+
+                return {
+                    id: productoId || null,
+                    productoId: productoId || null,
+                    nombre,
+                    precio: safeNumber(item?.precio, 0),
+                    cantidad: Math.max(1, safeNumber(item?.cantidad, 1)),
+                };
+            })
+            .filter(Boolean);
+    };
+
     // Detect mobile (por breakpoint similar a tailwind sm)
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -121,7 +188,7 @@ export default function CreatePedidoFromCrmModal({
         setPartido(defaults?.partido || defaults?.localidad || "");
         setLinkUbicacion(defaults?.linkUbicacion || "");
         setCoordenadas(defaults?.coordenadas || null);
-        setProductosSeleccionados(Array.isArray(defaults?.productos) ? defaults.productos : []);
+        setProductosSeleccionados(normalizeSelectedProducts(defaults?.productos));
         setBusqueda("");
 
         const f = parseFechaDefault(defaults);
@@ -188,23 +255,32 @@ export default function CreatePedidoFromCrmModal({
     }, [productosFirestore, busqueda]);
 
     const toggleProduct = (prod, checked) => {
+        const prodKey = getProductoKey(prod);
+
         if (checked) {
-            setProductosSeleccionados((prev) => [
-                ...prev,
-                { productoId: prod.id, nombre: prod.nombre, precio: Number(prod.precio || 0), cantidad: 1 },
-            ]);
+            setProductosSeleccionados((prev) => {
+                if (prev.some((p) => getProductoKey(p) === prodKey)) return prev;
+                return [...prev, buildSelectedProduct(prod)];
+            });
         } else {
-            setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== prod.nombre));
+            setProductosSeleccionados((prev) => prev.filter((p) => getProductoKey(p) !== prodKey));
         }
     };
 
-    const cambiarCantidad = (nombreProd, delta) => {
+    const cambiarCantidad = (productKey, delta) => {
         setProductosSeleccionados((prev) =>
             prev.map((p) =>
-                p.nombre === nombreProd
+                getProductoKey(p) === productKey
                     ? { ...p, cantidad: Math.max(1, (parseInt(p.cantidad, 10) || 1) + delta) }
                     : p
             )
+        );
+    };
+
+    const updateCantidad = (productKey, value) => {
+        const cantidad = Math.max(1, safeNumber(value, 1));
+        setProductosSeleccionados((prev) =>
+            prev.map((p) => (getProductoKey(p) === productKey ? { ...p, cantidad } : p))
         );
     };
 
@@ -291,7 +367,7 @@ export default function CreatePedidoFromCrmModal({
                 >
                     {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-base-300 shrink-0">
-                        <div className="font-semibold text-lg">🧾 Crear pedido</div>
+                        <div className="text-lg font-semibold">🧾 Crear pedido</div>
                         <button className="btn btn-sm btn-ghost" onClick={onClose} type="button">
                             ✕
                         </button>
@@ -300,7 +376,7 @@ export default function CreatePedidoFromCrmModal({
                     {/* Tabs solo en mobile */}
                     {isMobile && (
                         <div className="px-3 pt-3 shrink-0">
-                            <div className="tabs tabs-boxed w-full">
+                            <div className="w-full tabs tabs-boxed">
                                 <button
                                     type="button"
                                     className={`tab flex-1 ${mobileTab === "cliente" ? "tab-active" : ""}`}
@@ -325,96 +401,96 @@ export default function CreatePedidoFromCrmModal({
                     )}
 
                     {/* Body (scroll) */}
-                    <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 sm:p-4">
+                    <div className="flex-1 min-h-0 px-4 py-3 overflow-y-auto sm:p-4">
                         <div className={`grid gap-4 ${isMobile ? "" : "md:grid-cols-2"}`}>
                             {/* ====== DATOS ====== */}
                             {(!isMobile || mobileTab === "cliente") && (
                                 <div className="grid gap-3">
                                     <div className="p-3 border rounded-xl border-base-300">
-                                        <div className="text-sm font-semibold mb-2">Datos del cliente</div>
+                                        <div className="mb-2 text-sm font-semibold">Datos del cliente</div>
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">📅 Fecha del pedido</span>
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">📅 Fecha del pedido</span>
                                         </label>
                                         <DatePicker
                                             selected={fechaPedido}
                                             onChange={(d) => setFechaPedido(d || new Date())}
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             dateFormat="dd/MM/yyyy"
                                             locale="es"
                                             withPortal={isMobile}
                                         />
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">Nombre *</span>
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">Nombre *</span>
                                         </label>
                                         <input
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             value={nombre}
                                             onChange={(e) => setNombre(e.target.value)}
                                         />
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">Teléfono *</span>
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">Teléfono *</span>
                                         </label>
                                         <input
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             value={telefono}
                                             onChange={(e) => setTelefono(digits(e.target.value))}
                                             placeholder="351..."
                                         />
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">Teléfono alt</span>
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">Teléfono alt</span>
                                         </label>
                                         <input
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             value={telefonoAlt}
                                             onChange={(e) => setTelefonoAlt(digits(e.target.value))}
                                             placeholder="opcional"
                                         />
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">Dirección *</span>
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">Dirección *</span>
                                         </label>
                                         <input
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             value={direccion}
                                             onChange={(e) => setDireccion(e.target.value)}
                                             placeholder="Calle y altura"
                                         />
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">Entre calles</span>
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">Entre calles</span>
                                         </label>
                                         <input
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             value={entreCalles}
                                             onChange={(e) => setEntreCalles(e.target.value)}
                                         />
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">Ciudad / Partido</span>
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">Ciudad / Partido</span>
                                         </label>
                                         <input
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             value={partido}
                                             onChange={(e) => setPartido(e.target.value)}
                                         />
 
-                                        <label className="label py-1">
-                                            <span className="label-text text-xs opacity-80">
+                                        <label className="py-1 label">
+                                            <span className="text-xs label-text opacity-80">
                                                 Link ubicación (Maps/WhatsApp)
                                             </span>
                                         </label>
                                         <input
-                                            className="input input-bordered w-full input-sm sm:input-md"
+                                            className="w-full input input-bordered input-sm sm:input-md"
                                             value={linkUbicacion}
                                             onChange={(e) => setLinkUbicacion(e.target.value)}
                                             placeholder="opcional"
                                         />
 
-                                        <div className="mt-3 flex flex-wrap gap-2">
+                                        <div className="flex flex-wrap gap-2 mt-3">
                                             {lastChatLocation?.lat && lastChatLocation?.lng ? (
                                                 <button
                                                     className="btn btn-outline btn-sm"
@@ -438,7 +514,7 @@ export default function CreatePedidoFromCrmModal({
                                     </div>
 
                                     <div className="p-3 border rounded-xl border-base-300">
-                                        <div className="text-sm font-semibold mb-2">Resumen</div>
+                                        <div className="mb-2 text-sm font-semibold">Resumen</div>
                                         {productosSeleccionados.length === 0 ? (
                                             <div className="text-sm opacity-70">Todavía no hay productos.</div>
                                         ) : (
@@ -453,30 +529,31 @@ export default function CreatePedidoFromCrmModal({
 
                             {/* ====== PRODUCTOS ====== */}
                             {(!isMobile || mobileTab === "productos") && (
-                                <div className="p-3 border rounded-xl border-base-300 flex flex-col min-h-0">
+                                <div className="flex flex-col min-h-0 p-3 border rounded-xl border-base-300">
                                     <div className="flex items-center justify-between gap-2 mb-2 shrink-0">
                                         <div className="text-sm font-semibold">Productos</div>
                                         {loadingProducts ? <span className="loading loading-spinner loading-sm" /> : null}
                                     </div>
 
                                     <input
-                                        className="input input-bordered input-sm sm:input-md w-full mb-3 shrink-0"
+                                        className="w-full mb-3 input input-bordered input-sm sm:input-md shrink-0"
                                         placeholder="Buscar producto..."
                                         value={busqueda}
                                         onChange={(e) => setBusqueda(e.target.value)}
                                     />
 
-                                    <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                                    <div className="flex-1 min-h-0 pr-1 overflow-y-auto">
                                         {filteredProducts.map((prod) => {
-                                            const seleccionado = productosSeleccionados.find((p) => p.nombre === prod.nombre);
+                                            const prodKey = getProductoKey(prod);
+                                            const seleccionado = productosSeleccionados.find((p) => getProductoKey(p) === prodKey);
                                             const cantidad = seleccionado?.cantidad || 1;
 
                                             return (
                                                 <div
-                                                    key={prod.id}
+                                                    key={prod.id || getProductoKey(prod)}
                                                     className="flex items-center justify-between gap-3 py-2 border-b border-base-200"
                                                 >
-                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                    <div className="flex items-center flex-1 min-w-0 gap-2">
                                                         <input
                                                             type="checkbox"
                                                             className="checkbox checkbox-sm"
@@ -496,7 +573,7 @@ export default function CreatePedidoFromCrmModal({
                                                             <button
                                                                 type="button"
                                                                 className="join-item btn btn-xs btn-outline"
-                                                                onClick={() => cambiarCantidad(prod.nombre, -1)}
+                                                                onClick={() => cambiarCantidad(prodKey, -1)}
                                                                 disabled={cantidad <= 1}
                                                             >
                                                                 −
@@ -506,16 +583,14 @@ export default function CreatePedidoFromCrmModal({
                                                                 value={cantidad}
                                                                 onChange={(e) => {
                                                                     const v = Math.max(1, parseInt(e.target.value || "1", 10));
-                                                                    setProductosSeleccionados((prev) =>
-                                                                        prev.map((p) => (p.nombre === prod.nombre ? { ...p, cantidad: v } : p))
-                                                                    );
+                                                                    updateCantidad(prodKey, v);
                                                                 }}
                                                                 inputMode="numeric"
                                                             />
                                                             <button
                                                                 type="button"
                                                                 className="join-item btn btn-xs btn-outline"
-                                                                onClick={() => cambiarCantidad(prod.nombre, +1)}
+                                                                onClick={() => cambiarCantidad(prodKey, +1)}
                                                             >
                                                                 +
                                                             </button>

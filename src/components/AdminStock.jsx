@@ -1,4 +1,4 @@
-// src/components/AdminStock.jsx — agrega Exportar Excel (productos) + Ajuste rápido de stock + Remito de ingreso + COSTO
+// src/components/AdminStock.jsx
 /* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -29,7 +29,6 @@ function yyyyMmDd(d) {
   return `${y}-${m}-${day}`;
 }
 
-// ✅ NUEVO: formateador moneda ARS (para mostrar precio al lado del nombre)
 const ARS = new Intl.NumberFormat("es-AR", {
   style: "currency",
   currency: "ARS",
@@ -47,14 +46,14 @@ function AdminStock() {
   const [nuevoProducto, setNuevoProducto] = useState({
     nombre: "",
     precio: "",
-    costo: "", // ✅ NUEVO
+    costo: "",
     stock: 0,
     stockMinimo: 10,
     esCombo: false,
     componentes: [],
   });
 
-  // ===================== NUEVO: REMITO / INGRESO DE STOCK =====================
+  // ===================== REMITO / INGRESO DE STOCK =====================
   const [remito, setRemito] = useState({
     proveedor: "",
     nroRemito: "",
@@ -67,7 +66,7 @@ function AdminStock() {
 
   const [remitosHist, setRemitosHist] = useState([]);
   const [loadingHist, setLoadingHist] = useState(false);
-  // =========================================================================
+  // ====================================================================
 
   const colProductos = useMemo(
     () => collection(db, "provincias", provinciaId, "productos"),
@@ -79,11 +78,51 @@ function AdminStock() {
     [provinciaId]
   );
 
+ const normalizarPayload = (obj) => {
+  const esCombo = Boolean(obj.esCombo);
+
+  return {
+    nombre: String(obj.nombre || "").trim(),
+    precio: Number(obj.precio) || 0,
+    costo: Number(obj.costo) || 0,
+    stock: Number(obj.stock) || 0,
+    stockMinimo: Number(obj.stockMinimo) || 0,
+    esCombo,
+    componentes: esCombo
+      ? Array.isArray(obj.componentes)
+        ? obj.componentes
+            .map((c) => ({
+              id: String(c?.id || "").trim(),
+              cantidad: Number(c?.cantidad) || 0,
+            }))
+            .filter((c) => c.id && c.cantidad > 0)
+        : []
+      : [],
+  };
+};
+
+  const igualesShallow = (a, b) => {
+    if (
+      (a.nombre || "") !== (b.nombre || "") ||
+      Number(a.precio || 0) !== Number(b.precio || 0) ||
+      Number(a.costo || 0) !== Number(b.costo || 0) ||
+      Number(a.stock || 0) !== Number(b.stock || 0) ||
+      Number(a.stockMinimo || 0) !== Number(b.stockMinimo || 0) ||
+      Boolean(a.esCombo) !== Boolean(b.esCombo) ||
+      JSON.stringify(a.componentes || []) !== JSON.stringify(b.componentes || [])
+    ) {
+      return false;
+    }
+    return true;
+  };
+
   const cargarProductos = async () => {
     const snapshot = await getDocs(colProductos);
     const data = snapshot.docs.map((d) => ({
       id: d.id,
       _ajusteStock: "",
+      _editing: false,
+      _busy: false,
       ...d.data(),
     }));
     setProductos(data);
@@ -95,39 +134,45 @@ function AdminStock() {
     setOriginales(ori);
   };
 
-  // ---------- helpers ----------
-  const normalizarPayload = (obj) => ({
-    nombre: String(obj.nombre || "").trim(),
-    precio: Number(obj.precio) || 0, // precio de venta
-    costo: Number(obj.costo) || 0, // ✅ NUEVO: costo / precio de stock
-    stock: Number(obj.stock) || 0,
-    stockMinimo: Number(obj.stockMinimo) || 0,
-    esCombo: !!obj.esCombo,
-    componentes: Array.isArray(obj.componentes) ? obj.componentes : [],
-  });
+  useEffect(() => {
+    if (provinciaId) cargarProductos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provinciaId]);
 
-  const igualesShallow = (a, b) => {
-    if (
-      (a.nombre || "") !== (b.nombre || "") ||
-      Number(a.precio || 0) !== Number(b.precio || 0) ||
-      Number(a.costo || 0) !== Number(b.costo || 0) || // ✅ NUEVO
-      Number(a.stock || 0) !== Number(b.stock || 0) ||
-      Number(a.stockMinimo || 0) !== Number(b.stockMinimo || 0) ||
-      Boolean(a.esCombo) !== Boolean(b.esCombo) ||
-      JSON.stringify(a.componentes || []) !== JSON.stringify(b.componentes || [])
-    ) {
-      return false;
-    }
-    return true;
-  };
+  const idToNombre = useMemo(() => {
+    const m = {};
+    for (const p of productos) m[p.id] = p.nombre || "(sin nombre)";
+    return m;
+  }, [productos]);
 
-  // ---------- GUARDAR UNO ----------
+  const idToProducto = useMemo(() => {
+    const m = {};
+    for (const p of productos) m[p.id] = p;
+    return m;
+  }, [productos]);
+
+  const productosFiltrados = productos
+    .filter((p) =>
+      (p.nombre || "").toLowerCase().includes((filtro || "").toLowerCase())
+    )
+    .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+
+  const productosParaRemito = useMemo(() => {
+    const arr = [...productos].filter((p) => {
+      const esCombo =
+        !!p.esCombo || String(p.nombre || "").toLowerCase().includes("combo");
+      return incluirCombosEnRemito ? true : !esCombo;
+    });
+    arr.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+    return arr;
+  }, [productos, incluirCombosEnRemito]);
+
   const actualizarProducto = async (producto) => {
     const payload = normalizarPayload(producto);
     const originalNorm = originales[producto.id] || normalizarPayload({});
 
     if (igualesShallow(originalNorm, payload)) {
-      return Swal.fire({
+      await Swal.fire({
         icon: "info",
         title: "Sin cambios",
         text: `No hay cambios en "${payload.nombre}"`,
@@ -136,6 +181,7 @@ function AdminStock() {
         timer: 1400,
         showConfirmButton: false,
       });
+      return false;
     }
 
     try {
@@ -143,9 +189,21 @@ function AdminStock() {
         doc(db, "provincias", provinciaId, "productos", producto.id),
         payload
       );
+
       setProductos((prev) =>
-        prev.map((p) => (p.id === producto.id ? { ...p, ...payload } : p))
+        prev.map((p) =>
+          p.id === producto.id
+            ? {
+                ...p,
+                ...payload,
+                _editing: false,
+                _ajusteStock: "",
+                _busy: false,
+              }
+            : p
+        )
       );
+
       setOriginales((prev) => ({ ...prev, [producto.id]: payload }));
 
       Swal.fire({
@@ -158,6 +216,8 @@ function AdminStock() {
         timer: 2000,
         timerProgressBar: true,
       });
+
+      return true;
     } catch (error) {
       console.error(error);
       Swal.fire({
@@ -165,10 +225,10 @@ function AdminStock() {
         title: "Error",
         text: "Hubo un problema al guardar el producto.",
       });
+      return false;
     }
   };
 
-  // ---------- AGREGAR UNO ----------
   const agregarProducto = async () => {
     try {
       const payload = normalizarPayload(nuevoProducto);
@@ -179,13 +239,22 @@ function AdminStock() {
       const id = nanoid();
       await setDoc(doc(db, "provincias", provinciaId, "productos", id), payload);
 
-      setProductos((prev) => [...prev, { id, _ajusteStock: "", ...payload }]);
+      setProductos((prev) => [
+        ...prev,
+        {
+          id,
+          _ajusteStock: "",
+          _editing: false,
+          _busy: false,
+          ...payload,
+        },
+      ]);
       setOriginales((prev) => ({ ...prev, [id]: payload }));
 
       setNuevoProducto({
         nombre: "",
         precio: "",
-        costo: "", // ✅ reset
+        costo: "",
         stock: 0,
         stockMinimo: 10,
         esCombo: false,
@@ -206,7 +275,6 @@ function AdminStock() {
     }
   };
 
-  // ---------- ELIMINAR UNO ----------
   const eliminarProducto = async (id) => {
     try {
       await deleteDoc(doc(db, "provincias", provinciaId, "productos", id));
@@ -231,42 +299,73 @@ function AdminStock() {
     }
   };
 
-  useEffect(() => {
-    if (provinciaId) cargarProductos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provinciaId]);
+  // ===================== EDICIÓN POR PRODUCTO =====================
+  const iniciarEdicion = (prodId) => {
+    setProductos((prev) =>
+      prev.map((p) =>
+        p.id === prodId
+          ? {
+              ...p,
+              _editing: true,
+              _ajusteStock: "",
+            }
+          : p
+      )
+    );
+  };
 
-  // ======== Mapa id -> nombre para combos ========
-  const idToNombre = useMemo(() => {
-    const m = {};
-    for (const p of productos) m[p.id] = p.nombre || "(sin nombre)";
-    return m;
-  }, [productos]);
+  const cancelarEdicion = (prodId) => {
+    const original = originales[prodId];
+    if (!original) return;
 
-  const idToProducto = useMemo(() => {
-    const m = {};
-    for (const p of productos) m[p.id] = p;
-    return m;
-  }, [productos]);
+    setProductos((prev) =>
+      prev.map((p) =>
+        p.id === prodId
+          ? {
+              id: p.id,
+              _editing: false,
+              _busy: false,
+              _ajusteStock: "",
+              ...original,
+            }
+          : p
+      )
+    );
+  };
 
-  const productosFiltrados = productos
-    .filter((p) =>
-      (p.nombre || "").toLowerCase().includes((filtro || "").toLowerCase())
-    )
-    .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+  const cambiarCampoProducto = (prodId, campo, valor) => {
+    setProductos((prev) =>
+      prev.map((p) => (p.id === prodId ? { ...p, [campo]: valor } : p))
+    );
+  };
 
-  // Para el select del remito (por defecto excluye combos)
-  const productosParaRemito = useMemo(() => {
-    const arr = [...productos].filter((p) => {
-      const esCombo =
-        !!p.esCombo || String(p.nombre || "").toLowerCase().includes("combo");
-      return incluirCombosEnRemito ? true : !esCombo;
-    });
-    arr.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
-    return arr;
-  }, [productos, incluirCombosEnRemito]);
+  const setCantidadComponenteProducto = (prodId, compId, cantidad) => {
+    const cant = Number(cantidad) || 0;
 
-  // =============== AUDITORÍA DE COMBOS (no escribe nada) ===============
+    setProductos((prev) =>
+      prev.map((p) => {
+        if (p.id !== prodId) return p;
+
+        const actuales = Array.isArray(p.componentes) ? [...p.componentes] : [];
+        const sinEse = actuales.filter((c) => c.id !== compId);
+
+        return {
+          ...p,
+          componentes:
+            cant > 0 ? [...sinEse, { id: compId, cantidad: cant }] : sinEse,
+        };
+      })
+    );
+  };
+
+  const getCantidadComponente = (prod, compId) => {
+    const comp = Array.isArray(prod.componentes)
+      ? prod.componentes.find((c) => c.id === compId)
+      : null;
+    return comp ? Number(comp.cantidad) || 0 : 0;
+  };
+  // ===============================================================
+
   const auditarCombos = () => {
     if (!provinciaId) {
       return Swal.fire(
@@ -345,8 +444,8 @@ function AdminStock() {
       `<div><b>Combos con problemas:</b> ${combosConProblemas}</div>` +
       (problemas.length
         ? `<hr/><div style="margin-top:8px;max-height:200px;overflow:auto;font-size:12px;">` +
-        problemas.map((p) => `<div>${p}</div>`).join("") +
-        `</div>`
+          problemas.map((p) => `<div>${p}</div>`).join("") +
+          `</div>`
         : `<div style="margin-top:8px;color:#16a34a">✅ No se encontraron problemas.</div>`) +
       `</div>`;
 
@@ -357,9 +456,7 @@ function AdminStock() {
       width: 600,
     });
   };
-  // ============================================================
 
-  /* =============== EXPORTAR EXCEL =============== */
   const exportarExcel = () => {
     try {
       const ahora = new Date();
@@ -416,36 +513,35 @@ function AdminStock() {
       ]);
 
       ws["!cols"] = [
-        { wch: 40 }, // nombre
-        { wch: 14 }, // precio
-        { wch: 14 }, // costo
-        { wch: 8 }, // stock
-        { wch: 12 }, // stock min
-        { wch: 9 }, // combo
-        { wch: 60 }, // comps
+        { wch: 40 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 8 },
+        { wch: 12 },
+        { wch: 9 },
+        { wch: 60 },
       ];
 
       const firstDataRow = 3;
       for (let r = firstDataRow; r < firstDataRow + filas.length; r++) {
-        // precio
         const precioRef = XLSX.utils.encode_cell({ r, c: 1 });
         if (ws[precioRef]) {
           ws[precioRef].t = "n";
           ws[precioRef].z = "#,##0.00";
         }
-        // costo
+
         const costoRef = XLSX.utils.encode_cell({ r, c: 2 });
         if (ws[costoRef]) {
           ws[costoRef].t = "n";
           ws[costoRef].z = "#,##0.00";
         }
-        // stock
+
         const stockRef = XLSX.utils.encode_cell({ r, c: 3 });
         if (ws[stockRef]) {
           ws[stockRef].t = "n";
           ws[stockRef].z = "#,##0";
         }
-        // stock min
+
         const stockMinRef = XLSX.utils.encode_cell({ r, c: 4 });
         if (ws[stockMinRef]) {
           ws[stockMinRef].t = "n";
@@ -470,30 +566,26 @@ function AdminStock() {
       Swal.fire("❌ Error", "No se pudo exportar el Excel de productos.", "error");
     }
   };
-  /* ====================================================== */
 
-  // =============== APLICAR AJUSTE RÁPIDO DE STOCK ===============
   const aplicarAjusteStock = (prod) => {
     const raw = prod._ajusteStock;
     const delta = parseInt(raw, 10);
-    if (isNaN(delta) || delta === 0) {
-      return;
-    }
+    if (isNaN(delta) || delta === 0) return;
+
     setProductos((prev) =>
       prev.map((p) =>
         p.id === prod.id
           ? {
-            ...p,
-            stock: (Number(p.stock) || 0) + delta,
-            _ajusteStock: "",
-          }
+              ...p,
+              stock: (Number(p.stock) || 0) + delta,
+              _ajusteStock: "",
+            }
           : p
       )
     );
   };
-  // =============================================================
 
-  // ===================== NUEVO: REMITO / INGRESO DE STOCK =====================
+  // ===================== REMITO / INGRESO DE STOCK =====================
   const setRemitoItem = (idx, patch) => {
     setRemito((prev) => {
       const items = [...(prev.items || [])];
@@ -513,7 +605,10 @@ function AdminStock() {
     setRemito((prev) => {
       const items = [...(prev.items || [])];
       items.splice(idx, 1);
-      return { ...prev, items: items.length ? items : [{ productId: "", cantidad: "" }] };
+      return {
+        ...prev,
+        items: items.length ? items : [{ productId: "", cantidad: "" }],
+      };
     });
   };
 
@@ -548,6 +643,7 @@ function AdminStock() {
     for (const it of cleaned) {
       map.set(it.productId, (map.get(it.productId) || 0) + it.cantidad);
     }
+
     const itemsFinal = Array.from(map.entries()).map(([productId, cantidad]) => {
       const prod = idToProducto[productId];
       const nombreSnapshot = prod?.nombre || "";
@@ -562,7 +658,10 @@ function AdminStock() {
       };
     });
 
-    const totalUnidades = itemsFinal.reduce((acc, it) => acc + Number(it.cantidad || 0), 0);
+    const totalUnidades = itemsFinal.reduce(
+      (acc, it) => acc + Number(it.cantidad || 0),
+      0
+    );
 
     const html =
       `<div style="text-align:left">` +
@@ -685,7 +784,7 @@ function AdminStock() {
       setLoadingHist(false);
     }
   };
-  // =========================================================================
+  // ====================================================================
 
   return (
     <div className="min-h-screen p-6 bg-base-100 text-base-content">
@@ -697,8 +796,10 @@ function AdminStock() {
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
           <h2 className="text-2xl font-bold">📦 Gestión de Stock</h2>
-          <div className="flex items-center gap-2">
-            <div className="font-mono badge badge-primary badge-lg">Prov: {provinciaId}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="font-mono badge badge-primary badge-lg">
+              Prov: {provinciaId}
+            </div>
             <button className="btn btn-outline btn-sm" onClick={cargarProductos}>
               Refrescar
             </button>
@@ -718,7 +819,7 @@ function AdminStock() {
         {/* ===================== REMITO / INGRESO DE STOCK ===================== */}
         <div className="p-4 mb-6 border shadow rounded-xl bg-base-100 text-base-content">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h3 className="font-semibold text-lg">🚚 Remito / Ingreso de stock</h3>
+            <h3 className="text-lg font-semibold">🚚 Remito / Ingreso de stock</h3>
 
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-sm">
@@ -843,7 +944,7 @@ function AdminStock() {
                       />
                     </div>
 
-                    <div className="md:col-span-2 flex gap-2 justify-end">
+                    <div className="flex justify-end gap-2 md:col-span-2">
                       <button
                         className="btn btn-sm btn-error btn-outline"
                         type="button"
@@ -858,10 +959,11 @@ function AdminStock() {
               })}
             </div>
 
-            <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-2 mt-4 md:flex-row md:items-center md:justify-between">
               <div className="text-sm opacity-70">
-                Esto genera un registro en <span className="font-mono">remitosStock</span> y suma stock
-                con <span className="font-mono">increment()</span>. Ideal para auditar al que carga.
+                Esto genera un registro en{" "}
+                <span className="font-mono">remitosStock</span> y suma stock con{" "}
+                <span className="font-mono">increment()</span>.
               </div>
 
               <button
@@ -885,11 +987,11 @@ function AdminStock() {
                   const total = Number(r.totalUnidades) || 0;
 
                   return (
-                    <div key={r.id} className="border rounded-xl p-3 bg-base-200/40">
+                    <div key={r.id} className="p-3 border rounded-xl bg-base-200/40">
                       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                         <div className="font-semibold">
                           {r.fechaStr || "—"}{" "}
-                          <span className="opacity-70 font-normal">
+                          <span className="font-normal opacity-70">
                             {r.nroRemito ? `— Remito: ${r.nroRemito}` : ""}
                             {r.proveedor ? ` — ${r.proveedor}` : ""}
                           </span>
@@ -901,7 +1003,7 @@ function AdminStock() {
                       </div>
 
                       {Array.isArray(r.items) && r.items.length > 0 && (
-                        <ul className="mt-2 ml-5 list-disc text-sm">
+                        <ul className="mt-2 ml-5 text-sm list-disc">
                           {r.items.map((it, i) => (
                             <li key={`${r.id}-it-${i}`}>
                               {(it.nombreSnapshot || it.productId) ?? "—"}:{" "}
@@ -923,7 +1025,6 @@ function AdminStock() {
         <div className="p-4 mb-6 border shadow rounded-xl bg-base-100 text-base-content">
           <h3 className="mb-4 font-semibold">➕ Agregar producto</h3>
 
-          {/* ✅ ahora 5 columnas */}
           <div className="grid gap-4 md:grid-cols-5">
             <div>
               <label className="label">
@@ -1019,14 +1120,11 @@ function AdminStock() {
             <div className="mt-6">
               <h4 className="mb-2 font-semibold">🧩 Componentes del combo</h4>
               {productos
-                .filter((p) => !String(p.nombre || "").toLowerCase().includes("combo"))
+                .filter((p) => !p.esCombo && p.id !== nuevoProducto.id)
+                .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""))
                 .map((prodBase) => (
-                  <div
-                    key={prodBase.id}
-                    className="flex items-center gap-3 mb-2"
-                  >
-                    {/* ✅ CAMBIO: mostrar precio al lado del nombre */}
-                    <span className="w-full flex items-center justify-between gap-3">
+                  <div key={prodBase.id} className="flex items-center gap-3 mb-2">
+                    <span className="flex items-center justify-between w-full gap-3">
                       <span className="truncate">{prodBase.nombre}</span>
                       <span className="text-xs opacity-70 whitespace-nowrap">
                         {formatARS(prodBase.precio)}
@@ -1039,7 +1137,7 @@ function AdminStock() {
                       placeholder="0"
                       className="w-20 input input-sm input-bordered"
                       onChange={(e) => {
-                        const cantidad = parseInt(e.target.value) || 0;
+                        const cantidad = parseInt(e.target.value, 10) || 0;
                         setNuevoProducto((prev) => {
                           const otros = (prev.componentes || []).filter(
                             (c) => c.id !== prodBase.id
@@ -1059,10 +1157,7 @@ function AdminStock() {
             </div>
           )}
 
-          <button
-            onClick={agregarProducto}
-            className="w-full mt-6 btn btn-success"
-          >
+          <button onClick={agregarProducto} className="w-full mt-6 btn btn-success">
             Agregar producto
           </button>
         </div>
@@ -1087,50 +1182,122 @@ function AdminStock() {
               ? "border-l-4 border-pink-500 bg-pink-50 dark:bg-pink-900/20"
               : "border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20";
 
+            const productosBaseParaEditar = productos
+              .filter((p) => !p.esCombo && p.id !== prod.id)
+              .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+
             return (
               <div
                 key={prod.id}
                 className={`p-5 shadow-lg rounded-lg ${colorClase} transition-transform hover:scale-[1.01]`}
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-col gap-2 mb-3 md:flex-row md:items-center md:justify-between">
                   <div className="mb-2">
                     <h4 className="text-lg font-bold leading-snug">
                       {esCombo ? "🧃 Combo" : "📦 Producto"}:{" "}
                       <span className="text-primary">{prod.nombre}</span>
                     </h4>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <span className="text-sm opacity-60">
+                        ID: {prod.id.slice(0, 5)}...
+                      </span>
+                      {prod._editing ? (
+                        <span className="badge badge-warning badge-sm">Editando</span>
+                      ) : (
+                        <span className="badge badge-ghost badge-sm">Vista</span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-sm opacity-60">
-                    ID: {prod.id.slice(0, 5)}...
-                  </span>
+
+                  <div className="flex flex-wrap gap-2">
+                    {!prod._editing ? (
+                      <>
+                        <button
+                          className="btn btn-info btn-sm"
+                          onClick={() => iniciarEdicion(prod.id)}
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          className={`btn btn-error btn-sm ${prod._busy ? "btn-disabled" : ""}`}
+                          onClick={async () => {
+                            const conf = await Swal.fire({
+                              icon: "warning",
+                              title: "¿Eliminar producto?",
+                              text: `Se eliminará "${prod.nombre}".`,
+                              showCancelButton: true,
+                              confirmButtonText: "Sí, eliminar",
+                              cancelButtonText: "Cancelar",
+                            });
+                            if (!conf.isConfirmed) return;
+
+                            setProductos((p) =>
+                              p.map((pr) =>
+                                pr.id === prod.id ? { ...pr, _busy: true } : pr
+                              )
+                            );
+                            await eliminarProducto(prod.id);
+                          }}
+                          disabled={!!prod._busy}
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => cancelarEdicion(prod.id)}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          className={`btn btn-warning btn-sm ${prod._busy ? "btn-disabled" : ""}`}
+                          onClick={async () => {
+                            setProductos((p) =>
+                              p.map((pr) =>
+                                pr.id === prod.id ? { ...pr, _busy: true } : pr
+                              )
+                            );
+                            const ok = await actualizarProducto(prod);
+                            if (!ok) {
+                              setProductos((p) =>
+                                p.map((pr) =>
+                                  pr.id === prod.id ? { ...pr, _busy: false } : pr
+                                )
+                              );
+                            }
+                          }}
+                          disabled={!!prod._busy}
+                        >
+                          💾 Guardar
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {/* ✅ ahora 5 inputs */}
                 <div className="grid gap-3 md:grid-cols-5">
                   <input
                     className="w-full input input-bordered"
                     value={prod.nombre}
+                    disabled={!prod._editing}
                     onChange={(e) =>
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id
-                            ? { ...pr, nombre: e.target.value }
-                            : pr
-                        )
-                      )
+                      cambiarCampoProducto(prod.id, "nombre", e.target.value)
                     }
+                    placeholder="Nombre"
                   />
 
                   <input
                     className="w-full input input-bordered"
                     type="number"
                     value={prod.precio}
+                    disabled={!prod._editing}
                     onChange={(e) =>
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id
-                            ? { ...pr, precio: Number(e.target.value) || 0 }
-                            : pr
-                        )
+                      cambiarCampoProducto(
+                        prod.id,
+                        "precio",
+                        Number(e.target.value) || 0
                       )
                     }
                     placeholder="Precio"
@@ -1140,13 +1307,12 @@ function AdminStock() {
                     className="w-full input input-bordered"
                     type="number"
                     value={prod.costo ?? 0}
+                    disabled={!prod._editing}
                     onChange={(e) =>
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id
-                            ? { ...pr, costo: Number(e.target.value) || 0 }
-                            : pr
-                        )
+                      cambiarCampoProducto(
+                        prod.id,
+                        "costo",
+                        Number(e.target.value) || 0
                       )
                     }
                     placeholder="Costo"
@@ -1156,13 +1322,12 @@ function AdminStock() {
                     className="w-full input input-bordered"
                     type="number"
                     value={prod.stock}
+                    disabled={!prod._editing}
                     onChange={(e) =>
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id
-                            ? { ...pr, stock: Number(e.target.value) || 0 }
-                            : pr
-                        )
+                      cambiarCampoProducto(
+                        prod.id,
+                        "stock",
+                        Number(e.target.value) || 0
                       )
                     }
                     placeholder="Stock"
@@ -1172,50 +1337,113 @@ function AdminStock() {
                     className="w-full input input-bordered"
                     type="number"
                     value={prod.stockMinimo}
+                    disabled={!prod._editing}
                     onChange={(e) =>
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id
-                            ? { ...pr, stockMinimo: Number(e.target.value) || 0 }
-                            : pr
-                        )
+                      cambiarCampoProducto(
+                        prod.id,
+                        "stockMinimo",
+                        Number(e.target.value) || 0
                       )
                     }
                     placeholder="Stock mínimo"
                   />
                 </div>
 
-                {/* Ajuste rápido de stock */}
-                <div className="flex flex-wrap items-center gap-2 mt-3 text-sm">
-                  <span className="font-semibold">Ajustar stock rápido:</span>
-                  <input
-                    type="number"
-                    className="w-24 input input-sm input-bordered"
-                    placeholder="+/-"
-                    value={prod._ajusteStock ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setProductos((prev) =>
-                        prev.map((p) =>
-                          p.id === prod.id ? { ...p, _ajusteStock: value } : p
-                        )
-                      );
-                    }}
-                  />
-                  <button
-                    className="btn btn-sm btn-outline"
-                    type="button"
-                    onClick={() => aplicarAjusteStock(prod)}
-                  >
-                    Aplicar
-                  </button>
-                  <span className="opacity-60">
-                    Ej: escribí 300 para sumar 300 unidades (o -50 para restar),
-                    apretar guardar cuando se haya realizado el cambio de stock.
-                  </span>
-                </div>
+                {prod._editing && (
+                  <div className="mt-4">
+                    <label className="justify-start gap-3 cursor-pointer label">
+                      <span className="font-semibold label-text">¿Es combo?</span>
+                      <input
+                        type="checkbox"
+                        className="toggle toggle-primary"
+                        checked={!!prod.esCombo}
+                        onChange={(e) =>
+                          cambiarCampoProducto(prod.id, "esCombo", e.target.checked)
+                        }
+                      />
+                    </label>
+                  </div>
+                )}
 
-                {esCombo &&
+                {prod._editing && (
+                  <div className="flex flex-wrap items-center gap-2 mt-3 text-sm">
+                    <span className="font-semibold">Ajustar stock rápido:</span>
+                    <input
+                      type="number"
+                      className="w-24 input input-sm input-bordered"
+                      placeholder="+/-"
+                      value={prod._ajusteStock ?? ""}
+                      onChange={(e) =>
+                        setProductos((prev) =>
+                          prev.map((p) =>
+                            p.id === prod.id
+                              ? { ...p, _ajusteStock: e.target.value }
+                              : p
+                          )
+                        )
+                      }
+                    />
+                    <button
+                      className="btn btn-sm btn-outline"
+                      type="button"
+                      onClick={() => aplicarAjusteStock(prod)}
+                    >
+                      Aplicar
+                    </button>
+                    <span className="opacity-60">
+                      Poné 300 para sumar o -50 para restar, y después guardá.
+                    </span>
+                  </div>
+                )}
+
+                {prod._editing && !!prod.esCombo && (
+                  <div className="p-4 mt-5 border rounded-xl bg-base-200/40">
+                    <h5 className="mb-3 font-semibold">
+                      🧩 Editar componentes del combo
+                    </h5>
+                    <div className="grid gap-2">
+                      {productosBaseParaEditar.map((prodBase) => {
+                        const cantidadActual = getCantidadComponente(prod, prodBase.id);
+
+                        return (
+                          <div
+                            key={`${prod.id}-${prodBase.id}`}
+                            className="flex items-center gap-3"
+                          >
+                            <div className="flex items-center justify-between flex-1 gap-3">
+                              <span className="truncate">{prodBase.nombre}</span>
+                              <span className="text-xs opacity-70 whitespace-nowrap">
+                                {formatARS(prodBase.precio)} — stock:{" "}
+                                {Number(prodBase.stock) || 0}
+                              </span>
+                            </div>
+
+                            <input
+                              type="number"
+                              min={0}
+                              className="w-24 input input-sm input-bordered"
+                              value={cantidadActual}
+                              onChange={(e) =>
+                                setCantidadComponenteProducto(
+                                  prod.id,
+                                  prodBase.id,
+                                  parseInt(e.target.value, 10) || 0
+                                )
+                              }
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-3 text-xs opacity-70">
+                      Si ponés <b>0</b>, ese componente se quita del combo.
+                    </div>
+                  </div>
+                )}
+
+                {!prod._editing &&
+                  esCombo &&
                   Array.isArray(prod.componentes) &&
                   prod.componentes.length > 0 && (
                     <div className="mt-3 text-sm opacity-80">
@@ -1245,41 +1473,22 @@ function AdminStock() {
                     </div>
                   )}
 
-                <div className="flex justify-end gap-2 mt-4">
-                  <button
-                    className={`btn btn-warning btn-sm ${prod._busy ? "btn-disabled" : ""}`}
-                    onClick={async () => {
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id ? { ...pr, _busy: true } : pr
-                        )
-                      );
-                      await actualizarProducto(prod);
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id ? { ...pr, _busy: false } : pr
-                        )
-                      );
-                    }}
-                    disabled={!!prod._busy}
-                  >
-                    💾 Guardar
-                  </button>
-                  <button
-                    className={`btn btn-error btn-sm ${prod._busy ? "btn-disabled" : ""}`}
-                    onClick={async () => {
-                      setProductos((p) =>
-                        p.map((pr) =>
-                          pr.id === prod.id ? { ...pr, _busy: true } : pr
-                        )
-                      );
-                      await eliminarProducto(prod.id);
-                    }}
-                    disabled={!!prod._busy}
-                  >
-                    🗑️ Eliminar
-                  </button>
-                </div>
+                {!prod._editing && (
+                  <div className="grid gap-1 mt-4 text-sm opacity-80 md:grid-cols-2">
+                    <div>
+                      <b>Precio:</b> {formatARS(prod.precio)}
+                    </div>
+                    <div>
+                      <b>Costo:</b> {formatARS(prod.costo)}
+                    </div>
+                    <div>
+                      <b>Stock:</b> {Number(prod.stock) || 0}
+                    </div>
+                    <div>
+                      <b>Stock mínimo:</b> {Number(prod.stockMinimo) || 0}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

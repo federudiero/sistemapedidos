@@ -1,4 +1,3 @@
-// src/components/PedidoForm.jsx
 import React, { useRef, useState, useEffect, useMemo } from "react";
 import Swal from "sweetalert2";
 import { format } from "date-fns";
@@ -61,6 +60,7 @@ const PedidoForm = ({
 
   const [productosSeleccionados, setProductosSeleccionados] = useState([]);
   const [coordenadas, setCoordenadas] = useState(null);
+  const [placeId, setPlaceId] = useState(null);
 
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -139,6 +139,85 @@ const PedidoForm = ({
     }
     return m;
   }, [productosFirestore]);
+
+  const getProductoKey = (item) => {
+    const productoId = item?.productoId ?? item?.id ?? null;
+    if (productoId) return `id:${String(productoId)}`;
+
+    const nombreNorm = norm(item?.nombre);
+    if (nombreNorm) return `name:${nombreNorm}`;
+
+    return `tmp:${String(item?.nombre || "sin-nombre")}`;
+  };
+
+  const resolveCatalogProduct = (item) => {
+    const productoId = item?.productoId ?? item?.id ?? null;
+    if (productoId && productosById[String(productoId)]) {
+      return productosById[String(productoId)];
+    }
+
+    const nombreNorm = norm(item?.nombre);
+    if (nombreNorm && productosByNombreNorm[nombreNorm]) {
+      return productosByNombreNorm[nombreNorm];
+    }
+
+    return null;
+  };
+
+  const buildSelectedFromCatalog = (catalogProd, overrides = {}) => {
+    const costoFinal =
+      overrides?.costo === 0 || overrides?.costo
+        ? Number(overrides.costo) || 0
+        : Number(catalogProd?.costo ?? 0) || 0;
+
+    const precioFinal =
+      overrides?.precio === 0 || overrides?.precio
+        ? Number(overrides.precio) || 0
+        : Number(catalogProd?.precio ?? 0) || 0;
+
+    return {
+      ...catalogProd,
+      id: catalogProd?.id ?? overrides?.id ?? overrides?.productoId ?? null,
+      productoId: overrides?.productoId ?? catalogProd?.id ?? null,
+      nombre: overrides?.nombre ?? catalogProd?.nombre ?? "",
+      cantidad: Math.max(1, Number(overrides?.cantidad || 1)),
+      precio: precioFinal,
+      costo: costoFinal,
+      componentes:
+        overrides?.componentes ??
+        overrides?.componentesSnap ??
+        catalogProd?.componentes ??
+        undefined,
+      esCombo: overrides?.esCombo ?? undefined,
+    };
+  };
+
+  const buildSelectedFallback = (item = {}) => ({
+    ...item,
+    id: item?.productoId ?? item?.id ?? null,
+    productoId: item?.productoId ?? item?.id ?? null,
+    nombre: String(item?.nombre || "").trim(),
+    cantidad: Math.max(1, Number(item?.cantidad || 1)),
+    precio: Number(item?.precio || 0),
+    costo: Number(item?.costo ?? 0),
+    componentes: item?.componentes ?? item?.componentesSnap ?? undefined,
+    esCombo: item?.esCombo ?? undefined,
+  });
+
+  const mapPedidoItemToSelected = (item) => {
+    const catalogProd = resolveCatalogProduct(item);
+    if (catalogProd) return buildSelectedFromCatalog(catalogProd, item);
+
+    const fallback = buildSelectedFallback(item);
+    return fallback.nombre ? fallback : null;
+  };
+
+  const updateCantidadByKey = (productKey, cantidadValue) => {
+    const cantidad = Math.max(1, parseInt(cantidadValue || "1", 10) || 1);
+    setProductosSeleccionados((prev) =>
+      prev.map((p) => (getProductoKey(p) === productKey ? { ...p, cantidad } : p))
+    );
+  };
 
   const getComponentesFromProducto = (prod) => {
     if (!prod) return [];
@@ -311,16 +390,16 @@ const PedidoForm = ({
       if ("inputValue" in pacInstanceRef.current) {
         pacInstanceRef.current.inputValue = val ?? "";
       }
-    } catch (e) {console.error("Error al setear valor del autocomplete:", e);
-      // silencioso
+    } catch (e) {
+      console.error("Error al setear valor del autocomplete:", e);
     }
   };
 
-  const cambiarCantidad = (nombreProd, delta) => {
+  const cambiarCantidad = (productKey, delta) => {
     if (bloqueado) return;
     setProductosSeleccionados((prev) =>
       prev.map((p) =>
-        p.nombre === nombreProd
+        getProductoKey(p) === productKey
           ? {
               ...p,
               cantidad: Math.max(1, (parseInt(p.cantidad, 10) || 1) + delta),
@@ -407,11 +486,16 @@ const PedidoForm = ({
       try {
         const place = ev.placePrediction.toPlace();
         await place.fetchFields({
-          fields: ["formattedAddress", "location", "displayName"],
+          fields: ["formattedAddress", "location", "displayName", "id"],
         });
+
         const dir = place.formattedAddress || place.displayName?.text || "";
+        const nextPlaceId = place.id || ev?.placePrediction?.placeId || null;
+
         setDireccion(dir);
         setPacValue(dir);
+        setPlaceId(nextPlaceId);
+
         const loc = place.location;
         if (loc) setCoordenadas({ lat: loc.lat(), lng: loc.lng() });
       } catch (e) {
@@ -552,45 +636,22 @@ const PedidoForm = ({
       setTelefono(pedidoAEditar.telefono || "");
       setDireccion(pedidoAEditar.direccion || "");
       setPacValue(pedidoAEditar.direccion || "");
+      setPlaceId(pedidoAEditar.placeId || null);
       setEntreCalles(pedidoAEditar.entreCalles || "");
       setPartido(pedidoAEditar.partido || "");
       setTelefonoAlt(pedidoAEditar.telefonoAlt || "");
       setLinkUbicacion(pedidoAEditar.linkUbicacion || "");
       setVendedorEmailSeleccionado(
-        String(pedidoAEditar.vendedorEmail || "").trim().toLowerCase()
+        String(pedidoAEditar.vendedorReferenciaEmail || pedidoAEditar.vendedorEmail || "")
+          .trim()
+          .toLowerCase()
       );
       setVendedorNombreManual(pedidoAEditar.vendedorNombreManual || "");
 
       if (pedidoAEditar.coordenadas) setCoordenadas(pedidoAEditar.coordenadas);
 
       const nuevosProductos = (pedidoAEditar.productos || [])
-        .map((pedidoProd) => {
-          const productoOriginal = productosFirestore.find((p) => p.nombre === pedidoProd.nombre);
-
-          const costoFinal =
-            pedidoProd?.costo === 0 || pedidoProd?.costo
-              ? Number(pedidoProd.costo) || 0
-              : Number(productoOriginal?.costo ?? 0) || 0;
-
-          return productoOriginal
-            ? {
-                ...productoOriginal,
-                cantidad: pedidoProd.cantidad,
-                precio: Number(pedidoProd.precio ?? productoOriginal.precio),
-                costo: costoFinal,
-                componentes: pedidoProd.componentes ?? pedidoProd.componentesSnap ?? undefined,
-                esCombo: pedidoProd.esCombo ?? undefined,
-              }
-            : {
-                ...pedidoProd,
-                cantidad: pedidoProd.cantidad,
-                precio: Number(pedidoProd.precio || 0),
-                costo: Number(pedidoProd?.costo ?? 0),
-                id: pedidoProd.productoId || null,
-                componentes: pedidoProd.componentes ?? pedidoProd.componentesSnap ?? undefined,
-                esCombo: pedidoProd.esCombo ?? undefined,
-              };
-        })
+        .map((pedidoProd) => mapPedidoItemToSelected(pedidoProd))
         .filter(Boolean);
 
       if (nuevosProductos.length !== (pedidoAEditar.productos || []).length) {
@@ -623,12 +684,13 @@ const PedidoForm = ({
     setTelefono(String(d.telefono || "").replace(/\D/g, ""));
     setTelefonoAlt(String(d.telefonoAlt || "").replace(/\D/g, ""));
     setDireccion(d.direccion || "");
+    setPlaceId(d.placeId || null);
     setEntreCalles(d.entreCalles || "");
     setPartido(d.partido || d.localidad || "");
     setLinkUbicacion(d.linkUbicacion || "");
     setCoordenadas(d.coordenadas || null);
     setVendedorEmailSeleccionado(
-      String(d.vendedorEmail || "").trim().toLowerCase()
+      String(d.vendedorReferenciaEmail || d.vendedorEmail || "").trim().toLowerCase()
     );
     setVendedorNombreManual(d.vendedorNombreManual || "");
 
@@ -636,38 +698,7 @@ const PedidoForm = ({
 
     const draftProductos = Array.isArray(d.productos) ? d.productos : [];
     const mapped = draftProductos
-      .map((it) => {
-        const name = String(it?.nombre || "").trim();
-        if (!name) return null;
-
-        const cat = productosFirestore.find((p) => String(p.nombre || "") === name);
-
-        if (cat) {
-          const precioDraft = it?.precio;
-          const precioFinal =
-            precioDraft === 0 || precioDraft ? Number(precioDraft) : Number(cat.precio || 0);
-
-          const costoDraft = it?.costo;
-          const costoFinal =
-            costoDraft === 0 || costoDraft ? Number(costoDraft) || 0 : Number(cat.costo ?? 0) || 0;
-
-          return {
-            ...cat,
-            cantidad: Math.max(1, Number(it?.cantidad || 1)),
-            precio: precioFinal,
-            costo: costoFinal,
-          };
-        }
-
-        return {
-          id: it?.productoId || null,
-          productoId: it?.productoId || null,
-          nombre: name,
-          cantidad: Math.max(1, Number(it?.cantidad || 1)),
-          precio: Number(it?.precio || 0),
-          costo: Number(it?.costo ?? 0),
-        };
-      })
+      .map((it) => mapPedidoItemToSelected(it))
       .filter(Boolean);
 
     if (mapped.length !== draftProductos.length) {
@@ -725,6 +756,7 @@ const PedidoForm = ({
     setErrorTelefonoAlt("");
     setLinkUbicacion("");
     setCoordenadas(null);
+    setPlaceId(null);
     setMostrarDevolucion(false);
     setBusqueda("");
     setErrorNombre("");
@@ -778,8 +810,8 @@ const PedidoForm = ({
       (v) => v.email === String(vendedorEmailSeleccionado || "").trim().toLowerCase()
     );
 
-    const vendedorEmailFinal =
-      String(vendedorEmailSeleccionado || "").trim().toLowerCase() || vendedorEmailAuth;
+    const vendedorReferenciaEmail =
+      String(vendedorEmailSeleccionado || "").trim().toLowerCase() || null;
 
     const vendedorNombreManualFinal =
       String(vendedorNombreManual || "").trim() ||
@@ -813,7 +845,8 @@ const PedidoForm = ({
     });
 
     const pedidoConProductos = {
-      vendedorEmail: vendedorEmailFinal,
+      vendedorEmail: vendedorEmailAuth,
+      vendedorReferenciaEmail,
       vendedorNombreManual: vendedorNombreManualFinal,
       nombre,
       telefono,
@@ -822,6 +855,7 @@ const PedidoForm = ({
       direccion,
       entreCalles,
       linkUbicacion: linkUbicacion?.trim() || null,
+      placeId: placeId || null,
       pedido: pedidoFinal,
       coordenadas,
       productos: productosDb,
@@ -1059,7 +1093,7 @@ const PedidoForm = ({
               />
 
               <p className="mt-1 text-xs opacity-70">
-                Si elegís un vendedor de la provincia y no escribís nombre manual, se guarda automáticamente su nombre visible.
+                Si elegís un vendedor y no escribís nombre manual, se guarda su nombre visible como referencia. El dueño real del pedido sigue siendo tu usuario actual.
               </p>
             </div>
           </div>
@@ -1084,12 +1118,13 @@ const PedidoForm = ({
               {productosFirestore
                 .filter((prod) => (prod.nombre || "").toLowerCase().includes(busqueda.toLowerCase()))
                 .map((prod, idx) => {
-                  const seleccionado = productosSeleccionados.find((p) => p.nombre === prod.nombre);
+                  const prodKey = getProductoKey(prod);
+                  const seleccionado = productosSeleccionados.find((p) => getProductoKey(p) === prodKey);
                   const cantidad = seleccionado?.cantidad || 0;
 
                   return (
                     <div
-                      key={idx}
+                      key={prod.id || prod.nombre || idx}
                       className="flex items-center justify-between gap-3 py-2 border-b border-base-200"
                     >
                       <div className="flex items-center flex-1 min-w-0 gap-2">
@@ -1098,17 +1133,19 @@ const PedidoForm = ({
                           checked={!!seleccionado}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setProductosSeleccionados((prev) => [
-                                ...prev,
-                                {
-                                  ...prod,
-                                  cantidad: 1,
-                                  costo: Number(prod?.costo ?? 0),
-                                  precio: Number(prod?.precio ?? 0),
-                                },
-                              ]);
+                              setProductosSeleccionados((prev) => {
+                                if (prev.some((p) => getProductoKey(p) === prodKey)) return prev;
+                                return [
+                                  ...prev,
+                                  buildSelectedFromCatalog(prod, {
+                                    cantidad: 1,
+                                    costo: Number(prod?.costo ?? 0),
+                                    precio: Number(prod?.precio ?? 0),
+                                  }),
+                                ];
+                              });
                             } else {
-                              setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== prod.nombre));
+                              setProductosSeleccionados((prev) => prev.filter((p) => getProductoKey(p) !== prodKey));
                             }
                           }}
                           disabled={bloqueado}
@@ -1125,7 +1162,7 @@ const PedidoForm = ({
                           <button
                             type="button"
                             className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
-                            onClick={() => cambiarCantidad(prod.nombre, -1)}
+                            onClick={() => cambiarCantidad(prodKey, -1)}
                             disabled={bloqueado || cantidad <= 1}
                             title="Restar"
                           >
@@ -1138,9 +1175,7 @@ const PedidoForm = ({
                             value={cantidad}
                             onChange={(e) => {
                               const cant = Math.max(1, parseInt(e.target.value || "1", 10));
-                              setProductosSeleccionados((prev) =>
-                                prev.map((p) => (p.nombre === prod.nombre ? { ...p, cantidad: cant } : p))
-                              );
+                              updateCantidadByKey(prodKey, cant);
                             }}
                             className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
                             disabled={bloqueado}
@@ -1151,7 +1186,7 @@ const PedidoForm = ({
                           <button
                             type="button"
                             className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
-                            onClick={() => cambiarCantidad(prod.nombre, +1)}
+                            onClick={() => cambiarCantidad(prodKey, +1)}
                             disabled={bloqueado}
                             title="Sumar"
                           >
@@ -1183,13 +1218,14 @@ const PedidoForm = ({
                 <div className="pr-1 overflow-x-hidden overflow-y-auto max-h-64">
                   {productosFirestore.map((prod, idx) => {
                     const nombreDevolucion = `Devolución de ${prod.nombre}`;
-                    const seleccionado = productosSeleccionados.find((p) => p.nombre === nombreDevolucion);
+                    const devolucionKey = getProductoKey({ nombre: nombreDevolucion });
+                    const seleccionado = productosSeleccionados.find((p) => getProductoKey(p) === devolucionKey);
                     const cantidad = seleccionado?.cantidad || 1;
                     const estaSeleccionado = !!seleccionado;
 
                     return (
                       <div
-                        key={idx}
+                        key={`devolucion-${prod.id || prod.nombre || idx}`}
                         className="flex items-center justify-between gap-3 py-2 border-b border-error/30"
                       >
                         <div className="flex items-center flex-1 min-w-0 gap-2">
@@ -1198,18 +1234,21 @@ const PedidoForm = ({
                             checked={estaSeleccionado}
                             onChange={(e) => {
                               if (e.target.checked) {
-                                setProductosSeleccionados((prev) => [
-                                  ...prev,
-                                  {
-                                    nombre: nombreDevolucion,
-                                    precio: -Math.abs(prod.precio || 0),
-                                    cantidad: 1,
-                                    productoId: null,
-                                    costo: 0,
-                                  },
-                                ]);
+                                setProductosSeleccionados((prev) => {
+                                  if (prev.some((p) => getProductoKey(p) === devolucionKey)) return prev;
+                                  return [
+                                    ...prev,
+                                    {
+                                      nombre: nombreDevolucion,
+                                      precio: -Math.abs(prod.precio || 0),
+                                      cantidad: 1,
+                                      productoId: null,
+                                      costo: 0,
+                                    },
+                                  ];
+                                });
                               } else {
-                                setProductosSeleccionados((prev) => prev.filter((p) => p.nombre !== nombreDevolucion));
+                                setProductosSeleccionados((prev) => prev.filter((p) => getProductoKey(p) !== devolucionKey));
                               }
                             }}
                             className="checkbox checkbox-error"
@@ -1226,7 +1265,7 @@ const PedidoForm = ({
                             <button
                               type="button"
                               className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
-                              onClick={() => cambiarCantidad(nombreDevolucion, -1)}
+                              onClick={() => cambiarCantidad(devolucionKey, -1)}
                               disabled={bloqueado || cantidad <= 1}
                               title="Restar"
                             >
@@ -1238,9 +1277,7 @@ const PedidoForm = ({
                               value={cantidad}
                               onChange={(e) => {
                                 const cant = Math.max(1, parseInt(e.target.value || "1", 10));
-                                setProductosSeleccionados((prev) =>
-                                  prev.map((p) => (p.nombre === nombreDevolucion ? { ...p, cantidad: cant } : p))
-                                );
+                                updateCantidadByKey(devolucionKey, cant);
                               }}
                               className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
                               disabled={bloqueado}
@@ -1248,7 +1285,7 @@ const PedidoForm = ({
                             <button
                               type="button"
                               className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
-                              onClick={() => cambiarCantidad(nombreDevolucion, +1)}
+                              onClick={() => cambiarCantidad(devolucionKey, +1)}
                               disabled={bloqueado}
                               title="Sumar"
                             >

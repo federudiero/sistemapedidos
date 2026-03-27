@@ -13,6 +13,7 @@ import {
   setDoc,
   updateDoc,
   addDoc,
+  where,
 } from "firebase/firestore";
 import {
   getStorage,
@@ -23,12 +24,6 @@ import {
 import { auth } from "../../../firebase/firebase";
 import { safeSlug, normalizeSlug, normalizeEmail } from "./crmChatUtils";
 
-// ======================================================
-// Paths nuevos (alineados al backend)
-// provincias/{prov}/conversaciones/{convId}
-// provincias/{prov}/conversaciones/{convId}/mensajes
-// provincias/{prov}/conversaciones/{convId}/userMeta/{email}
-// ======================================================
 function convDocRef(db, provinciaId, convId) {
   return doc(
     db,
@@ -68,22 +63,36 @@ function userLabelsColRef(db, provinciaId, myEmail) {
     "provincias",
     String(provinciaId),
     "crmUserLabels",
-    String(myEmail),
+    String(normalizeEmail(myEmail)),
     "labels"
   );
 }
 
-function templatesColRef(db, provinciaId) {
+function userTemplatesColRef(db, provinciaId, myEmail) {
+  return collection(
+    db,
+    "provincias",
+    String(provinciaId),
+    "crmUserTemplates",
+    String(normalizeEmail(myEmail)),
+    "items"
+  );
+}
+
+function legacyTemplatesColRef(db, provinciaId) {
   return collection(db, "provincias", String(provinciaId), "crmTemplates");
 }
 
 function clientDocRef(db, provinciaId, clientId) {
-  return doc(db, "provincias", String(provinciaId), "crmClientes", String(clientId));
+  return doc(
+    db,
+    "provincias",
+    String(provinciaId),
+    "crmClientes",
+    String(clientId)
+  );
 }
 
-// ======================================================
-// API backend
-// ======================================================
 function trimTrailingSlash(url) {
   return String(url || "").replace(/\/+$/, "");
 }
@@ -113,10 +122,7 @@ async function fetchJson(url, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok || data?.ok === false) {
-    const msg =
-      data?.error ||
-      data?.message ||
-      `Request failed (${res.status})`;
+    const msg = data?.error || data?.message || `Request failed (${res.status})`;
     const err = new Error(msg);
     err.response = data;
     err.status = res.status;
@@ -126,9 +132,30 @@ async function fetchJson(url, options = {}) {
   return data;
 }
 
-// ----------------------
-// Conversation snapshot
-// ----------------------
+function extensionFromMime(mimeType, fallback = "bin") {
+  const mime = String(mimeType || "").toLowerCase();
+
+  const map = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
+    "audio/ogg": "ogg",
+    "audio/opus": "opus",
+    "audio/mp4": "m4a",
+    "audio/mpeg": "mp3",
+    "audio/aac": "aac",
+    "audio/webm": "webm",
+    "application/pdf": "pdf",
+  };
+
+  return map[mime] || fallback;
+}
+
 export function useCrmConversation({ db, provinciaId, myEmail, conversationId }) {
   const convRef = useMemo(() => {
     if (!provinciaId || !conversationId) return null;
@@ -154,7 +181,6 @@ export function useCrmConversation({ db, provinciaId, myEmail, conversationId })
     return () => unsub();
   }, [convRef]);
 
-  // marcar leído al abrir el chat
   useEffect(() => {
     if (!provinciaId || !conversationId || !myEmail) return;
 
@@ -178,9 +204,6 @@ export function useCrmConversation({ db, provinciaId, myEmail, conversationId })
   return { convRef, conversation };
 }
 
-// ----------------------
-// Messages snapshot
-// ----------------------
 export function useCrmMessages({ db, provinciaId, conversationId }) {
   const [msgs, setMsgs] = useState([]);
 
@@ -205,9 +228,6 @@ export function useCrmMessages({ db, provinciaId, conversationId }) {
   return { msgs };
 }
 
-// ----------------------
-// Custom labels snapshot (por usuario)
-// ----------------------
 export function useCrmUserLabels({ db, provinciaId, myEmail }) {
   const [customLabels, setCustomLabels] = useState([]);
 
@@ -234,71 +254,116 @@ export function useCrmUserLabels({ db, provinciaId, myEmail }) {
   return { customLabels };
 }
 
-// ----------------------
-// Templates snapshot + CRUD
-// ----------------------
-export function useCrmTemplates({ db, provinciaId }) {
-  const [templates, setTemplates] = useState([]);
+export function useCrmTemplates({ db, provinciaId, myEmail }) {
+  const [privateTemplates, setPrivateTemplates] = useState([]);
+  const [legacyTemplates, setLegacyTemplates] = useState([]);
 
   useEffect(() => {
-    if (!provinciaId) {
-      setTemplates([]);
+    if (!provinciaId || !myEmail) {
+      setPrivateTemplates([]);
+      setLegacyTemplates([]);
       return;
     }
 
-    const colRef = templatesColRef(db, provinciaId);
-
-    const unsub = onSnapshot(
-      colRef,
-      (snap) => {
-        const rows = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .sort((a, b) =>
-            String(a.title || "").localeCompare(String(b.title || ""))
-          );
-
-        setTemplates(rows);
-      },
-      (err) => console.error("templates snapshot error:", err)
+    const privateRef = userTemplatesColRef(db, provinciaId, myEmail);
+    const legacyRef = query(
+      legacyTemplatesColRef(db, provinciaId),
+      where("createdBy", "==", normalizeEmail(myEmail))
     );
 
-    return () => unsub();
-  }, [db, provinciaId]);
+    const unsubPrivate = onSnapshot(
+      privateRef,
+      (snap) => {
+        const rows = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+          scope: "private",
+        }));
+        setPrivateTemplates(rows);
+      },
+      (err) => console.error("private templates snapshot error:", err)
+    );
+
+    const unsubLegacy = onSnapshot(
+      legacyRef,
+      (snap) => {
+        const rows = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+          scope: "legacy",
+        }));
+        setLegacyTemplates(rows);
+      },
+      (err) => console.error("legacy templates snapshot error:", err)
+    );
+
+    return () => {
+      unsubPrivate();
+      unsubLegacy();
+    };
+  }, [db, provinciaId, myEmail]);
+
+  const templates = useMemo(() => {
+    return [...privateTemplates, ...legacyTemplates]
+      .map((row) => ({
+        ...row,
+        createdBy: normalizeEmail(row?.createdBy || myEmail),
+      }))
+      .sort((a, b) =>
+        String(a.title || "").localeCompare(String(b.title || ""), "es", {
+          sensitivity: "base",
+        })
+      );
+  }, [legacyTemplates, myEmail, privateTemplates]);
 
   const createTemplate = useCallback(
-    async ({ myEmail, title, text }) => {
+    async ({ title, text }) => {
       if (!provinciaId) throw new Error("Provincia no definida.");
+      if (!myEmail) throw new Error("Sesión no lista (email vacío).");
 
-      const colRef = templatesColRef(db, provinciaId);
+      const colRef = userTemplatesColRef(db, provinciaId, myEmail);
 
       await addDoc(colRef, {
-        title,
-        text,
+        title: String(title || "").trim(),
+        text: String(text || "").trim(),
         createdAt: serverTimestamp(),
-        createdBy: myEmail,
+        createdBy: normalizeEmail(myEmail),
+        updatedAt: serverTimestamp(),
+        updatedBy: normalizeEmail(myEmail),
       });
     },
-    [db, provinciaId]
+    [db, provinciaId, myEmail]
   );
 
   const deleteTemplate = useCallback(
-    async ({ id }) => {
+    async ({ id, scope }) => {
       if (!provinciaId || !id) return;
 
+      if (scope === "legacy") {
+        await deleteDoc(doc(db, "provincias", String(provinciaId), "crmTemplates", String(id)));
+        return;
+      }
+
+      if (!myEmail) throw new Error("Sesión no lista (email vacío).");
+
       await deleteDoc(
-        doc(db, "provincias", String(provinciaId), "crmTemplates", String(id))
+        doc(
+          db,
+          "provincias",
+          String(provinciaId),
+          "crmUserTemplates",
+          String(normalizeEmail(myEmail)),
+          "items",
+          String(id)
+        )
       );
     },
-    [db, provinciaId]
+    [db, provinciaId, myEmail]
   );
 
   return { templates, createTemplate, deleteTemplate };
 }
 
-// ----------------------
-// Labels actions + optimistic
-// Nota: acepta labelsFromDoc o labels para no romper tu componente actual
-// ----------------------
 export function useCrmLabelActions({
   db,
   provinciaId,
@@ -393,7 +458,7 @@ export function useCrmLabelActions({
         "provincias",
         String(provinciaId),
         "crmUserLabels",
-        String(myEmail),
+        String(normalizeEmail(myEmail)),
         "labels",
         String(slug)
       );
@@ -403,7 +468,7 @@ export function useCrmLabelActions({
         name: cleanName,
         color: color || "badge-ghost",
         createdAt: serverTimestamp(),
-        createdBy: myEmail,
+        createdBy: normalizeEmail(myEmail),
       };
 
       const snap = await getDoc(ref);
@@ -432,7 +497,7 @@ export function useCrmLabelActions({
         "provincias",
         String(provinciaId),
         "crmUserLabels",
-        String(myEmail),
+        String(normalizeEmail(myEmail)),
         "labels",
         cleanSlug
       );
@@ -458,7 +523,7 @@ export function useCrmLabelActions({
         "provincias",
         String(provinciaId),
         "crmUserLabels",
-        String(myEmail),
+        String(normalizeEmail(myEmail)),
         "labels",
         cleanSlug
       );
@@ -480,9 +545,6 @@ export function useCrmLabelActions({
   };
 }
 
-// ----------------------
-// Client doc load + save
-// ----------------------
 export function useCrmClient({
   db,
   provinciaId,
@@ -577,9 +639,11 @@ export function useCrmClient({
           localidad: (clientForm.localidad || "").trim(),
           notas: (clientForm.notas || "").trim(),
           updatedAt: serverTimestamp(),
-          updatedBy: myEmail,
+          updatedBy: normalizeEmail(myEmail),
           createdAt: clientDoc?.createdAt ? clientDoc.createdAt : serverTimestamp(),
-          createdBy: clientDoc?.createdBy ? clientDoc.createdBy : myEmail,
+          createdBy: clientDoc?.createdBy
+            ? clientDoc.createdBy
+            : normalizeEmail(myEmail),
         },
         { merge: true }
       );
@@ -605,56 +669,59 @@ export function useCrmClient({
   return { clientDoc, clientForm, setClientForm, savingClient, saveClient };
 }
 
-// ----------------------
-// Sender
-// - Texto: backend /crm/sendText
-// - Media/audio/location: Firestore/Storage interno
-// ----------------------
 export function useCrmSender({
   db,
   provinciaId,
   myEmail,
   conversationId,
-  convRef,
 }) {
+  const [sending, setSending] = useState({
+    text: false,
+    media: false,
+    audio: false,
+    location: false,
+  });
+  const [sendError, setSendError] = useState("");
+
   const requireReady = useCallback(() => {
-    if (!provinciaId || !conversationId) return false;
+    if (!db || !provinciaId || !conversationId) return false;
     if (!myEmail) return false;
     return true;
-  }, [provinciaId, conversationId, myEmail]);
+  }, [db, provinciaId, conversationId, myEmail]);
 
-  const pushMessage = useCallback(
-    async (payload) => {
-      if (!requireReady()) return;
+  const setBusy = useCallback((key, value) => {
+    setSending((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
-      const colRef = msgsColRef(db, provinciaId, conversationId);
+  const clearSendError = useCallback(() => setSendError(""), []);
 
-      await addDoc(colRef, {
-        ...payload,
-        agentEmail: myEmail,
-        timestamp: serverTimestamp(),
-        status: "sent",
-      });
+  const withSendState = useCallback(
+    async (key, fn) => {
+      setBusy(key, true);
+      setSendError("");
+      try {
+        return await fn();
+      } catch (e) {
+        setSendError(e?.message || "No se pudo completar el envío.");
+        throw e;
+      } finally {
+        setBusy(key, false);
+      }
     },
-    [db, provinciaId, conversationId, myEmail, requireReady]
+    [setBusy]
   );
 
-  const updateLast = useCallback(
-    async (previewText) => {
-      if (!convRef) return;
+  const getAuthContext = useCallback(async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Sesión no lista. Volvé a iniciar sesión.");
+    }
 
-      await setDoc(
-        convRef,
-        {
-          lastMessageText: previewText || "",
-          lastMessageAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    },
-    [convRef]
-  );
+    const idToken = await currentUser.getIdToken();
+    const apiBase = resolveApiBase();
+
+    return { idToken, apiBase };
+  }, []);
 
   const uploadBlob = useCallback(async ({ blob, path, contentType }) => {
     const storage = getStorage();
@@ -681,129 +748,165 @@ export function useCrmSender({
       const body = String(text || "").trim();
       if (!body || !requireReady()) return;
 
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        throw new Error("Sesión no lista. Volvé a iniciar sesión.");
-      }
+      return withSendState("text", async () => {
+        const { idToken, apiBase } = await getAuthContext();
 
-      const idToken = await currentUser.getIdToken();
-      const apiBase = resolveApiBase();
-
-      await fetchJson(`${apiBase}/crm/sendText`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          provinciaId,
-          convId: conversationId,
-          text: body,
-        }),
+        await fetchJson(`${apiBase}/crm/sendText`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            provinciaId,
+            convId: conversationId,
+            text: body,
+          }),
+        });
       });
     },
-    [provinciaId, conversationId, requireReady]
+    [conversationId, getAuthContext, provinciaId, requireReady, withSendState]
   );
 
   const sendMediaFiles = useCallback(
     async (files) => {
       if (!files || files.length === 0 || !requireReady()) return;
 
-      for (const f of files) {
-        const isImg = f.type?.startsWith("image/");
-        const isVid = f.type?.startsWith("video/");
-        if (!isImg && !isVid) continue;
+      return withSendState("media", async () => {
+        const { idToken, apiBase } = await getAuthContext();
 
-        const ext =
-          (f.name || "").split(".").pop() || (isImg ? "jpg" : "mp4");
-        const msgId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-        const path = `crm/${provinciaId}/${conversationId}/${msgId}.${ext}`;
+        for (const f of files) {
+          const isImg = f.type?.startsWith("image/");
+          const isVid = f.type?.startsWith("video/");
+          if (!isImg && !isVid) continue;
 
-        const url = await uploadBlob({
-          blob: f,
-          path,
-          contentType: f.type,
-        });
+          const ext =
+            (f.name || "").split(".").pop() ||
+            extensionFromMime(f.type, isImg ? "jpg" : "mp4");
+          const msgId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+          const path = `crm/${provinciaId}/${conversationId}/${msgId}.${ext}`;
 
-        await pushMessage({
-          direction: "out",
-          type: "media",
-          media: {
-            url,
-            mime: f.type,
-            kind: isImg ? "image" : "video",
-            name: f.name || null,
-            size: f.size || null,
-          },
-          from: "agent",
-          text: "",
-        });
+          const mediaUrl = await uploadBlob({
+            blob: f,
+            path,
+            contentType: f.type,
+          });
 
-        await updateLast(isImg ? "📷 Imagen" : "🎥 Video");
-      }
+          await fetchJson(`${apiBase}/crm/sendMedia`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              provinciaId,
+              convId: conversationId,
+              mediaUrl,
+              mimeType: f.type || "",
+              filename: f.name || "",
+              kind: isImg ? "image" : "video",
+              caption: "",
+            }),
+          });
+        }
+      });
     },
-    [provinciaId, conversationId, requireReady, uploadBlob, pushMessage, updateLast]
+    [conversationId, getAuthContext, provinciaId, requireReady, uploadBlob, withSendState]
   );
 
   const sendAudio = useCallback(
     async (blob) => {
       if (!blob || !requireReady()) return;
 
-      const msgId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      const path = `crm/${provinciaId}/${conversationId}/aud_${msgId}.webm`;
+      return withSendState("audio", async () => {
+        const { idToken, apiBase } = await getAuthContext();
+        const mimeType = String(blob?.type || "audio/webm").trim();
+        const ext = extensionFromMime(mimeType, "webm");
+        const msgId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const path = `crm/${provinciaId}/${conversationId}/aud_${msgId}.${ext}`;
+        const filename = `audio_${msgId}.${ext}`;
 
-      const url = await uploadBlob({
-        blob,
-        path,
-        contentType: "audio/webm",
+        const mediaUrl = await uploadBlob({
+          blob,
+          path,
+          contentType: mimeType,
+        });
+
+        await fetchJson(`${apiBase}/crm/sendMedia`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            provinciaId,
+            convId: conversationId,
+            mediaUrl,
+            mimeType,
+            filename,
+            kind: "audio",
+            caption: "",
+          }),
+        });
       });
-
-      await pushMessage({
-        direction: "out",
-        type: "audio",
-        audio: { url, mime: "audio/webm" },
-        from: "agent",
-        text: "",
-      });
-
-      await updateLast("🎤 Audio");
     },
-    [provinciaId, conversationId, requireReady, uploadBlob, pushMessage, updateLast]
+    [conversationId, getAuthContext, provinciaId, requireReady, uploadBlob, withSendState]
   );
 
-  const sendLocation = useCallback(async () => {
-    if (!navigator.geolocation) {
-      throw new Error("Tu navegador no soporta geolocalización.");
-    }
+  const sendLocation = useCallback(
+    async ({ name = "", address = "" } = {}) => {
+      if (!navigator.geolocation) {
+        throw new Error("Tu navegador no soporta geolocalización.");
+      }
 
-    if (!requireReady()) return;
+      if (!requireReady()) return;
 
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 8000,
+      return withSendState("location", async () => {
+        const pos = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 8000,
+          });
+        });
+
+        const { latitude, longitude } = pos.coords;
+        const { idToken, apiBase } = await getAuthContext();
+
+        await fetchJson(`${apiBase}/crm/sendLocation`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            provinciaId,
+            convId: conversationId,
+            latitude,
+            longitude,
+            name: String(name || "").trim(),
+            address: String(address || "").trim(),
+          }),
+        });
       });
-    });
+    },
+    [conversationId, getAuthContext, provinciaId, requireReady, withSendState]
+  );
 
-    const { latitude, longitude } = pos.coords;
+  const anySending =
+    sending.text || sending.media || sending.audio || sending.location;
 
-    await pushMessage({
-      direction: "out",
-      type: "location",
-      location: { lat: latitude, lng: longitude },
-      from: "agent",
-      text: "",
-    });
-
-    await updateLast("📍 Ubicación");
-  }, [requireReady, pushMessage, updateLast]);
-
-  return { sendText, sendMediaFiles, sendAudio, sendLocation, updateLast };
+  return {
+    sendText,
+    sendMediaFiles,
+    sendAudio,
+    sendLocation,
+    sending,
+    anySending,
+    sendError,
+    clearSendError,
+  };
 }
 
-// ----------------------
-// Auto scroll helper
-// ----------------------
 export function useChatAutoScroll({ viewportRef, msgs }) {
   const [didAutoScroll, setDidAutoScroll] = useState(false);
 

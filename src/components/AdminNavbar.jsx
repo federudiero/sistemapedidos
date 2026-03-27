@@ -36,6 +36,7 @@ const AdminNavbar = () => {
             <li><Link to="/admin/dividir-pedidos">División de Pedidos</Link></li>
             <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
             <li><Link to="/admin/AdminCRMPanel">Admin CRM Panel</Link></li>
+            <li><Link to="/admin/crm-remarketing">CRM Remarketing</Link></li>
 
             <li><Link to="/admin/deposito">Depósito</Link></li>
 
@@ -69,6 +70,7 @@ const AdminNavbar = () => {
           <li><Link to="/admin/dividir-pedidos">División</Link></li>
           <li><Link to="/admin/hoja-de-ruta">Hoja de Ruta</Link></li>
           <li><Link to="/admin/AdminCRMPanel">Admin CRM Panel</Link></li>
+          <li><Link to="/admin/crm-remarketing">CRM Remarketing</Link></li>
 
           <li><Link to="/admin/deposito">Depósito</Link></li>
 

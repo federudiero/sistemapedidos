@@ -19,9 +19,11 @@ import AdminDepositoPedidos from "./views/AdminDepositoPedidos";
 import HistorialMovimientosStock from "./components/HistorialMovimientosStock";
 import SeleccionarProvincia from "./views/SeleccionarProvincia";
 import AdminCRMPanel from "./views/AdminCRMPanel";
+import AdminCRMRemarketing from "./views/AdminCRMRemarketing";
 import AdminControlCierres from "./views/AdminControlCierres";
 import AuditoriaProductos from "./views/AuditoriaProductos";
 import AdminPreCargaProductos from "./views/AdminPreCargaProductos";
+import VendedorCRMRemarketing from "./views/VendedorCRMRemarketing";
 
 function App() {
   return (
@@ -43,6 +45,7 @@ function App() {
         <Route path="/admin/stock" element={<AdminStock />} />
         <Route path="/admin/cierre-caja" element={<CierreCaja />} />
         <Route path="/admin/AdminCRMPanel" element={<AdminCRMPanel />} />
+        <Route path="/admin/crm-remarketing" element={<AdminCRMRemarketing />} />
         <Route path="/admin/panel-stock" element={<PanelStock />} />
         <Route path="/admin/AdminControlCierres" element={<AdminControlCierres />} />
         <Route path="/admin/AuditoriaProductos" element={<AuditoriaProductos />} />
@@ -55,7 +58,7 @@ function App() {
           path="/admin/liquidaciones-comisiones"
           element={<LiquidacionesComisiones />}
         />
-        
+        <Route path="/vendedor/crm-remarketing" element={<VendedorCRMRemarketing />} />
         <Route path="/admin/historial-stock" element={<HistorialMovimientosStock />} />
 
         <Route path="/login-repartidor" element={<LoginRepartidor />} />
