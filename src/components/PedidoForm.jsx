@@ -45,6 +45,44 @@ const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
   return "";
 };
 
+const buildGoogleMapsLink = ({
+  linkUbicacion,
+  placeId,
+  coordenadas,
+  direccion,
+}) => {
+  const manual = String(linkUbicacion || "").trim();
+  if (manual) return manual;
+
+  const dir = String(direccion || "").trim();
+  const lat = coordenadas?.lat;
+  const lng = coordenadas?.lng;
+
+  if (placeId && dir) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      dir
+    )}&query_place_id=${encodeURIComponent(placeId)}`;
+  }
+
+  if (placeId) {
+    return `https://www.google.com/maps/search/?api=1&query=Google%20Maps&query_place_id=${encodeURIComponent(
+      placeId
+    )}`;
+  }
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  }
+
+  if (dir) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      dir
+    )}`;
+  }
+
+  return null;
+};
+
 const PedidoForm = ({
   onAgregar,
   onActualizar,
@@ -76,7 +114,6 @@ const PedidoForm = ({
   const [busqueda, setBusqueda] = useState("");
   const [linkUbicacion, setLinkUbicacion] = useState("");
 
-  // ✅ vendedor opcional: selector por provincia + nombre manual
   const [vendedoresProvincia, setVendedoresProvincia] = useState([]);
   const [vendedorEmailSeleccionado, setVendedorEmailSeleccionado] = useState("");
   const [vendedorNombreManual, setVendedorNombreManual] = useState("");
@@ -113,9 +150,6 @@ const PedidoForm = ({
 
   const lastPrefillTokenRef = useRef(null);
 
-  // =======================
-  // HELPERS
-  // =======================
   const norm = (s) => String(s || "").trim().toLowerCase();
 
   const esEnvioNombre = (nombreProd) => {
@@ -409,7 +443,6 @@ const PedidoForm = ({
     );
   };
 
-  // =============== MARCADOR EN EL MAPA ===============
   useEffect(() => {
     if (!isLoaded || !mapReady || !mapRef.current) return;
 
@@ -476,7 +509,6 @@ const PedidoForm = ({
     };
   }, [isLoaded, mapReady, coordenadas, nombre, direccion, MAP_ID]);
 
-  // =============== AUTOCOMPLETE ===============
   useEffect(() => {
     if (!isLoaded || !pacHostRef.current || !window.google?.maps) return;
 
@@ -492,12 +524,27 @@ const PedidoForm = ({
         const dir = place.formattedAddress || place.displayName?.text || "";
         const nextPlaceId = place.id || ev?.placePrediction?.placeId || null;
 
+        let nextCoords = null;
+        const loc = place.location;
+        if (loc) {
+          nextCoords = { lat: loc.lat(), lng: loc.lng() };
+          setCoordenadas(nextCoords);
+        } else {
+          setCoordenadas(null);
+        }
+
         setDireccion(dir);
         setPacValue(dir);
         setPlaceId(nextPlaceId);
 
-        const loc = place.location;
-        if (loc) setCoordenadas({ lat: loc.lat(), lng: loc.lng() });
+        const autoLink = buildGoogleMapsLink({
+          linkUbicacion: "",
+          placeId: nextPlaceId,
+          coordenadas: nextCoords,
+          direccion: dir,
+        });
+
+        setLinkUbicacion(autoLink || "");
       } catch (e) {
         console.error(e);
       }
@@ -526,7 +573,6 @@ const PedidoForm = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, bloqueado, pacRefresh]);
 
-  // =============== CARGA DE PRODUCTOS ===============
   useEffect(() => {
     const cargarProductos = async () => {
       if (!provinciaId) return;
@@ -576,7 +622,6 @@ const PedidoForm = ({
     cargarProductos();
   }, [provinciaId]);
 
-  // =============== CARGA VENDEDORES DE LA PROVINCIA ===============
   useEffect(() => {
     const cargarVendedoresProvincia = async () => {
       if (!provinciaId) {
@@ -629,7 +674,6 @@ const PedidoForm = ({
     cargarVendedoresProvincia();
   }, [provinciaId]);
 
-  // =============== EDITAR PEDIDO ===============
   useEffect(() => {
     if (pedidoAEditar && productosFirestore.length > 0) {
       setNombre(pedidoAEditar.nombre || "");
@@ -640,7 +684,15 @@ const PedidoForm = ({
       setEntreCalles(pedidoAEditar.entreCalles || "");
       setPartido(pedidoAEditar.partido || "");
       setTelefonoAlt(pedidoAEditar.telefonoAlt || "");
-      setLinkUbicacion(pedidoAEditar.linkUbicacion || "");
+
+      const autoLinkEdit = buildGoogleMapsLink({
+        linkUbicacion: pedidoAEditar.linkUbicacion,
+        placeId: pedidoAEditar.placeId,
+        coordenadas: pedidoAEditar.coordenadas,
+        direccion: pedidoAEditar.direccion,
+      });
+      setLinkUbicacion(autoLinkEdit || "");
+
       setVendedorEmailSeleccionado(
         String(pedidoAEditar.vendedorReferenciaEmail || pedidoAEditar.vendedorEmail || "")
           .trim()
@@ -666,7 +718,6 @@ const PedidoForm = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoAEditar, productosFirestore]);
 
-  // =============== PREFILL DESDE CRM ===============
   useEffect(() => {
     if (!prefillDraft) return;
     if (pedidoAEditar) return;
@@ -687,7 +738,15 @@ const PedidoForm = ({
     setPlaceId(d.placeId || null);
     setEntreCalles(d.entreCalles || "");
     setPartido(d.partido || d.localidad || "");
-    setLinkUbicacion(d.linkUbicacion || "");
+
+    const autoLinkPrefill = buildGoogleMapsLink({
+      linkUbicacion: d.linkUbicacion,
+      placeId: d.placeId,
+      coordenadas: d.coordenadas,
+      direccion: d.direccion,
+    });
+    setLinkUbicacion(autoLinkPrefill || "");
+
     setCoordenadas(d.coordenadas || null);
     setVendedorEmailSeleccionado(
       String(d.vendedorReferenciaEmail || d.vendedorEmail || "").trim().toLowerCase()
@@ -844,6 +903,13 @@ const PedidoForm = ({
       return base;
     });
 
+    const linkUbicacionFinal = buildGoogleMapsLink({
+      linkUbicacion,
+      placeId,
+      coordenadas,
+      direccion,
+    });
+
     const pedidoConProductos = {
       vendedorEmail: vendedorEmailAuth,
       vendedorReferenciaEmail,
@@ -854,7 +920,7 @@ const PedidoForm = ({
       partido,
       direccion,
       entreCalles,
-      linkUbicacion: linkUbicacion?.trim() || null,
+      linkUbicacion: linkUbicacionFinal,
       placeId: placeId || null,
       pedido: pedidoFinal,
       coordenadas,
@@ -915,7 +981,6 @@ const PedidoForm = ({
         className="space-y-6"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 md:gap-6 md:items-stretch">
-          {/* DATOS DEL CLIENTE */}
           <div className="w-full col-span-1 shadow-lg card bg-base-200">
             <div className="p-4 card-body sm:p-6">
               <h2 className="text-xl font-bold">🧑 Datos del cliente</h2>
@@ -1098,7 +1163,6 @@ const PedidoForm = ({
             </div>
           </div>
 
-          {/* LISTA DE PRODUCTOS */}
           <div className="flex flex-col card-body">
             <h2 className="text-lg font-bold">🛒 Productos disponibles</h2>
 
@@ -1200,7 +1264,6 @@ const PedidoForm = ({
             </div>
           </div>
 
-          {/* DEVOLUCIONES */}
           <button
             type="button"
             className="w-full mb-4 btn btn-outline btn-error btn-sm"
@@ -1301,7 +1364,6 @@ const PedidoForm = ({
             </div>
           )}
 
-          {/* BOTÓN GUARDAR + PREVIEW */}
           <div className="mt-6 text-right">
             <button
               type="submit"
@@ -1351,4 +1413,5 @@ const PedidoForm = ({
     <p className="text-center">Cargando Google Maps...</p>
   );
 };
+
 export default PedidoForm;

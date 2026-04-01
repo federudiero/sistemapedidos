@@ -1,5 +1,4 @@
 const {
-  
   normalizeEmail,
   safeStr,
   extractEmailsFromFlexField,
@@ -10,6 +9,20 @@ const {
   getCrmVendedoresSnap,
 } = require("../repositories/vendor.repository");
 const { pickRoundRobinIndex } = require("../repositories/roundRobin.repository");
+
+function normalizePhoneNumberId(value) {
+  const v = safeStr(value);
+  return v ? String(v).trim() : null;
+}
+
+function resolveConversationPhoneNumberId(convData) {
+  return normalizePhoneNumberId(
+    convData?.scopedPhoneNumberId ||
+      convData?.waPhoneNumberId ||
+      convData?.phoneNumberId ||
+      null
+  );
+}
 
 async function getUsuariosConfig(prov) {
   const snap = await getUsuariosConfigSnap(prov);
@@ -53,7 +66,7 @@ async function getCrmVendedoresConfig(prov) {
     if (!email) return;
 
     const data = docSnap.data() || {};
-    const phoneNumberId = safeStr(
+    const phoneNumberId = normalizePhoneNumberId(
       data.phoneNumberId || data.waPhoneNumberId || data.metaPhoneNumberId
     );
     const displayPhoneNumber = safeStr(
@@ -179,28 +192,89 @@ async function pickNextVendorEmail(prov) {
   return vendedores[nextIndex];
 }
 
-function resolvePhoneNumberIdForSend({ convData, vendorCfg }) {
-  const fromConv = convData?.waPhoneNumberId || convData?.phoneNumberId || null;
-  if (fromConv) return String(fromConv).trim();
+function resolveVendorEmailForPhoneNumberId({ phoneNumberId, vendorCfg }) {
+  const phoneKey = normalizePhoneNumberId(phoneNumberId);
+  if (!phoneKey) return null;
+  return vendorCfg?.byPhoneNumberId?.[phoneKey] || null;
+}
 
+function resolvePhoneNumberIdForSend({ convData, vendorCfg }) {
   const assigned = normalizeEmail(convData?.assignedToEmail);
+  const convPhoneNumberId = resolveConversationPhoneNumberId(convData);
+
+  // 1) Si la conversación ya está asociada a una línea, esa línea manda.
+  if (convPhoneNumberId) {
+    const mappedEmail = resolveVendorEmailForPhoneNumberId({
+      phoneNumberId: convPhoneNumberId,
+      vendorCfg,
+    });
+
+    // Si la línea existe en la config y pertenece a otro vendedor distinto al asignado,
+    // frenamos para evitar mandar desde una casilla incorrecta.
+    if (assigned && mappedEmail && mappedEmail !== assigned) {
+      throw new Error(
+        `La conversación está asociada a la línea ${convPhoneNumberId}, pero esa línea pertenece a ${mappedEmail} y no al usuario asignado ${assigned}.`
+      );
+    }
+
+    return convPhoneNumberId;
+  }
+
+  // 2) Si no vino línea guardada todavía, usamos la del vendedor asignado.
   const fromVendor = assigned && vendorCfg?.byEmail?.[assigned]?.phoneNumberId;
   if (fromVendor) return String(fromVendor).trim();
 
-  const fallback = process.env.META_WA_PHONE_NUMBER_ID;
-  return fallback ? String(fallback).trim() : null;
+  // 3) En modo casillas individuales puras, NO hacemos fallback silencioso
+  // a META_WA_PHONE_NUMBER_ID porque podría mandar desde una línea equivocada.
+  return null;
 }
 
 function resolveTokenForSend({ convData, vendorCfg }) {
   const assigned = normalizeEmail(convData?.assignedToEmail);
+  const convPhoneNumberId = resolveConversationPhoneNumberId(convData);
+
+  // Si la conversación tiene línea, intentamos usar el token del dueño de esa línea.
+  if (convPhoneNumberId) {
+    const mappedEmail = resolveVendorEmailForPhoneNumberId({
+      phoneNumberId: convPhoneNumberId,
+      vendorCfg,
+    });
+
+    const tokenFromLine =
+      mappedEmail && vendorCfg?.byEmail?.[mappedEmail]?.token
+        ? String(vendorCfg.byEmail[mappedEmail].token).trim()
+        : null;
+
+    if (tokenFromLine) return tokenFromLine;
+  }
+
+  // Si no, usamos el token del vendedor asignado.
   const fromVendor = assigned && vendorCfg?.byEmail?.[assigned]?.token;
   if (fromVendor) return String(fromVendor).trim();
 
+  // Fallback técnico: el token global puede servir para operar varias líneas
+  // dentro del mismo negocio de Meta, pero NO define la línea de envío.
   const fallback = process.env.META_WA_TOKEN;
   return fallback ? String(fallback).trim() : null;
 }
 
-function resolveWabaIdForSender({ assignedEmail, vendorCfg }) {
+function resolveWabaIdForSender({ assignedEmail, vendorCfg, convData = null }) {
+  const convPhoneNumberId = resolveConversationPhoneNumberId(convData);
+
+  if (convPhoneNumberId) {
+    const mappedEmail = resolveVendorEmailForPhoneNumberId({
+      phoneNumberId: convPhoneNumberId,
+      vendorCfg,
+    });
+
+    const fromLine =
+      mappedEmail && vendorCfg?.byEmail?.[mappedEmail]?.wabaId
+        ? String(vendorCfg.byEmail[mappedEmail].wabaId).trim()
+        : null;
+
+    if (fromLine) return fromLine;
+  }
+
   const assigned = normalizeEmail(assignedEmail);
   const fromVendor = assigned && vendorCfg?.byEmail?.[assigned]?.wabaId;
   if (fromVendor) return String(fromVendor).trim();
@@ -210,6 +284,8 @@ function resolveWabaIdForSender({ assignedEmail, vendorCfg }) {
 }
 
 module.exports = {
+  normalizePhoneNumberId,
+  resolveConversationPhoneNumberId,
   getUsuariosConfig,
   getCrmVendedoresConfig,
   getCrmVendorContext,
@@ -218,6 +294,7 @@ module.exports = {
   isAdminProv,
   assertVendorEnabledProv,
   pickNextVendorEmail,
+  resolveVendorEmailForPhoneNumberId,
   resolvePhoneNumberIdForSend,
   resolveTokenForSend,
   resolveWabaIdForSender,

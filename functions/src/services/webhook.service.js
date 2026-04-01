@@ -38,6 +38,161 @@ function parseWhatsAppWebhook(body) {
   };
 }
 
+function normalizePhoneId(value) {
+  const v = safeStr(value);
+  return v ? String(v).trim() : null;
+}
+
+function buildLegacyConvId(customerWaId) {
+  const clientKey = normalizeWaId(customerWaId);
+  return clientKey || null;
+}
+
+function buildScopedConvId({ customerWaId, phoneNumberId }) {
+  const clientKey = normalizeWaId(customerWaId);
+  const phoneKey = normalizePhoneId(phoneNumberId);
+
+  if (!clientKey || !phoneKey) return null;
+  return `${phoneKey}__${clientKey}`;
+}
+
+function resolveMappedVendorByPhoneId(vendorCfg, phoneNumberId) {
+  const phoneKey = normalizePhoneId(phoneNumberId);
+  if (!phoneKey) return null;
+  return vendorCfg?.byPhoneNumberId?.[phoneKey] || null;
+}
+
+function extractMessageData(foundMsg) {
+  if (!foundMsg) return null;
+
+  if (typeof foundMsg.data === "function") {
+    try {
+      return foundMsg.data() || null;
+    } catch (e) {
+      console.error("extractMessageData(data fn) error:", e);
+    }
+  }
+
+  if (foundMsg.data && typeof foundMsg.data === "object") {
+    return foundMsg.data;
+  }
+
+  if (foundMsg.snap && typeof foundMsg.snap.data === "function") {
+    try {
+      return foundMsg.snap.data() || null;
+    } catch (e) {
+      console.error("extractMessageData(snap) error:", e);
+    }
+  }
+
+  if (foundMsg.doc && typeof foundMsg.doc.data === "function") {
+    try {
+      return foundMsg.doc.data() || null;
+    } catch (e) {
+      console.error("extractMessageData(doc) error:", e);
+    }
+  }
+
+  return null;
+}
+
+function resolveStoredMessageKind(data) {
+  const raw = safeStr(
+    data?.rawType || data?.type || data?.media?.kind || data?.kind || "text"
+  ).toLowerCase();
+
+  if (raw === "media") {
+    return safeStr(data?.media?.kind || "media").toLowerCase() || "media";
+  }
+
+  return raw || "text";
+}
+
+function buildStoredMessagePreview(data) {
+  const directText = safeStr(
+    data?.text || data?.caption || data?.body || data?.message
+  );
+
+  if (directText) return directText;
+
+  const kind = resolveStoredMessageKind(data);
+  const filename =
+    safeStr(data?.document?.filename) ||
+    safeStr(data?.media?.filename) ||
+    safeStr(data?.filename) ||
+    "";
+
+  if (kind === "location") return "📍 Ubicación";
+  if (kind === "audio") return "🎙️ Audio";
+  if (kind === "image") return "📷 Imagen";
+  if (kind === "video") return "🎥 Video";
+  if (kind === "sticker") return "🏷️ Sticker";
+  if (kind === "document" || kind === "file") {
+    return buildMediaPlaceholder("document", filename || null);
+  }
+
+  return "Mensaje";
+}
+
+function buildReplyMetaFromFoundMessage(foundMsg, fallbackId) {
+  const data = extractMessageData(foundMsg) || {};
+  const replyId =
+    safeStr(data?.waMessageId) ||
+    safeStr(data?.messageId) ||
+    safeStr(data?.id) ||
+    safeStr(fallbackId);
+
+  if (!replyId) return null;
+
+  const direction = safeStr(data?.direction).toLowerCase();
+  const from = safeStr(data?.from).toLowerCase();
+  const author =
+    direction === "out" || from === "agent" ? "Vos" : "Cliente";
+
+  return {
+    id: replyId,
+    messageId: replyId,
+    waMessageId: replyId,
+    type: resolveStoredMessageKind(data) || "text",
+    textPreview: buildStoredMessagePreview(data),
+    author,
+  };
+}
+
+async function resolveReplyMetaForInbound({
+  prov,
+  convId,
+  legacyConvId,
+  contextWaMessageId,
+}) {
+  const replyId = safeStr(contextWaMessageId);
+  if (!replyId) return null;
+
+  const candidateConvIds = Array.from(
+    new Set([convId, legacyConvId].filter(Boolean))
+  );
+
+  for (const candidateConvId of candidateConvIds) {
+    const foundMsg = await findMessageByWaMessageId(
+      prov,
+      candidateConvId,
+      replyId
+    );
+
+    if (foundMsg) {
+      return buildReplyMetaFromFoundMessage(foundMsg, replyId);
+    }
+  }
+
+  return {
+    id: replyId,
+    messageId: replyId,
+    waMessageId: replyId,
+    type: "text",
+    textPreview: "Mensaje citado",
+  };
+}
+
 function parseInboundMessage(value, msg) {
   if (!msg) return null;
 
@@ -47,6 +202,7 @@ function parseInboundMessage(value, msg) {
 
   const toPhoneNumberId = value?.metadata?.phone_number_id || null;
   const toDisplayPhoneNumber = value?.metadata?.display_phone_number || null;
+  const contextWaMessageId = safeStr(msg?.context?.id) || null;
 
   let text = "";
   let normalizedType = "text";
@@ -87,6 +243,7 @@ function parseInboundMessage(value, msg) {
     waMessageId,
     toPhoneNumberId,
     toDisplayPhoneNumber,
+    contextWaMessageId,
     rawType: msg.type || "unknown",
     normalizedType,
     media,
@@ -106,12 +263,17 @@ function parseStatusEvent(value, status) {
   if (!status) return null;
 
   const waMessageId = status.id || null;
-  const convId = normalizeWaId(status.recipient_id);
+  const recipientWaId = normalizeWaId(status.recipient_id);
   const statusName = safeStr(status.status).toLowerCase() || "unknown";
   const phoneNumberId = value?.metadata?.phone_number_id || null;
 
   return {
-    convId,
+    recipientWaId,
+    scopedConvId: buildScopedConvId({
+      customerWaId: recipientWaId,
+      phoneNumberId,
+    }),
+    legacyConvId: buildLegacyConvId(recipientWaId),
     waMessageId,
     statusName,
     phoneNumberId,
@@ -129,7 +291,7 @@ async function fetchAndStoreInboundMedia({
 }) {
   if (!media?.mediaId) return null;
 
-  const phoneKey = toPhoneNumberId ? String(toPhoneNumberId).trim() : null;
+  const phoneKey = normalizePhoneId(toPhoneNumberId);
   const vendorEmail = phoneKey
     ? vendorCfg?.byPhoneNumberId?.[phoneKey] || null
     : null;
@@ -225,49 +387,147 @@ async function processInboundMessage({ prov, inbound }) {
     normalizedType,
     location,
     media,
+    contextWaMessageId,
   } = inbound;
 
-  const convId = normalizeWaId(fromWaId);
+  const clientWaId = normalizeWaId(fromWaId);
+  const phoneKey = normalizePhoneId(toPhoneNumberId);
+
+  if (!clientWaId) {
+    return { ok: true, ignored: true, reason: "missing client wa id" };
+  }
+
+  if (!phoneKey) {
+    return {
+      ok: true,
+      ignored: true,
+      reason: "missing inbound phone_number_id",
+    };
+  }
+
+  const convId = buildScopedConvId({
+    customerWaId: clientWaId,
+    phoneNumberId: phoneKey,
+  });
 
   if (!convId) {
-    return { ok: true, ignored: true, reason: "missing convId" };
+    return {
+      ok: true,
+      ignored: true,
+      reason: "could not build scoped convId",
+    };
+  }
+
+  const legacyConvId = buildLegacyConvId(clientWaId);
+  const vendorCfg = await getCrmVendorContext(prov);
+  const mappedVendorEmail = resolveMappedVendorByPhoneId(vendorCfg, phoneKey);
+
+  if (!mappedVendorEmail) {
+    console.warn("INBOUND IGNORED - UNMAPPED PHONE NUMBER ID", {
+      prov,
+      convId,
+      waMessageId: waMessageId || null,
+      phoneNumberId: phoneKey,
+      clientWaId,
+    });
+
+    return {
+      ok: true,
+      ignored: true,
+      reason: "unmapped inbound phone_number_id",
+      phoneNumberId: phoneKey,
+      clientWaId,
+    };
+  }
+
+  if (waMessageId) {
+    let existingMsg = await findMessageByWaMessageId(prov, convId, waMessageId);
+
+    if (!existingMsg && legacyConvId && legacyConvId !== convId) {
+      existingMsg = await findMessageByWaMessageId(
+        prov,
+        legacyConvId,
+        waMessageId
+      );
+    }
+
+    if (existingMsg) {
+      return {
+        ok: true,
+        ignored: true,
+        duplicate: true,
+        reason: "duplicate inbound waMessageId",
+        prov,
+        convId,
+        waMessageId,
+      };
+    }
   }
 
   const convSnap = await getConversationSnap(prov, convId);
 
+  let legacySnap = null;
+  if (legacyConvId && legacyConvId !== convId) {
+    legacySnap = await getConversationSnap(prov, legacyConvId);
+  }
+
+  const seedFromLegacy =
+    legacySnap?.exists &&
+    (!normalizePhoneId(legacySnap.data()?.waPhoneNumberId) ||
+      normalizePhoneId(legacySnap.data()?.waPhoneNumberId) === phoneKey);
+
+  const seedSnap = convSnap.exists ? convSnap : seedFromLegacy ? legacySnap : convSnap;
+  const seedData = seedSnap?.exists ? seedSnap.data() || {} : {};
+
   const assignedToEmail = await resolveAssignedForInbound({
     prov,
-    convSnap,
-    toPhoneNumberId,
+    convSnap: seedSnap || convSnap,
+    toPhoneNumberId: phoneKey,
   });
 
-  const vendorCfg = await getCrmVendorContext(prov);
-  const telefonoE164 = toDisplayE164(convId);
+  if (!assignedToEmail) {
+    return {
+      ok: true,
+      ignored: true,
+      reason: "could not resolve assigned vendor for inbound",
+      prov,
+      convId,
+      phoneNumberId: phoneKey,
+      clientWaId,
+    };
+  }
+
+  const telefonoE164 = toDisplayE164(clientWaId);
   const tsNow = nowTs();
 
   await mergeConversation(prov, convId, {
     telefonoE164,
-    nombre: profileName || (convSnap.exists ? convSnap.data()?.nombre || null : null),
+    nombre: profileName || seedData?.nombre || null,
     assignedToEmail: normalizeEmail(assignedToEmail),
-    waPhoneNumberId: toPhoneNumberId
-      ? String(toPhoneNumberId).trim()
-      : convSnap.exists
-      ? convSnap.data()?.waPhoneNumberId || null
-      : null,
+    waPhoneNumberId: phoneKey,
     waDisplayPhoneNumber: toDisplayPhoneNumber
       ? String(toDisplayPhoneNumber).trim()
-      : convSnap.exists
-      ? convSnap.data()?.waDisplayPhoneNumber || null
-      : null,
-    lastInboundPhoneId: toPhoneNumberId ? String(toPhoneNumberId).trim() : null,
-    status: convSnap.exists ? convSnap.data()?.status || "open" : "open",
+      : seedData?.waDisplayPhoneNumber || null,
+    lastInboundPhoneId: phoneKey,
+    status: seedData?.status || "open",
     lastMessageAt: tsNow,
     lastMessageText:
       text || (media ? buildMediaPlaceholder(media.kind, media.filename) : ""),
     lastFrom: "client",
     lastInboundAt: tsNow,
     updatedAt: tsNow,
-    createdAt: convSnap.exists ? convSnap.data()?.createdAt || tsNow : tsNow,
+    createdAt: seedData?.createdAt || tsNow,
+    convKeyVersion: 2,
+    clienteWaId: clientWaId,
+    scopedPhoneNumberId: phoneKey,
+    legacyConvId: legacyConvId || null,
+  });
+
+  const replyTo = await resolveReplyMetaForInbound({
+    prov,
+    convId,
+    legacyConvId,
+    contextWaMessageId,
   });
 
   const msgPayload = {
@@ -278,8 +538,10 @@ async function processInboundMessage({ prov, inbound }) {
     ts: tsNow,
     status: "delivered",
     waMessageId: waMessageId || null,
-    waPhoneNumberId: toPhoneNumberId ? String(toPhoneNumberId).trim() : null,
+    waPhoneNumberId: phoneKey,
     rawType: rawType || "text",
+    clienteWaId: clientWaId,
+    ...(replyTo ? { replyTo } : {}),
   };
 
   if (
@@ -302,7 +564,7 @@ async function processInboundMessage({ prov, inbound }) {
         prov,
         convId,
         waMessageId,
-        toPhoneNumberId,
+        toPhoneNumberId: phoneKey,
         vendorCfg,
         media,
       });
@@ -433,29 +695,77 @@ async function processInboundMessage({ prov, inbound }) {
     assignedToEmail,
   });
 
-  return { ok: true, prov, convId, assignedToEmail };
+  return {
+    ok: true,
+    prov,
+    convId,
+    assignedToEmail,
+    phoneNumberId: phoneKey,
+    clientWaId,
+  };
 }
 
 async function processStatusEvent({ prov, statusEvent }) {
-  const { convId, waMessageId, statusName, phoneNumberId, raw } = statusEvent;
+  const {
+    recipientWaId,
+    scopedConvId,
+    legacyConvId,
+    waMessageId,
+    statusName,
+    phoneNumberId,
+    raw,
+  } = statusEvent;
 
-  if (!convId || !waMessageId) {
+  if (!recipientWaId || !waMessageId) {
     return {
       ok: true,
       ignored: true,
-      reason: "missing convId or waMessageId",
+      reason: "missing recipientWaId or waMessageId",
     };
   }
 
-  const convSnap = await getConversationSnap(prov, convId);
+  const phoneKey = normalizePhoneId(phoneNumberId);
 
-  if (!convSnap.exists) {
-    return { ok: true, ignored: true, reason: "conversation not found" };
+  if (phoneKey) {
+    const vendorCfg = await getCrmVendorContext(prov);
+    const mappedVendorEmail = resolveMappedVendorByPhoneId(vendorCfg, phoneKey);
+
+    if (!mappedVendorEmail) {
+      return {
+        ok: true,
+        ignored: true,
+        reason: "unmapped status phone_number_id",
+        phoneNumberId: phoneKey,
+        recipientWaId,
+      };
+    }
   }
 
-  const msgDoc = await findMessageByWaMessageId(prov, convId, waMessageId);
+  const candidateConvIds = [];
+  if (scopedConvId) candidateConvIds.push(scopedConvId);
+  if (legacyConvId && legacyConvId !== scopedConvId) candidateConvIds.push(legacyConvId);
 
-  if (!msgDoc) {
+  let matchedConvId = null;
+  let msgDoc = null;
+
+  for (const candidateConvId of candidateConvIds) {
+    const snap = await getConversationSnap(prov, candidateConvId);
+    if (!snap.exists) continue;
+
+    const found = await findMessageByWaMessageId(
+      prov,
+      candidateConvId,
+      waMessageId
+    );
+
+    if (found) {
+      matchedConvId = candidateConvId;
+      msgDoc = found;
+      break;
+    }
+  }
+
+  if (!matchedConvId || !msgDoc) {
     return { ok: true, ignored: true, reason: "message not found" };
   }
 
@@ -464,8 +774,8 @@ async function processStatusEvent({ prov, statusEvent }) {
     statusUpdatedAt: nowTs(),
   };
 
-  if (phoneNumberId) {
-    update.waPhoneNumberId = String(phoneNumberId).trim();
+  if (phoneKey) {
+    update.waPhoneNumberId = phoneKey;
   }
 
   if (statusName === "failed") {
@@ -473,9 +783,15 @@ async function processStatusEvent({ prov, statusEvent }) {
   }
 
   await updateMessageByRef(msgDoc.ref, update);
-  await mergeConversation(prov, convId, { updatedAt: nowTs() });
+  await mergeConversation(prov, matchedConvId, { updatedAt: nowTs() });
 
-  return { ok: true, prov, convId, waMessageId, statusName };
+  return {
+    ok: true,
+    prov,
+    convId: matchedConvId,
+    waMessageId,
+    statusName,
+  };
 }
 
 module.exports = {

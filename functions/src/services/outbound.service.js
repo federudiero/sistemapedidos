@@ -13,6 +13,10 @@ const {
   normalizeOutboundMediaKind,
 } = require("../utils/media");
 const {
+  normalizeAudioMimeType,
+  ensureOutboundAudioReadyForWhatsApp,
+} = require("../utils/outbound-audio");
+const {
   addMessage,
   mergeConversation,
 } = require("../repositories/conversation.repository");
@@ -25,13 +29,83 @@ const {
   resolvePhoneNumberIdForSend,
   resolveTokenForSend,
 } = require("./vendor.service");
-const { sendWhatsAppMessage } = require("./meta.service");
+const { sendWhatsAppMessage, uploadMediaToMeta } = require("./meta.service");
 const { evaluateTextSendPolicy } = require("./message-policy.service");
+
+function ensureFreeformPolicyAllowed(convData) {
+  const policy = evaluateTextSendPolicy({ convData });
+
+  if (!policy?.allowed) {
+    throw new Error(
+      policy?.summary ||
+        "La conversación no permite enviar mensajes libres en este momento."
+    );
+  }
+
+  return policy;
+}
+
+function normalizeReplyToPayload(replyTo) {
+  if (!replyTo) return null;
+
+  const id = safeStr(
+    typeof replyTo === "string"
+      ? replyTo
+      : replyTo?.id ||
+          replyTo?.messageId ||
+          replyTo?.waMessageId ||
+          replyTo?.wamid ||
+          replyTo?.whatsappMessageId ||
+          replyTo?.metaMessageId ||
+          replyTo?.providerMessageId ||
+          replyTo?.originalMessageId
+  );
+
+  if (!id) return null;
+
+  const textPreview = safeStr(
+    typeof replyTo === "object"
+      ? replyTo?.textPreview ||
+          replyTo?.preview ||
+          replyTo?.text ||
+          replyTo?.body ||
+          replyTo?.caption ||
+          replyTo?.message
+      : ""
+  );
+
+  const type = safeStr(
+    typeof replyTo === "object"
+      ? replyTo?.type || replyTo?.kind || replyTo?.rawType
+      : ""
+  ).toLowerCase();
+
+  const author = safeStr(
+    typeof replyTo === "object"
+      ? replyTo?.author || replyTo?.fromName || replyTo?.senderName
+      : ""
+  );
+
+  return {
+    id,
+    messageId: id,
+    waMessageId: id,
+    ...(textPreview ? { textPreview } : {}),
+    ...(type ? { type } : {}),
+    ...(author ? { author } : {}),
+  };
+}
+
+function buildReplyContext(replyTo) {
+  if (!replyTo?.id) return null;
+  return { message_id: replyTo.id };
+}
 
 async function sendText(req) {
   const prov = normProv(req.body?.provinciaId) || DEFAULT_PROV;
-  const convId = normalizeWaId(req.body?.convId);
+  const convId = safeStr(req.body?.convId);
   const text = ensureValidText(req.body?.text);
+  const replyTo = normalizeReplyToPayload(req.body?.replyTo);
 
   if (!convId) {
     throw new Error("convId requerido");
@@ -46,15 +120,7 @@ async function sendText(req) {
     email,
   });
 
-  const textPolicy = evaluateTextSendPolicy({ convData });
-
-  if (!textPolicy.allowed) {
-    throw new Error(
-      textPolicy.summary ||
-        "La conversación no permite enviar texto libre en este momento."
-    );
-  }
-
+  const freeformPolicy = ensureFreeformPolicyAllowed(convData);
   const vendorCfg = await getCrmVendorContext(prov);
 
   const phoneNumberId = resolvePhoneNumberIdForSend({
@@ -69,17 +135,22 @@ async function sendText(req) {
 
   if (!phoneNumberId || !token) {
     throw new Error(
-      "Faltan configuraciones: phoneNumberId/token. Configura META_WA_PHONE_NUMBER_ID + META_WA_TOKEN o asigna phoneNumberId/token por vendedor en provincias/{prov}/crmVendedores"
+      "Faltan configuraciones para enviar desde esta casilla. Verificá phoneNumberId/token del vendedor o de la conversación."
     );
   }
 
-  const to = normalizeMetaRecipient(convId);
+  const to = normalizeMetaRecipient(
+    convData?.clienteWaId || convData?.telefonoE164 || convId
+  );
+
+  const replyContext = buildReplyContext(replyTo);
 
   const payload = {
     messaging_product: "whatsapp",
     to,
     type: "text",
     text: { body: text },
+    ...(replyContext ? { context: replyContext } : {}),
   };
 
   console.log("SEND TEXT DEBUG:", {
@@ -88,6 +159,9 @@ async function sendText(req) {
     to,
     phoneNumberId,
     assignedToEmail: convData?.assignedToEmail || null,
+    clienteWaId: convData?.clienteWaId || null,
+    scopedPhoneNumberId: convData?.scopedPhoneNumberId || null,
+    replyToId: replyTo?.id || null,
   });
 
   const { waMsgId } = await sendWhatsAppMessage({
@@ -110,6 +184,8 @@ async function sendText(req) {
     waMessageId: waMsgId,
     waPhoneNumberId: phoneNumberId,
     agentEmail: normalizeEmail(email) || null,
+    clienteWaId: normalizeWaId(convData?.clienteWaId || to) || null,
+    ...(replyTo ? { replyTo } : {}),
   });
 
   await mergeConversation(prov, convId, {
@@ -117,6 +193,8 @@ async function sendText(req) {
     lastMessageText: text,
     lastFrom: "agent",
     updatedAt: tsNow,
+    waPhoneNumberId: String(phoneNumberId).trim(),
+    scopedPhoneNumberId: String(phoneNumberId).trim(),
   });
 
   await markReadForSender({
@@ -131,18 +209,22 @@ async function sendText(req) {
     convId,
     waMsgId,
     phoneNumberId,
-    policy: textPolicy,
+    policy: freeformPolicy,
   };
 }
 
 async function sendMedia(req) {
   const prov = normProv(req.body?.provinciaId) || DEFAULT_PROV;
-  const convId = normalizeWaId(req.body?.convId);
+  const convId = safeStr(req.body?.convId);
   const mediaUrl = safeStr(req.body?.mediaUrl);
-  const mimeType = safeStr(req.body?.mimeType);
+  const originalMimeType = safeStr(
+    req.body?.originalMimeType || req.body?.mimeType
+  );
   const filename = safeStr(req.body?.filename);
   const caption = safeStr(req.body?.caption || req.body?.text || "");
-  const mediaType = normalizeOutboundMediaKind(req.body?.kind, mimeType);
+  const mediaType = normalizeOutboundMediaKind(req.body?.kind, originalMimeType);
+  const isVoiceNote = req.body?.isVoiceNote === true;
+  const replyTo = normalizeReplyToPayload(req.body?.replyTo);
 
   if (!convId) {
     throw new Error("convId requerido");
@@ -165,6 +247,7 @@ async function sendMedia(req) {
     email,
   });
 
+  const freeformPolicy = ensureFreeformPolicyAllowed(convData);
   const vendorCfg = await getCrmVendorContext(prov);
 
   const phoneNumberId = resolvePhoneNumberIdForSend({
@@ -179,18 +262,78 @@ async function sendMedia(req) {
 
   if (!phoneNumberId || !token) {
     throw new Error(
-      "Faltan configuraciones: phoneNumberId/token. Configura META_WA_PHONE_NUMBER_ID + META_WA_TOKEN o asigna phoneNumberId/token por vendedor en provincias/{prov}/crmVendedores"
+      "Faltan configuraciones para enviar desde esta casilla. Verificá phoneNumberId/token del vendedor o de la conversación."
     );
   }
 
-  const to = normalizeMetaRecipient(convId);
+  let finalMediaUrl = String(mediaUrl || "").trim();
+  let finalMimeType = originalMimeType || null;
+  let finalFilename = filename || null;
+  let generatedStoragePath = null;
+  let generatedBucket = null;
+  let generatedSize = null;
+  let preparedAudioBuffer = null;
+  let uploadedMetaMediaId = null;
+
+  if (mediaType === "audio") {
+    const preparedAudio = await ensureOutboundAudioReadyForWhatsApp({
+      prov,
+      convId,
+      mediaUrl: finalMediaUrl,
+      mimeType: finalMimeType,
+      filename: finalFilename,
+    });
+
+    finalMediaUrl = preparedAudio.mediaUrl;
+    finalMimeType = normalizeAudioMimeType(
+      preparedAudio.mimeType || finalMimeType
+    );
+    finalFilename = preparedAudio.filename || finalFilename || "audio.mp3";
+    generatedStoragePath = preparedAudio.storagePath || null;
+    generatedBucket = preparedAudio.bucket || null;
+    generatedSize = preparedAudio.size || null;
+    preparedAudioBuffer = preparedAudio.buffer || null;
+
+    const uploadedMetaAudio = await uploadMediaToMeta({
+      phoneNumberId,
+      token,
+      buffer: preparedAudioBuffer,
+      mimeType: finalMimeType || "audio/mpeg",
+      filename: finalFilename || "audio.mp3",
+      timeout: 60000,
+    });
+
+    uploadedMetaMediaId = uploadedMetaAudio.mediaId;
+  }
+
+  const effectiveIsVoiceNote =
+    mediaType === "audio" &&
+    normalizeAudioMimeType(finalMimeType) === "audio/ogg"
+      ? isVoiceNote
+      : false;
+
+  const to = normalizeMetaRecipient(
+    convData?.clienteWaId || convData?.telefonoE164 || convId
+  );
 
   const cleanCaption = safeStr(caption);
-  const cleanFilename = safeStr(filename);
+  const cleanFilename = safeStr(finalFilename);
 
-  const mediaObject = {
-    link: String(mediaUrl || "").trim(),
-  };
+  let mediaObject;
+
+  if (mediaType === "audio") {
+    if (!uploadedMetaMediaId) {
+      throw new Error("No se pudo subir el audio a Meta antes del envío.");
+    }
+
+    mediaObject = {
+      id: uploadedMetaMediaId,
+    };
+  } else {
+    mediaObject = {
+      link: finalMediaUrl,
+    };
+  }
 
   if ((mediaType === "image" || mediaType === "video") && cleanCaption) {
     mediaObject.caption = cleanCaption;
@@ -200,11 +343,14 @@ async function sendMedia(req) {
     mediaObject.filename = cleanFilename;
   }
 
+  const replyContext = buildReplyContext(replyTo);
+
   const payload = {
     messaging_product: "whatsapp",
     to,
     type: mediaType,
     [mediaType]: mediaObject,
+    ...(replyContext ? { context: replyContext } : {}),
   };
 
   console.log("SEND MEDIA DEBUG:", {
@@ -213,10 +359,19 @@ async function sendMedia(req) {
     to,
     phoneNumberId,
     mediaType,
-    mimeType: mimeType || null,
+    mimeType: finalMimeType || null,
+    originalMimeType: originalMimeType || null,
     filename: cleanFilename || null,
     hasCaption: Boolean(cleanCaption),
     assignedToEmail: convData?.assignedToEmail || null,
+    clienteWaId: convData?.clienteWaId || null,
+    scopedPhoneNumberId: convData?.scopedPhoneNumberId || null,
+    convertedAudio:
+      mediaType === "audio" &&
+      finalMediaUrl !== String(mediaUrl || "").trim(),
+    uploadedMetaMediaId: uploadedMetaMediaId || null,
+    effectiveIsVoiceNote,
+    replyToId: replyTo?.id || null,
   });
 
   const { waMsgId } = await sendWhatsAppMessage({
@@ -242,49 +397,58 @@ async function sendMedia(req) {
     waMessageId: waMsgId,
     waPhoneNumberId: phoneNumberId,
     agentEmail: normalizeEmail(email) || null,
+    clienteWaId: normalizeWaId(convData?.clienteWaId || to) || null,
     media: {
       kind: mediaType,
-      url: String(mediaUrl || "").trim(),
-      mimeType: mimeType || null,
+      url: finalMediaUrl,
+      mimeType: finalMimeType || null,
       filename: cleanFilename || null,
       caption: cleanCaption || "",
-      storagePath: null,
-      bucket: null,
-      size: null,
+      storagePath: generatedStoragePath,
+      bucket: generatedBucket,
+      size: generatedSize,
       error: null,
-      voice: false,
+      voice: mediaType === "audio" ? effectiveIsVoiceNote : false,
       animated: false,
+      metaMediaId: uploadedMetaMediaId,
     },
+    ...(replyTo ? { replyTo } : {}),
   };
 
   if (mediaType === "audio") {
     msgPayload.audio = {
-      url: String(mediaUrl || "").trim(),
-      mimeType: mimeType || null,
+      url: finalMediaUrl,
+      mimeType: finalMimeType || null,
+      filename: cleanFilename || null,
       error: null,
+      voice: effectiveIsVoiceNote,
+      storagePath: generatedStoragePath,
+      bucket: generatedBucket,
+      size: generatedSize,
+      metaMediaId: uploadedMetaMediaId,
     };
   }
 
   if (mediaType === "image") {
     msgPayload.image = {
-      url: String(mediaUrl || "").trim(),
-      mimeType: mimeType || null,
+      url: finalMediaUrl,
+      mimeType: finalMimeType || null,
       error: null,
     };
   }
 
   if (mediaType === "video") {
     msgPayload.video = {
-      url: String(mediaUrl || "").trim(),
-      mimeType: mimeType || null,
+      url: finalMediaUrl,
+      mimeType: finalMimeType || null,
       error: null,
     };
   }
 
   if (mediaType === "document") {
     msgPayload.document = {
-      url: String(mediaUrl || "").trim(),
-      mimeType: mimeType || null,
+      url: finalMediaUrl,
+      mimeType: finalMimeType || null,
       filename: cleanFilename || null,
       error: null,
     };
@@ -297,6 +461,8 @@ async function sendMedia(req) {
     lastMessageText: previewText,
     lastFrom: "agent",
     updatedAt: tsNow,
+    waPhoneNumberId: String(phoneNumberId).trim(),
+    scopedPhoneNumberId: String(phoneNumberId).trim(),
   });
 
   await markReadForSender({
@@ -312,23 +478,26 @@ async function sendMedia(req) {
     waMsgId,
     phoneNumberId,
     mediaType,
+    metaMediaId: uploadedMetaMediaId,
+    policy: freeformPolicy,
   };
 }
 
 async function sendLocation(req) {
   const prov = normProv(req.body?.provinciaId) || DEFAULT_PROV;
-  const convId = normalizeWaId(req.body?.convId);
+  const convId = safeStr(req.body?.convId);
   const latitude = Number(req.body?.latitude);
   const longitude = Number(req.body?.longitude);
-  const name = safeStr(req.body?.name || "");
-  const address = safeStr(req.body?.address || "");
+  const name = safeStr(req.body?.name);
+  const address = safeStr(req.body?.address);
+  const replyTo = normalizeReplyToPayload(req.body?.replyTo);
 
   if (!convId) {
     throw new Error("convId requerido");
   }
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    throw new Error("latitude y longitude son requeridos");
+    throw new Error("latitude/longitude inválidos");
   }
 
   const email =
@@ -340,6 +509,7 @@ async function sendLocation(req) {
     email,
   });
 
+  const freeformPolicy = ensureFreeformPolicyAllowed(convData);
   const vendorCfg = await getCrmVendorContext(prov);
 
   const phoneNumberId = resolvePhoneNumberIdForSend({
@@ -354,13 +524,15 @@ async function sendLocation(req) {
 
   if (!phoneNumberId || !token) {
     throw new Error(
-      "Faltan configuraciones: phoneNumberId/token. Configura META_WA_PHONE_NUMBER_ID + META_WA_TOKEN o asigna phoneNumberId/token por vendedor en provincias/{prov}/crmVendedores"
+      "Faltan configuraciones para enviar desde esta casilla. Verificá phoneNumberId/token del vendedor o de la conversación."
     );
   }
 
-  const to = normalizeMetaRecipient(convId);
-  const cleanName = safeStr(name);
-  const cleanAddress = safeStr(address);
+  const to = normalizeMetaRecipient(
+    convData?.clienteWaId || convData?.telefonoE164 || convId
+  );
+
+  const replyContext = buildReplyContext(replyTo);
 
   const payload = {
     messaging_product: "whatsapp",
@@ -369,9 +541,10 @@ async function sendLocation(req) {
     location: {
       latitude,
       longitude,
-      ...(cleanName ? { name: cleanName } : {}),
-      ...(cleanAddress ? { address: cleanAddress } : {}),
+      ...(name ? { name } : {}),
+      ...(address ? { address } : {}),
     },
+    ...(replyContext ? { context: replyContext } : {}),
   };
 
   console.log("SEND LOCATION DEBUG:", {
@@ -379,44 +552,51 @@ async function sendLocation(req) {
     convId,
     to,
     phoneNumberId,
-    latitude,
-    longitude,
     assignedToEmail: convData?.assignedToEmail || null,
+    clienteWaId: convData?.clienteWaId || null,
+    scopedPhoneNumberId: convData?.scopedPhoneNumberId || null,
+    replyToId: replyTo?.id || null,
   });
 
   const { waMsgId } = await sendWhatsAppMessage({
     phoneNumberId,
     token,
     payload,
-    timeout: 20000,
+    timeout: 15000,
   });
 
   const tsNow = nowTs();
+  const previewText = "📍 Ubicación";
 
   await addMessage(prov, convId, {
     direction: "out",
-    type: "location",
     from: "agent",
-    text: "📍 Ubicación",
+    type: "location",
+    rawType: "location",
+    text: previewText,
     timestamp: tsNow,
     ts: tsNow,
     status: "sent",
     waMessageId: waMsgId,
     waPhoneNumberId: phoneNumberId,
     agentEmail: normalizeEmail(email) || null,
+    clienteWaId: normalizeWaId(convData?.clienteWaId || to) || null,
     location: {
-      lat: latitude,
-      lng: longitude,
-      name: cleanName || null,
-      address: cleanAddress || null,
+      latitude,
+      longitude,
+      name: name || null,
+      address: address || null,
     },
+    ...(replyTo ? { replyTo } : {}),
   });
 
   await mergeConversation(prov, convId, {
     lastMessageAt: tsNow,
-    lastMessageText: "📍 Ubicación",
+    lastMessageText: previewText,
     lastFrom: "agent",
     updatedAt: tsNow,
+    waPhoneNumberId: String(phoneNumberId).trim(),
+    scopedPhoneNumberId: String(phoneNumberId).trim(),
   });
 
   await markReadForSender({
@@ -431,12 +611,7 @@ async function sendLocation(req) {
     convId,
     waMsgId,
     phoneNumberId,
-    location: {
-      latitude,
-      longitude,
-      name: cleanName || null,
-      address: cleanAddress || null,
-    },
+    policy: freeformPolicy,
   };
 }
 

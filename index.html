@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es" data-theme="dim">
+<html lang="es" data-theme="corporate">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -7,21 +7,20 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
 
-    <!-- Forzar tema -->
     <script>
-      const THEME = "dim";
-      try { localStorage.setItem("theme", THEME); } catch {}
+      const THEME = "corporate";
+      try {
+        localStorage.setItem("theme", THEME);
+      } catch {}
       document.documentElement.setAttribute("data-theme", THEME);
     </script>
 
     <title>Estilos Pinturas</title>
 
-    <!-- Manifest y iconos -->
-    <link rel="manifest" href="/manifest.json?v=2">
-    <meta name="theme-color" content="#111827">
+    <link rel="manifest" href="/manifest.json?v=3" />
+    <meta name="theme-color" content="#EDEDED" />
 
-    <!-- iOS / Safari -->
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body>
     <div id="root"></div>

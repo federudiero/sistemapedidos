@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 @plugin "daisyui" {
-  themes: dim --default;
+  themes: corporate --default, business, dim;
   logs: true;
+}
+
+:root {
+  color-scheme: light;
 }

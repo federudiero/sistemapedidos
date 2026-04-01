@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { deleteField, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "../../../firebase/firebase";
 import { useAuthState } from "../../../hooks/useAuthState";
 import { useNavigate } from "react-router-dom";
@@ -98,6 +99,69 @@ function Toast({ notice, onClose }) {
   );
 }
 
+function ComposerReplyBar({ replyTarget, onClose }) {
+  if (!replyTarget) return null;
+
+  return (
+    <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#2f434c] bg-[#1b262d] px-2.5 py-1.5">
+      <div className="text-xs text-[#25d366]">↩</div>
+
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="truncate text-[11px] font-semibold text-[#25d366]">
+          Respondiendo a {replyTarget.author || "mensaje"}
+        </div>
+        <div className="truncate text-[11px] text-[#c7d1d6]">
+          {replyTarget.textPreview || "Mensaje"}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[#9fb0b8] transition hover:bg-white/10 hover:text-white"
+        title="Cancelar respuesta"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function PinnedMessageBar({ pinnedMessage, onJump, onUnpin }) {
+  if (!pinnedMessage) return null;
+
+  return (
+    <div className="shrink-0 border-b border-[#2a3942] bg-[#182229] px-2 py-1.5">
+      <div className="flex items-center max-w-5xl gap-2 mx-auto">
+        <span className="text-xs text-[#25d366]">📌</span>
+
+        <button
+          type="button"
+          onClick={onJump}
+          className="flex-1 min-w-0 text-left"
+          title="Ir al mensaje fijado"
+        >
+          <div className="truncate text-[11px] font-semibold text-[#25d366]">
+            Mensaje fijado
+          </div>
+          <div className="truncate text-[11px] text-[#c7d1d6]">
+            {pinnedMessage?.textPreview || "Mensaje"}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={onUnpin}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#9fb0b8] transition hover:bg-white/10 hover:text-white"
+          title="Desfijar mensaje"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CrmChat({
   provinciaId,
   meEmail,
@@ -124,6 +188,8 @@ export default function CrmChat({
   const [showTemplates, setShowTemplates] = useState(false);
   const [showMetaTemplates, setShowMetaTemplates] = useState(false);
   const [showCrearPedido, setShowCrearPedido] = useState(false);
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [pinnedMessage, setPinnedMessage] = useState(null);
 
   const [templateDraft, setTemplateDraft] = useState({ title: "", text: "" });
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -131,6 +197,7 @@ export default function CrmChat({
 
   const viewportRef = useRef(null);
   const inputRef = useRef(null);
+  const messageRefs = useRef(new Map());
 
   const pushNotice = useCallback((kind, message) => {
     if (!message) return;
@@ -142,6 +209,44 @@ export default function CrmChat({
     const t = setTimeout(() => setNotice(null), 4200);
     return () => clearTimeout(t);
   }, [notice?.id]);
+
+  const userMetaRef = useMemo(() => {
+    if (!provinciaId || !effectiveConversationId || !myEmail) return null;
+
+    return doc(
+      db,
+      "provincias",
+      String(provinciaId),
+      "conversaciones",
+      String(effectiveConversationId),
+      "userMeta",
+      String(normalizeEmail(myEmail))
+    );
+  }, [effectiveConversationId, myEmail, provinciaId]);
+
+  useEffect(() => {
+    if (!userMetaRef) {
+      setPinnedMessage(null);
+      return;
+    }
+
+    const unsub = onSnapshot(
+      userMetaRef,
+      (snap) => {
+        const data = snap.exists() ? snap.data() : null;
+        setPinnedMessage(data?.pinnedMessage || null);
+      },
+      (err) => {
+        console.error("userMeta snapshot error:", err);
+      }
+    );
+
+    return () => unsub();
+  }, [userMetaRef]);
+
+  useEffect(() => {
+    setReplyTarget(null);
+  }, [effectiveConversationId]);
 
   const { convRef, conversation } = useCrmConversation({
     db,
@@ -312,6 +417,97 @@ export default function CrmChat({
     });
   };
 
+  const scrollToMessage = useCallback((localMessageId) => {
+    if (!localMessageId) return false;
+    const node = messageRefs.current.get(localMessageId);
+    if (!node) return false;
+
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    return true;
+  }, []);
+
+  const handleReplyToMessage = useCallback((message) => {
+    if (!message?.id) return;
+
+    setReplyTarget({
+      id: message.id,
+      type: message.type || "text",
+      textPreview: message.textPreview || "Mensaje",
+      author: message.author || "mensaje",
+    });
+
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const handleTogglePinMessage = useCallback(
+    async (message) => {
+      if (!userMetaRef || !message?.id) return;
+
+      const samePinned =
+        String(pinnedMessage?.id || "") === String(message.id || "");
+
+      try {
+        await setDoc(
+          userMetaRef,
+          samePinned
+            ? {
+                pinnedMessage: deleteField(),
+                updatedAt: serverTimestamp(),
+              }
+            : {
+                pinnedMessage: {
+                  id: String(message.id || ""),
+                  messageId: String(message.messageId || message.id || ""),
+                  type: String(message.type || "text"),
+                  textPreview: String(message.textPreview || "Mensaje"),
+                  author: String(message.author || ""),
+                  timestamp: message.timestamp || serverTimestamp(),
+                  pinnedAt: serverTimestamp(),
+                },
+                updatedAt: serverTimestamp(),
+              },
+          { merge: true }
+        );
+
+        pushNotice(
+          "success",
+          samePinned ? "Mensaje desfijado." : "Mensaje fijado en este chat."
+        );
+      } catch (e) {
+        console.error(e);
+        pushNotice("error", e?.message || "No se pudo fijar el mensaje.");
+      }
+    },
+    [pinnedMessage?.id, pushNotice, userMetaRef]
+  );
+
+  const handleJumpToPinned = useCallback(() => {
+    if (!pinnedMessage?.id) return;
+    const ok = scrollToMessage(pinnedMessage.id);
+    if (!ok) {
+      pushNotice("error", "No encontré ese mensaje en la vista actual.");
+    }
+  }, [pinnedMessage?.id, pushNotice, scrollToMessage]);
+
+  const handleUnpinMessage = useCallback(async () => {
+    if (!userMetaRef) return;
+
+    try {
+      await setDoc(
+        userMetaRef,
+        {
+          pinnedMessage: deleteField(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      pushNotice("success", "Mensaje desfijado.");
+    } catch (e) {
+      console.error(e);
+      pushNotice("error", e?.message || "No se pudo desfijar el mensaje.");
+    }
+  }, [pushNotice, userMetaRef]);
+
   const onKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -327,9 +523,13 @@ export default function CrmChat({
     requestAnimationFrame(() => inputRef.current?.focus());
 
     try {
-      await sendText(body);
+      await sendText(body, {
+        replyTo: replyTarget,
+      });
+      setReplyTarget(null);
     } catch (e) {
       console.error("send error:", e);
+      setText((prev) => prev || body);
       pushNotice("error", e?.message || "No se pudo enviar.");
     }
   };
@@ -415,7 +615,10 @@ export default function CrmChat({
   const handlePickFiles = async (files) => {
     setShowAttach(false);
     try {
-      await sendMediaFiles(files);
+      await sendMediaFiles(files, {
+        replyTo: replyTarget,
+      });
+      setReplyTarget(null);
     } catch (e) {
       console.error("media send error:", e);
       pushNotice("error", e?.message || "No se pudo enviar el archivo.");
@@ -424,8 +627,13 @@ export default function CrmChat({
 
   const handleSendLocation = async () => {
     setShowAttach(false);
+
     try {
-      await sendLocation({ name: "Ubicación compartida" });
+      await sendLocation({
+        name: "Ubicación compartida",
+        replyTo: replyTarget,
+      });
+      setReplyTarget(null);
     } catch (e) {
       console.error(e);
       pushNotice("error", e?.message || "No pude obtener o enviar la ubicación.");
@@ -434,7 +642,10 @@ export default function CrmChat({
 
   const handleSendAudio = async (blob) => {
     try {
-      await sendAudio(blob);
+      await sendAudio(blob, {
+        replyTo: replyTarget,
+      });
+      setReplyTarget(null);
     } catch (e) {
       console.error(e);
       pushNotice("error", e?.message || "No se pudo enviar el audio.");
@@ -640,6 +851,12 @@ export default function CrmChat({
         </div>
       </header>
 
+      <PinnedMessageBar
+        pinnedMessage={pinnedMessage}
+        onJump={handleJumpToPinned}
+        onUnpin={handleUnpinMessage}
+      />
+
       <div className="flex-1 min-h-0 overflow-hidden">
         <div
           ref={viewportRef}
@@ -663,8 +880,20 @@ export default function CrmChat({
                 }
 
                 return (
-                  <div key={item.id}>
-                    <MessageBubble m={item} />
+                  <div
+                    key={item.id}
+                    ref={(node) => {
+                      if (node) messageRefs.current.set(item.id, node);
+                      else messageRefs.current.delete(item.id);
+                    }}
+                    data-chat-msg-id={item.id}
+                  >
+                    <MessageBubble
+                      m={item}
+                      onReply={handleReplyToMessage}
+                      onPin={handleTogglePinMessage}
+                      isPinned={String(pinnedMessage?.id || "") === String(item.id || "")}
+                    />
                   </div>
                 );
               })}
@@ -674,6 +903,11 @@ export default function CrmChat({
       </div>
 
       <footer className="shrink-0 border-t border-[#2a3942] bg-[#202c33] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3">
+        <ComposerReplyBar
+          replyTarget={replyTarget}
+          onClose={() => setReplyTarget(null)}
+        />
+
         {busyLabel ? (
           <div className="mb-2 flex items-center gap-2 rounded-2xl border border-[#2f434c] bg-[#1b262d] px-3 py-2 text-[12px] text-[#b9c7ce]">
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#25d366]" />
@@ -730,6 +964,7 @@ export default function CrmChat({
               <div className="crm-audio-wrap">
                 <AudioRecorderButton
                   onRecorded={handleSendAudio}
+                  onCancel={() => pushNotice("info", "Grabación cancelada.")}
                   disabled={anySending && !sending.audio}
                   busy={sending.audio}
                 />
@@ -790,6 +1025,7 @@ export default function CrmChat({
             <div className="crm-audio-wrap">
               <AudioRecorderButton
                 onRecorded={handleSendAudio}
+                onCancel={() => pushNotice("info", "Grabación cancelada.")}
                 disabled={anySending && !sending.audio}
                 busy={sending.audio}
               />

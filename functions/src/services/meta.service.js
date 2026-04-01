@@ -40,6 +40,50 @@ async function sendWhatsAppMessage({
   };
 }
 
+async function uploadMediaToMeta({
+  phoneNumberId,
+  token,
+  buffer,
+  mimeType,
+  filename,
+  timeout = 60000,
+}) {
+  const form = new FormData();
+  const cleanMimeType = String(mimeType || "application/octet-stream").trim();
+  const cleanFilename = String(filename || "archivo.bin").trim() || "archivo.bin";
+
+  form.append("messaging_product", "whatsapp");
+  form.append("type", cleanMimeType);
+  form.append(
+    "file",
+    new Blob([buffer], { type: cleanMimeType }),
+    cleanFilename
+  );
+
+  const response = await fetch(graphUrl(`${phoneNumberId}/media`), {
+    method: "POST",
+    headers: graphHeaders(token),
+    body: form,
+    signal: AbortSignal.timeout(timeout),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data?.id) {
+    const err = new Error(
+      data?.error?.message || `Meta media upload failed (${response.status})`
+    );
+    err.status = response.status;
+    err.response = data;
+    throw err;
+  }
+
+  return {
+    raw: data,
+    mediaId: data.id,
+  };
+}
+
 async function listAllMessageTemplates({ wabaId, token }) {
   const rows = [];
   let after = null;
@@ -114,6 +158,7 @@ async function downloadMetaMedia({ mediaId, token }) {
 
 module.exports = {
   sendWhatsAppMessage,
+  uploadMediaToMeta,
   listAllMessageTemplates,
   getMediaMetadata,
   downloadMediaBinary,

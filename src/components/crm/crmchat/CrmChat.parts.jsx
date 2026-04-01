@@ -19,15 +19,15 @@ export function MessageTicks({ status }) {
 
 function pickSupportedAudioMimeType() {
   if (typeof window === "undefined" || typeof MediaRecorder === "undefined") {
-    return "audio/webm";
+    return "audio/webm;codecs=opus";
   }
 
   const candidates = [
     "audio/ogg;codecs=opus",
-    "audio/ogg",
-    "audio/mp4",
     "audio/webm;codecs=opus",
+    "audio/ogg",
     "audio/webm",
+    "audio/mp4",
   ];
 
   for (const type of candidates) {
@@ -38,25 +38,72 @@ function pickSupportedAudioMimeType() {
     }
   }
 
-  return "audio/webm";
+  return "audio/webm;codecs=opus";
 }
 
 export function AudioRecorderButton({
   onRecorded,
+  onCancel,
   compact = false,
   disabled = false,
   busy = false,
 }) {
   const [rec, setRec] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const mediaRef = useRef(null);
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
+  const discardRef = useRef(false);
   const chunksRef = useRef([]);
   const mimeTypeRef = useRef("audio/webm");
 
+  const clearTimer = () => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const stopTracks = () => {
+    try {
+      streamRef.current?.getTracks?.().forEach((t) => t.stop());
+    } catch (e) {
+      console.error(e);
+    }
+    streamRef.current = null;
+  };
+
+  const resetState = () => {
+    clearTimer();
+    setRec(false);
+    setElapsedMs(0);
+    chunksRef.current = [];
+    mediaRef.current = null;
+    discardRef.current = false;
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimer();
+      try {
+        if (mediaRef.current?.state === "recording") {
+          discardRef.current = true;
+          mediaRef.current.stop();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      stopTracks();
+    };
+  }, []);
+
   const start = async () => {
-    if (disabled || busy) return;
+    if (disabled || busy || rec) return;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
       const preferredMimeType = pickSupportedAudioMimeType();
       const mr = preferredMimeType
         ? new MediaRecorder(stream, { mimeType: preferredMimeType })
@@ -64,16 +111,39 @@ export function AudioRecorderButton({
 
       mimeTypeRef.current = mr.mimeType || preferredMimeType || "audio/webm";
       chunksRef.current = [];
+      discardRef.current = false;
+      setElapsedMs(0);
+
+      const startedAt = Date.now();
+      clearTimer();
+      timerRef.current = window.setInterval(() => {
+        setElapsedMs(Date.now() - startedAt);
+      }, 200);
 
       mr.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
 
       mr.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
+        clearTimer();
+        stopTracks();
+
+        const shouldDiscard = discardRef.current;
         const finalMimeType = mr.mimeType || mimeTypeRef.current || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: finalMimeType });
-        onRecorded?.(blob);
+
+        resetState();
+
+        if (shouldDiscard) {
+          onCancel?.();
+          return;
+        }
+
+        if (blob.size > 0) {
+          onRecorded?.(blob);
+        } else {
+          onCancel?.();
+        }
       };
 
       mediaRef.current = mr;
@@ -81,58 +151,108 @@ export function AudioRecorderButton({
       setRec(true);
     } catch (e) {
       console.error(e);
+      stopTracks();
+      resetState();
       alert("No pude acceder al micrófono.");
     }
   };
 
-  const stop = () => {
+  const stopAndSend = () => {
     try {
-      mediaRef.current?.stop();
+      if (!mediaRef.current || mediaRef.current.state !== "recording") return;
+      discardRef.current = false;
+      mediaRef.current.stop();
     } catch (e) {
       console.error(e);
+      resetState();
     }
-    setRec(false);
   };
 
-  const busyLabel = busy ? "Enviando…" : rec ? "Detener" : "Audio";
-  const busyIcon = busy ? "⏳" : rec ? "⏹" : "🎙️";
+  const cancel = () => {
+    try {
+      if (mediaRef.current?.state === "recording") {
+        discardRef.current = true;
+        mediaRef.current.stop();
+      } else {
+        stopTracks();
+        resetState();
+        onCancel?.();
+      }
+    } catch (e) {
+      console.error(e);
+      stopTracks();
+      resetState();
+      onCancel?.();
+    }
+  };
 
-  const sharedClass = disabled || busy
-    ? "opacity-60 cursor-not-allowed"
-    : "hover:brightness-105";
+  const elapsedLabel = formatAudioClock((elapsedMs || 0) / 1000);
+  const sharedClass =
+    disabled || busy ? "opacity-60 cursor-not-allowed" : "hover:brightness-105";
+
+  if (busy) {
+    return (
+      <button
+        className={`inline-flex h-12 items-center gap-2 rounded-full bg-[#00a884] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] ${sharedClass}`}
+        type="button"
+        disabled
+      >
+        <span>⏳</span>
+        <span>Enviando…</span>
+      </button>
+    );
+  }
+
+  if (rec) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#6d2323] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition hover:brightness-105"
+          onClick={cancel}
+          title="Cancelar grabación"
+          type="button"
+        >
+          ✕
+        </button>
+
+        <button
+          className="inline-flex h-12 items-center gap-2 rounded-full bg-[#00a884] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition hover:brightness-105"
+          onClick={stopAndSend}
+          title="Detener y enviar audio"
+          type="button"
+        >
+          <span>🎙️</span>
+          <span>{elapsedLabel}</span>
+          <span className="hidden sm:inline">Enviar</span>
+        </button>
+      </div>
+    );
+  }
 
   if (compact) {
     return (
       <button
-        className={`inline-flex h-12 w-12 items-center justify-center rounded-full transition ${
-          rec
-            ? "bg-[#6d2323] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)]"
-            : "bg-[#00a884] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)]"
-        } ${sharedClass}`}
-        onClick={rec ? stop : start}
-        title={busy ? "Enviando audio" : rec ? "Detener grabación" : "Grabar audio"}
+        className={`inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#00a884] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition ${sharedClass}`}
+        onClick={start}
+        title="Grabar audio"
         type="button"
-        disabled={(disabled || busy) && !rec}
+        disabled={disabled || busy}
       >
-        <span className="text-lg">{busyIcon}</span>
+        <span className="text-lg">🎙️</span>
       </button>
     );
   }
 
   return (
     <button
-      className={`inline-flex h-12 items-center gap-2 rounded-full px-4 text-sm font-medium transition ${
-        rec
-          ? "bg-[#6d2323] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)]"
-          : "bg-[#00a884] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)]"
-      } ${sharedClass}`}
-      onClick={rec ? stop : start}
-      title={busy ? "Enviando audio" : rec ? "Detener grabación" : "Grabar audio"}
+      className={`inline-flex h-12 items-center gap-2 rounded-full bg-[#00a884] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition ${sharedClass}`}
+      onClick={start}
+      title="Grabar audio"
       type="button"
-      disabled={(disabled || busy) && !rec}
+      disabled={disabled || busy}
     >
-      <span>{busyIcon}</span>
-      <span>{busyLabel}</span>
+      <span>🎙️</span>
+      <span>Audio</span>
     </button>
   );
 }
@@ -685,8 +805,93 @@ function MediaErrorNote({ error }) {
   );
 }
 
-export function MessageBubble({ m }) {
+function getMessageIdForReply(m) {
+  return firstString(
+    m?.waMessageId,
+    m?.wamid,
+    m?.messageId,
+    m?.metaMessageId,
+    m?.whatsappMessageId,
+    m?.id
+  );
+}
+
+function getKindPreviewLabel(kind) {
+  const map = {
+    image: "📷 Imagen",
+    video: "🎥 Video",
+    audio: "🎙️ Audio",
+    sticker: "🏷️ Sticker",
+    location: "📍 Ubicación",
+    document: "📎 Archivo",
+    file: "📎 Archivo",
+  };
+  return map[kind] || "Mensaje";
+}
+
+function getMessagePreview(m) {
+  const kind = getMessageKind(m);
+  const text = getDisplayText(m, kind);
+  return text || getKindPreviewLabel(kind);
+}
+
+function getReplyMeta(m) {
+  const raw =
+    m?.replyTo ||
+    m?.quotedMessage ||
+    m?.quoted ||
+    m?.context?.replyTo ||
+    m?.context ||
+    null;
+
+  if (!raw || typeof raw !== "object") return null;
+
+  const type = firstString(raw.type, raw.kind) || "text";
+  const preview =
+    firstString(raw.textPreview, raw.preview, raw.text, raw.body, raw.caption) ||
+    getKindPreviewLabel(type);
+
+  const id = firstString(
+    raw.id,
+    raw.messageId,
+    raw.waMessageId,
+    raw.wamid,
+    raw.metaMessageId
+  );
+
+  return {
+    id,
+    type,
+    preview,
+    author: firstString(raw.author, raw.name, raw.fromName, raw.senderName),
+  };
+}
+
+function ReplySnippet({ replyMeta, outgoing = false }) {
+  if (!replyMeta) return null;
+
+  return (
+    <div
+      className={`mb-1.5 rounded-lg border-l-[3px] px-2 py-1 text-[11px] ${
+        outgoing
+          ? "border-[#86e3c3] bg-black/15 text-[#d9fdd3]"
+          : "border-[#53bdeb] bg-black/10 text-[#d7e6ee]"
+      }`}
+    >
+      <div className="font-semibold leading-none">
+        {replyMeta.author || "Respuesta"}
+      </div>
+      <div className="mt-0.5 line-clamp-1 break-words opacity-90">
+        {replyMeta.preview}
+      </div>
+    </div>
+  );
+}
+
+export function MessageBubble({ m, onReply, onPin, isPinned = false }) {
   const out = isOutgoing(m);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   const kind = getMessageKind(m);
   const mediaUrl = getMediaUrlByKind(m, kind);
@@ -694,6 +899,7 @@ export function MessageBubble({ m }) {
   const mimeType = getMimeType(m);
   const fileName = getFileName(m);
   const location = getLocationData(m);
+  const replyMeta = getReplyMeta(m);
   const mediaError =
     m?.media?.error ||
     m?.audio?.error ||
@@ -702,6 +908,24 @@ export function MessageBubble({ m }) {
     m?.document?.error ||
     m?.sticker?.error ||
     "";
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handleOutside = (ev) => {
+      if (!menuRef.current?.contains(ev.target)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [menuOpen]);
 
   const bubbleBaseText =
     "w-fit max-w-[86%] sm:max-w-[78%] xl:max-w-[68%] rounded-2xl px-3 py-2.5 shadow-[0_1px_1px_rgba(0,0,0,0.18)]";
@@ -723,6 +947,12 @@ export function MessageBubble({ m }) {
       : kind === "image" || kind === "video" || kind === "sticker"
       ? bubbleBaseMedia
       : bubbleBaseText;
+
+  const messagePreview = getMessagePreview(m);
+  const messageReplyId = getMessageIdForReply(m);
+
+  const canReply = typeof onReply === "function" && Boolean(messageReplyId);
+  const canPin = typeof onPin === "function";
 
   const renderContent = () => {
     if (kind === "image" && mediaUrl) {
@@ -859,8 +1089,88 @@ export function MessageBubble({ m }) {
   };
 
   return (
-    <div className={`flex w-full ${out ? "justify-end" : "justify-start"}`}>
-      <div className={`${bubbleBase} ${out ? bubbleOut : bubbleIn}`}>
+    <div className={`group flex w-full ${out ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`${bubbleBase} ${out ? bubbleOut : bubbleIn} relative overflow-visible ${
+          isPinned ? "ring-2 ring-[#00a884]/70" : ""
+        }`}
+      >
+        <div
+          ref={menuRef}
+          className={`absolute top-1 z-10 ${
+            out ? "left-1" : "right-1"
+          }`}
+        >
+          {(canReply || canPin) ? (
+            <>
+              <button
+                type="button"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/20 text-[12px] text-white/90 opacity-100 transition hover:bg-black/35 md:opacity-0 md:group-hover:opacity-100"
+                title="Opciones del mensaje"
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                ▾
+              </button>
+
+              {menuOpen ? (
+                <div
+                  className={`absolute top-7 min-w-[150px] rounded-xl border border-white/10 bg-[#1f2c33] p-1 shadow-2xl ${
+                    out ? "left-0" : "right-0"
+                  }`}
+                >
+                  {canReply ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#e9edef] transition hover:bg-white/10"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onReply?.({
+                          id: messageReplyId,
+                          type: kind,
+                          textPreview: messagePreview,
+                          author: out ? "Vos" : "Cliente",
+                        });
+                      }}
+                    >
+                      <span>↩</span>
+                      <span>Responder</span>
+                    </button>
+                  ) : null}
+
+                  {canPin ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#e9edef] transition hover:bg-white/10"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onPin?.({
+                          id: m?.id,
+                          messageId: messageReplyId || m?.id,
+                          type: kind,
+                          textPreview: messagePreview,
+                          author: out ? "Vos" : "Cliente",
+                          timestamp: m?.timestamp || null,
+                        });
+                      }}
+                    >
+                      <span>📌</span>
+                      <span>{isPinned ? "Desfijar" : "Fijar"}</span>
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        {isPinned ? (
+          <div className="mb-1 flex items-center gap-1 pr-6 text-[10px] font-medium text-[#86e3c3]">
+            <span>📌</span>
+            <span>Fijado</span>
+          </div>
+        ) : null}
+
+        <ReplySnippet replyMeta={replyMeta} outgoing={out} />
         {renderContent()}
 
         <div
@@ -934,17 +1244,63 @@ export function AttachModal({
   sending = false,
   busyLabel = "",
 }) {
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState([]);
+
+  useEffect(() => {
+    setPreviewUrls((prev) => {
+      prev.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error(e);
+        }
+      });
+      return pendingFiles.map((file) => URL.createObjectURL(file));
+    });
+
+    return () => {
+      previewUrls.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error(e);
+        }
+      });
+    };
+  }, [pendingFiles]);
+
+  useEffect(() => {
+    if (!open) {
+      setPendingFiles([]);
+    }
+  }, [open]);
+
+  const pendingItems = useMemo(() => {
+    return pendingFiles.map((file, idx) => ({
+      file,
+      url: previewUrls[idx] || "",
+      isImage: String(file?.type || "").startsWith("image/"),
+      isVideo: String(file?.type || "").startsWith("video/"),
+    }));
+  }, [pendingFiles, previewUrls]);
+
+  const closeAndReset = () => {
+    setPendingFiles([]);
+    onClose?.();
+  };
+
   if (!open) return null;
 
   return (
-    <ModalShell onClose={onClose} z="z-[96]">
+    <ModalShell onClose={closeAndReset} z="z-[96]">
       <div
         className="w-full max-w-md p-4 border shadow-xl rounded-2xl border-base-300 bg-base-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold">Adjuntar</div>
-          <button className="btn btn-sm btn-ghost" onClick={onClose} type="button">
+          <button className="btn btn-sm btn-ghost" onClick={closeAndReset} type="button">
             ✕
           </button>
         </div>
@@ -955,24 +1311,30 @@ export function AttachModal({
               sending ? "pointer-events-none opacity-60" : ""
             }`}
           >
-            📷 / 🎥 Enviar imagen o video
+            📷 / 🎥 Elegir imagen o video
             <input
               type="file"
               className="hidden"
               multiple
               accept="image/*,video/*"
               disabled={sending}
-              onChange={async (e) => {
-                const files = Array.from(e.target.files || []);
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []).filter((file) => {
+                  const type = String(file?.type || "");
+                  return type.startsWith("image/") || type.startsWith("video/");
+                });
                 e.target.value = "";
-                onPickFiles?.(files);
+                setPendingFiles(files);
               }}
             />
           </label>
 
           <button
             className="justify-start btn btn-outline sm:justify-center"
-            onClick={onSendLocation}
+            onClick={async () => {
+              await onSendLocation?.();
+              closeAndReset();
+            }}
             type="button"
             disabled={sending}
           >
@@ -980,10 +1342,77 @@ export function AttachModal({
           </button>
         </div>
 
+        {pendingItems.length ? (
+          <div className="mt-4 space-y-3">
+            <div className="text-sm font-semibold">
+              Archivos listos para enviar ({pendingItems.length})
+            </div>
+
+            <div className="grid max-h-[42vh] gap-3 overflow-y-auto pr-1">
+              {pendingItems.map((item, idx) => (
+                <div
+                  key={`${item.file.name}_${idx}`}
+                  className="overflow-hidden border rounded-2xl border-base-300 bg-base-200/30"
+                >
+                  <div className="p-2">
+                    {item.isImage ? (
+                      <img
+                        src={item.url}
+                        alt={item.file.name || "preview"}
+                        className="object-cover w-full max-h-56 rounded-xl"
+                      />
+                    ) : item.isVideo ? (
+                      <video
+                        src={item.url}
+                        className="object-cover w-full max-h-56 rounded-xl"
+                        controls
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="px-3 pb-3 text-xs opacity-75">
+                    <div className="text-sm font-medium break-all opacity-100">
+                      {item.file.name || "Archivo"}
+                    </div>
+                    <div>
+                      {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                className="btn btn-ghost"
+                onClick={() => setPendingFiles([])}
+                type="button"
+                disabled={sending}
+              >
+                Limpiar
+              </button>
+
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  await onPickFiles?.(pendingFiles);
+                  closeAndReset();
+                }}
+                type="button"
+                disabled={sending || !pendingFiles.length}
+              >
+                Enviar
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-3 text-xs opacity-70">
           {sending
             ? busyLabel || "Enviando…"
-            : "Los envíos salen por backend real y se registran en la conversación."}
+            : pendingItems.length
+            ? "Elegiste archivos, ahora tocá Enviar para mandarlos."
+            : "Primero elegís el archivo y después lo confirmás con el botón Enviar."}
         </div>
       </div>
     </ModalShell>

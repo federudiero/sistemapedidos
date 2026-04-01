@@ -10,7 +10,7 @@ const normalizar = (s = "") =>
 const emailUsername = (v) => {
   const s = String(v || "");
   const at = s.indexOf("@");
-  return at > 0 ? s.slice(0, at) : (s || "—");
+  return at > 0 ? s.slice(0, at) : s || "—";
 };
 
 /** Helper universal para WhatsApp → E.164 sin "+" (para wa.me/<num>) */
@@ -74,6 +74,17 @@ const normalizeLocationUrl = (raw = "") => {
 
 // 🔧 Separador robusto para items (string → bullets)
 const ITEM_SEP = /\s*(?:\r?\n|,|;|•|-\s+|–\s+|—\s+|\|)\s*/gu;
+
+// ✅ Separar detalle y total sin arrastrar el costo
+const parsePedidoParts = (pedido = "") => {
+  const raw = String(pedido || "");
+  const [detalle, totalPart = ""] = raw.split(" | TOTAL: $");
+  const totalSolo = String(totalPart || "").split(" | COSTO: $")[0].trim();
+  return {
+    detalle: detalle || "",
+    total: totalSolo || "",
+  };
+};
 
 // 🧩 Renderiza el detalle de productos en la tarjeta (UI)
 const DetalleProductos = ({ pedidoStr, productos }) => {
@@ -161,10 +172,12 @@ const PedidoTabla = ({
   const [q, setQ] = useState("");
 
   const getPhones = (p) =>
-    [p.telefono, p.telefonoAlt].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    [p.telefono, p.telefonoAlt]
+      .filter(Boolean)
+      .filter((v, i, a) => a.indexOf(v) === i);
 
   const copiarPedidoCompleto = (pedido) => {
-    const [detalleSolo, totalStr] = String(pedido.pedido || "").split(" | TOTAL: $");
+    const { detalle: detalleSolo, total: totalSolo } = parsePedidoParts(pedido.pedido);
 
     // Limpia caracteres invisibles que rompen formatos
     const clean = (s) =>
@@ -178,8 +191,8 @@ const PedidoTabla = ({
       ["━━━━━━━━━━━━━━━━", "```" + txt + "```", "━━━━━━━━━━━━━━━━"].join("\n");
 
     let totalLinea = "";
-    if (typeof totalStr === "string" && totalStr.trim()) {
-      const t = clean(totalStr);
+    if (typeof totalSolo === "string" && totalSolo.trim()) {
+      const t = clean(totalSolo);
       totalLinea = banner(`💵 TOTAL: $${t}`);
     } else if (Number.isFinite(Number(pedido.monto))) {
       const t = clean(new Intl.NumberFormat("es-AR").format(Number(pedido.monto)));
@@ -191,10 +204,10 @@ const PedidoTabla = ({
       pedidoStr: detalleSolo || pedido.pedido,
       productos: pedido.productos,
     });
-    const bloquePedido =
-      detalleBullets
-        ? `📝 Pedido:\n${detalleBullets}`
-        : `📝 Pedido: ${detalleSolo || pedido.pedido || "—"}`;
+
+    const bloquePedido = detalleBullets
+      ? `📝 Pedido:\n${detalleBullets}`
+      : `📝 Pedido: ${detalleSolo || pedido.pedido || "—"}`;
 
     // Teléfonos en texto plano
     const phones = [pedido.telefono, pedido.telefonoAlt]
@@ -203,7 +216,7 @@ const PedidoTabla = ({
 
     const waLines = phones
       .map((ph, idx) => {
-        const mostrado = clean(ph); // texto plano
+        const mostrado = clean(ph);
         return `${idx === 0 ? "📱 Teléfono principal" : "📱 Teléfono alternativo"}: ${mostrado}`;
       })
       .join("\n");
@@ -212,16 +225,12 @@ const PedidoTabla = ({
       .filter(Boolean)
       .join(", ");
 
-    // 🔗 Link plano de ubicación si existe
-    const linkPlano = clean(pedido.linkUbicacion);
-    const lineaLink = linkPlano ? `🔗 Ubicación (link): ${linkPlano}` : "";
-
     const textoCompleto = `
 👤 Nombre: ${clean(pedido.nombre)}
 📌 Dirección: ${direccionPlano || "—"}
 🌐 Entre calles: ${clean(pedido.entreCalles)}
 📍 Ciudad/partido: ${clean(pedido.partido)}
-${waLines ? `${waLines}\n` : ""}${lineaLink ? `${lineaLink}\n` : ""}${bloquePedido}
+${waLines ? `${waLines}\n` : ""}${bloquePedido}
 ${totalLinea ? `\n${totalLinea}\n` : ""}
 ⚠️ Pago con transferencia se le agrega un 10% al total de la compra.
 `.trim();
@@ -307,7 +316,7 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
               String(p.vendedorEmail || "").trim().toLowerCase() ===
               String(currentUserEmail || "").trim().toLowerCase();
 
-            const [detalle, total] = String(p.pedido || "").split(" | TOTAL: $");
+            const { detalle, total } = parsePedidoParts(p.pedido);
 
             // 🚚 Repartidor asignado (si existe)
             let repartidorAsignado = "";
@@ -370,9 +379,11 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                         "—"
                       )}
                     </li>
+
                     <li>
                       <strong>🌐 Observación (Entre calles):</strong> {p.entreCalles}
                     </li>
+
                     <li>
                       <strong>📍 Ciudad o partido:</strong> {p.partido}
                     </li>

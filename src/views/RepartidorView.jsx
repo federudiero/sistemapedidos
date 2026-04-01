@@ -86,8 +86,8 @@ const normalizeLocationUrl = (raw) => {
 
 const sanitizeDireccion = (s) => {
   let x = String(s || "").normalize("NFKC").trim().replace(/\s+/g, " ");
-  const from = "ÁÉÍÓÚÜÑáéíóúüñ",
-    to = "AEIOUUNaeiouun";
+  const from = "ÁÉÍÓÚÜÑáéíóúüñ";
+  const to = "AEIOUUNaeiouun";
   return x.replace(/[ÁÉÍÓÚÜÑáéíóúüñ]/g, (ch) => to[from.indexOf(ch)] || ch);
 };
 
@@ -101,9 +101,21 @@ const ensureARContext = (addr, base) => {
 };
 
 const buildMapsLink = (p, base) => {
-  if (p?.placeId) {
-    return `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(
-      p.placeId
+  const manual = String(p?.linkUbicacion || "").trim();
+  if (manual) return normalizeLocationUrl(manual);
+
+  const dir = String(p?.direccion || "").trim();
+  const placeId = String(p?.placeId || "").trim();
+
+  if (placeId && dir) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      dir
+    )}&query_place_id=${encodeURIComponent(placeId)}`;
+  }
+
+  if (placeId) {
+    return `https://www.google.com/maps/search/?api=1&query=Google%20Maps&query_place_id=${encodeURIComponent(
+      placeId
     )}`;
   }
 
@@ -116,7 +128,7 @@ const buildMapsLink = (p, base) => {
     return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   }
 
-  const q = sanitizeDireccion(ensureARContext(p?.direccion || "", base));
+  const q = sanitizeDireccion(ensureARContext(dir, base));
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     q
   )}`;
@@ -153,7 +165,6 @@ const getPhones = (p) =>
 
 /* ✅ NUEVO: intentar resolver vendedor sin romper nada */
 const getVendedorLabel = (p) => {
-  // caso objeto {nombre,email}
   if (p?.vendedor && typeof p.vendedor === "object") {
     const n = p.vendedor?.nombre || p.vendedor?.name || "";
     const e = p.vendedor?.email || p.vendedor?.mail || "";
@@ -268,10 +279,8 @@ function RepartidorView() {
 
   const [bloqueado, setBloqueado] = useState(false);
 
-  // ✅ NUEVO: mostrar/ocultar recuadro de descuento por pedido (arranca cerrado)
   const [showDescuentoById, setShowDescuentoById] = useState({});
 
-  // Evitar refetch idéntico
   const lastLoadKeyRef = useRef("");
 
   useEffect(() => {
@@ -317,7 +326,6 @@ function RepartidorView() {
         // seguimos
       }
 
-      // ✅ al cambiar fecha/carga, cerramos paneles de descuento para evitar confusión
       setShowDescuentoById({});
 
       verificarCierreIndividual(emailRepartidor);
@@ -352,6 +360,11 @@ function RepartidorView() {
         ? raw.linkUbicacion.trim()
         : null;
 
+    const placeId =
+      typeof raw.placeId === "string" && raw.placeId.trim()
+        ? raw.placeId.trim()
+        : null;
+
     const descuentoModo =
       typeof raw.descuentoModo === "string" ? raw.descuentoModo : "";
     const descuentoPct = Number.isFinite(Number(raw.descuentoPct))
@@ -361,12 +374,10 @@ function RepartidorView() {
       ? Number(raw.montoConDescuento)
       : undefined;
 
-    // ✅ CAMBIO: traemos descuentosProductos (array paralelo)
     const descuentosProductos = Array.isArray(raw.descuentosProductos)
       ? raw.descuentosProductos.map(clampPct)
       : undefined;
 
-    // 🔒 Importante: NO inyectamos descuentoPct dentro de productos (no tocar productos)
     const productos = Array.isArray(raw.productos) ? raw.productos : raw.productos;
 
     return {
@@ -381,6 +392,7 @@ function RepartidorView() {
       pagoMixtoCon10,
       direccion,
       linkUbicacion,
+      placeId,
 
       descuentoModo,
       descuentoPct,
@@ -452,20 +464,17 @@ function RepartidorView() {
     setPedidos(lista);
   };
 
-  /* ===== DESCUENTO: setters locales ===== */
   const setDescuentoModoLocal = (pedidoId, modo) => {
     setPedidos((prev) =>
       prev.map((p) => {
         if (p.id !== pedidoId) return p;
 
-        // ✅ si elige "productos", inicializamos descuentosProductos con ceros si falta
         if (String(modo).toLowerCase() === "productos") {
           const len = Array.isArray(p.productos) ? p.productos.length : 0;
           const arr = Array.isArray(p.descuentosProductos)
             ? [...p.descuentosProductos]
             : Array.from({ length: len }, () => 0);
 
-          // si cambió el largo de productos, ajustamos
           if (arr.length !== len) {
             const fixed = Array.from({ length: len }, (_, i) =>
               clampPct(arr[i] ?? 0)
@@ -499,7 +508,6 @@ function RepartidorView() {
     );
   };
 
-  // ✅ CAMBIO: descuento por producto se guarda en descuentosProductos[] (NO en productos[])
   const setProductoDescuentoLocal = (pedidoId, index, pct) => {
     const pp = clampPct(pct);
     setPedidos((prev) =>
@@ -542,8 +550,6 @@ function RepartidorView() {
           descuentoMonto: deleteField(),
           descuentoUpdatedAt: Timestamp.now(),
           descuentoUpdatedBy: emailRepartidor,
-
-          // ✅ si había por-producto, limpiamos también
           descuentosProductos: deleteField(),
         });
 
@@ -571,8 +577,6 @@ function RepartidorView() {
         descuentoMonto: descuentoMonto,
         descuentoUpdatedAt: Timestamp.now(),
         descuentoUpdatedBy: emailRepartidor,
-
-        // ✅ si pasa a total, limpiamos por-producto
         descuentosProductos: deleteField(),
       });
 
@@ -600,7 +604,6 @@ function RepartidorView() {
     }
   };
 
-  // ✅ CAMBIO: guarda SOLO descuentosProductos (no toca productos)
   const guardarDescuentoProductos = async (pedido) => {
     const ref = doc(db, "provincias", provinciaId, "pedidos", pedido.id);
     const productos = Array.isArray(pedido.productos) ? pedido.productos : [];
@@ -617,8 +620,6 @@ function RepartidorView() {
       descuentosProductos,
       descuentoUpdatedAt: Timestamp.now(),
       descuentoUpdatedBy: emailRepartidor,
-
-      // ✅ si pasa a por-producto, limpiamos descuento total
       descuentoPct: deleteField(),
     };
 
@@ -662,7 +663,6 @@ function RepartidorView() {
     }
   };
 
-  /* ===== acciones ===== */
   const toggleEntregado = async (pedido) => {
     if (!puedeEntregar) {
       Swal.fire("Permisos", "No tenés permiso para marcar entregas.", "info");
@@ -675,7 +675,6 @@ function RepartidorView() {
     let extraPatch = {};
     const montoCobrar = getMontoCobrar(pedido);
 
-    // 🟡 Solo validamos cuando se quiere pasar a ENTREGADO = true
     if (nuevoEstado === true) {
       if (!pedido.metodoPago) {
         Swal.fire(
@@ -729,7 +728,6 @@ function RepartidorView() {
     }
 
     try {
-      // ✅ FIX PERMISOS: acá NO tocamos campos de descuento
       await updateDoc(ref, {
         ...extraPatch,
         entregado: nuevoEstado,
@@ -873,7 +871,6 @@ function RepartidorView() {
     }
   };
 
-  /* ===== totales ===== */
   const { efectivo, transferencia10, transferencia0, total } = useMemo(() => {
     let efectivo = 0,
       transferencia10 = 0,
@@ -915,7 +912,6 @@ function RepartidorView() {
     };
   }, [pedidos]);
 
-  /* ===== cierre individual ===== */
   const verificarCierreIndividual = async (email) => {
     try {
       const fechaStr = format(fechaSeleccionada, "yyyy-MM-dd");
@@ -934,7 +930,6 @@ function RepartidorView() {
     return parts.slice(-3).join(", ");
   }, [BASE_DIRECCION]);
 
-  // ✅ Toggle del recuadro "Descuento" por pedido
   const toggleDescuentoUI = (pedidoId) => {
     setShowDescuentoById((prev) => ({
       ...prev,
@@ -944,7 +939,6 @@ function RepartidorView() {
 
   return (
     <div className="max-w-4xl px-4 py-6 mx-auto">
-      {/* HEADER RESPONSIVE */}
       <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <span className="text-3xl md:text-4xl">🚚</span>
@@ -1031,14 +1025,11 @@ function RepartidorView() {
             const montoHeader =
               p.metodoPago === "transferencia10" ? totalCon10Full : roundMoney(baseCobrar);
 
-            // ✅ CAMBIO: calcProductos usa descuentosProductos
             const calcProductos = hasProductos
               ? calcTotalFromProductos(p.productos, p.descuentosProductos)
               : null;
 
             const showDescuento = !!showDescuentoById[p.id];
-
-            // ✅ NUEVO: vendedor + teléfono para "tramo" (cabecera)
             const vendedorLabel = getVendedorLabel(p) || "No informado";
 
             return (
@@ -1048,17 +1039,15 @@ function RepartidorView() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* "Tramo" / cabecera */}
                     <span className="px-2 py-1 font-mono text-xs rounded-full bg-base-300/80">
                       🛣️ Pedido #{idx + 1}
                     </span>
 
-                    {/* ✅ NUEVO: vendedor en tramo/cabecera */}
                     <span className="badge badge-info badge-sm">
                       🧑‍💼 Vendedor: {vendedorLabel}
                     </span>
 
-                                        {p.entregado && (
+                    {p.entregado && (
                       <span className="flex items-center gap-1 text-xs badge badge-success badge-sm">
                         ✅ Entregado
                       </span>
@@ -1070,7 +1059,6 @@ function RepartidorView() {
                       </span>
                     )}
 
-                    {/* ✅ botón que activa/oculta el recuadro de descuento */}
                     <button
                       className={`btn btn-xs ${showDescuento ? "btn-ghost" : "btn-outline"}`}
                       onClick={() => toggleDescuentoUI(p.id)}
@@ -1099,7 +1087,6 @@ function RepartidorView() {
                       <strong>🧍 Cliente:</strong> {p.nombre}
                     </p>
 
-                    {/* ✅ NUEVO: vendedor visible en la card */}
                     <p>
                       <strong>🧑‍💼 Vendedor:</strong> {vendedorLabel}
                     </p>
@@ -1110,18 +1097,25 @@ function RepartidorView() {
                         <span className="opacity-70">No informado</span>
                       ) : (
                         <span className="inline-flex flex-wrap gap-2">
-                          {getPhones(p).map((ph, i) => (
-                            <a
-                              key={i}
-                              className="link link-accent"
-                              href={`https://wa.me/${toWhatsAppAR(ph)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title={`WhatsApp a ${formatPhoneARDisplay(ph)}`}
-                            >
-                              {formatPhoneARDisplay(ph)}
-                            </a>
-                          ))}
+                          {getPhones(p).map((ph, i) => {
+                            const wa = toWhatsAppAR(ph);
+                            return wa ? (
+                              <a
+                                key={i}
+                                className="link link-accent"
+                                href={`https://wa.me/${wa}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`WhatsApp a ${formatPhoneARDisplay(ph)}`}
+                              >
+                                {formatPhoneARDisplay(ph)}
+                              </a>
+                            ) : (
+                              <span key={i} className="opacity-80">
+                                {formatPhoneARDisplay(ph)}
+                              </span>
+                            );
+                          })}
                         </span>
                       )}
                     </div>
@@ -1182,7 +1176,6 @@ function RepartidorView() {
                 </div>
 
                 <div className="pt-2 mt-2 space-y-3 border-t border-base-300/60">
-                  {/* ✅ RECUADRO DESCUENTO: SOLO si se activa con el botón */}
                   {showDescuento && (
                     <div className="p-3 rounded-lg bg-base-300">
                       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -1295,7 +1288,6 @@ function RepartidorView() {
                                       const qty = getItemQty(it);
                                       const unit = getItemUnitPrice(it);
 
-                                      // ✅ CAMBIO: pct viene del array paralelo
                                       const pct = clampPct(
                                         Array.isArray(p.descuentosProductos) &&
                                           p.descuentosProductos[i] != null
@@ -1379,7 +1371,6 @@ function RepartidorView() {
                     </div>
                   )}
 
-                  {/* Método de pago */}
                   <div>
                     <label className="mr-2 text-sm font-semibold">💳 Método de pago:</label>
                     <select

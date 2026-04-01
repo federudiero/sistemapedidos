@@ -132,8 +132,15 @@ async function fetchJson(url, options = {}) {
   return data;
 }
 
+function normalizeMimeType(mimeType) {
+  return String(mimeType || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+}
+
 function extensionFromMime(mimeType, fallback = "bin") {
-  const mime = String(mimeType || "").toLowerCase();
+  const mime = normalizeMimeType(mimeType);
 
   const map = {
     "image/jpeg": "jpg",
@@ -149,11 +156,63 @@ function extensionFromMime(mimeType, fallback = "bin") {
     "audio/mp4": "m4a",
     "audio/mpeg": "mp3",
     "audio/aac": "aac",
+    "audio/amr": "amr",
     "audio/webm": "webm",
     "application/pdf": "pdf",
   };
 
   return map[mime] || fallback;
+}
+
+function normalizeReplyTo(replyTo) {
+  if (!replyTo) return null;
+
+  if (typeof replyTo === "string") {
+    const id = replyTo.trim();
+    return id ? { id, messageId: id, waMessageId: id } : null;
+  }
+
+  if (typeof replyTo !== "object") return null;
+
+  const id = String(
+    replyTo?.waMessageId ||
+      replyTo?.id ||
+      replyTo?.messageId ||
+      replyTo?.wamid ||
+      replyTo?.whatsappMessageId ||
+      replyTo?.metaMessageId ||
+      replyTo?.providerMessageId ||
+      replyTo?.originalMessageId ||
+      ""
+  ).trim();
+
+  if (!id) return null;
+
+  const textPreview = String(
+    replyTo?.textPreview ||
+      replyTo?.text ||
+      replyTo?.body ||
+      replyTo?.caption ||
+      replyTo?.message ||
+      ""
+  ).trim();
+
+  const type = String(
+    replyTo?.type || replyTo?.kind || replyTo?.rawType || ""
+  ).trim();
+
+  const author = String(
+    replyTo?.author || replyTo?.fromName || replyTo?.senderName || ""
+  ).trim();
+
+  return {
+    id,
+    messageId: id,
+    waMessageId: id,
+    ...(textPreview ? { textPreview } : {}),
+    ...(type ? { type } : {}),
+    ...(author ? { author } : {}),
+  };
 }
 
 export function useCrmConversation({ db, provinciaId, myEmail, conversationId }) {
@@ -340,7 +399,9 @@ export function useCrmTemplates({ db, provinciaId, myEmail }) {
       if (!provinciaId || !id) return;
 
       if (scope === "legacy") {
-        await deleteDoc(doc(db, "provincias", String(provinciaId), "crmTemplates", String(id)));
+        await deleteDoc(
+          doc(db, "provincias", String(provinciaId), "crmTemplates", String(id))
+        );
         return;
       }
 
@@ -744,12 +805,13 @@ export function useCrmSender({
   }, []);
 
   const sendText = useCallback(
-    async (text) => {
+    async (text, options = {}) => {
       const body = String(text || "").trim();
       if (!body || !requireReady()) return;
 
       return withSendState("text", async () => {
         const { idToken, apiBase } = await getAuthContext();
+        const replyTo = normalizeReplyTo(options?.replyTo);
 
         await fetchJson(`${apiBase}/crm/sendText`, {
           method: "POST",
@@ -761,6 +823,7 @@ export function useCrmSender({
             provinciaId,
             convId: conversationId,
             text: body,
+            ...(replyTo ? { replyTo } : {}),
           }),
         });
       });
@@ -769,11 +832,12 @@ export function useCrmSender({
   );
 
   const sendMediaFiles = useCallback(
-    async (files) => {
+    async (files, options = {}) => {
       if (!files || files.length === 0 || !requireReady()) return;
 
       return withSendState("media", async () => {
         const { idToken, apiBase } = await getAuthContext();
+        const replyTo = normalizeReplyTo(options?.replyTo);
 
         for (const f of files) {
           const isImg = f.type?.startsWith("image/");
@@ -806,6 +870,7 @@ export function useCrmSender({
               filename: f.name || "",
               kind: isImg ? "image" : "video",
               caption: "",
+              ...(replyTo ? { replyTo } : {}),
             }),
           });
         }
@@ -815,12 +880,23 @@ export function useCrmSender({
   );
 
   const sendAudio = useCallback(
-    async (blob) => {
+    async (blob, options = {}) => {
       if (!blob || !requireReady()) return;
 
       return withSendState("audio", async () => {
+        if (!blob.size) {
+          throw new Error("El audio está vacío. Grabalo de nuevo.");
+        }
+
         const { idToken, apiBase } = await getAuthContext();
-        const mimeType = String(blob?.type || "audio/webm").trim();
+        const replyTo = normalizeReplyTo(options?.replyTo);
+        const originalMimeType = String(blob?.type || "audio/webm").trim();
+        const mimeType = normalizeMimeType(originalMimeType) || "audio/webm";
+
+        if (!mimeType.startsWith("audio/")) {
+          throw new Error("El archivo grabado no es un audio válido.");
+        }
+
         const ext = extensionFromMime(mimeType, "webm");
         const msgId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
         const path = `crm/${provinciaId}/${conversationId}/aud_${msgId}.${ext}`;
@@ -843,9 +919,12 @@ export function useCrmSender({
             convId: conversationId,
             mediaUrl,
             mimeType,
+            originalMimeType,
             filename,
             kind: "audio",
+            isVoiceNote: true,
             caption: "",
+            ...(replyTo ? { replyTo } : {}),
           }),
         });
       });
@@ -854,7 +933,7 @@ export function useCrmSender({
   );
 
   const sendLocation = useCallback(
-    async ({ name = "", address = "" } = {}) => {
+    async ({ name = "", address = "", replyTo = null } = {}) => {
       if (!navigator.geolocation) {
         throw new Error("Tu navegador no soporta geolocalización.");
       }
@@ -871,6 +950,7 @@ export function useCrmSender({
 
         const { latitude, longitude } = pos.coords;
         const { idToken, apiBase } = await getAuthContext();
+        const normalizedReply = normalizeReplyTo(replyTo);
 
         await fetchJson(`${apiBase}/crm/sendLocation`, {
           method: "POST",
@@ -885,6 +965,7 @@ export function useCrmSender({
             longitude,
             name: String(name || "").trim(),
             address: String(address || "").trim(),
+            ...(normalizedReply ? { replyTo: normalizedReply } : {}),
           }),
         });
       });
