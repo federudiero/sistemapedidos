@@ -1,11 +1,11 @@
 // src/views/RepartidorView.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { db, auth } from "../firebase/firebase";
 import {
   collection,
   query,
   where,
-  getDocs,
+  onSnapshot,
   doc,
   updateDoc,
   Timestamp,
@@ -23,6 +23,7 @@ import MapaRutaRepartidor from "../components/MapaRutaRepartidor";
 import BotonIniciarViaje from "../components/BotonIniciarViaje";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { baseDireccion } from "../constants/provincias";
+import { getPedidoMapsUrl } from "../utils/pedidoLocation.js";
 import CargaDelDiaRepartidor from "../components/CargaDelDiaRepartidor";
 
 /* ===== colecciones / docs ===== */
@@ -80,59 +81,14 @@ const toWhatsAppAR = (raw) => {
 const normalizeLocationUrl = (raw) => {
   if (!raw) return "";
   let s = String(raw).trim();
+  if (!s) return "";
   if (!/^https?:\/\//i.test(s)) s = "https://" + s;
   return s;
 };
 
-const sanitizeDireccion = (s) => {
-  let x = String(s || "").normalize("NFKC").trim().replace(/\s+/g, " ");
-  const from = "ÁÉÍÓÚÜÑáéíóúüñ";
-  const to = "AEIOUUNaeiouun";
-  return x.replace(/[ÁÉÍÓÚÜÑáéíóúüñ]/g, (ch) => to[from.indexOf(ch)] || ch);
-};
 
-const ensureARContext = (addr, base) => {
-  const s = String(addr || "");
-  if (/argentina/i.test(s)) return s;
-  const parts = String(base || "")
-    .split(",")
-    .map((t) => t.trim());
-  return `${s}, ${parts.slice(-3).join(", ")}`;
-};
 
-const buildMapsLink = (p, base) => {
-  const manual = String(p?.linkUbicacion || "").trim();
-  if (manual) return normalizeLocationUrl(manual);
-
-  const dir = String(p?.direccion || "").trim();
-  const placeId = String(p?.placeId || "").trim();
-
-  if (placeId && dir) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-      dir
-    )}&query_place_id=${encodeURIComponent(placeId)}`;
-  }
-
-  if (placeId) {
-    return `https://www.google.com/maps/search/?api=1&query=Google%20Maps&query_place_id=${encodeURIComponent(
-      placeId
-    )}`;
-  }
-
-  if (
-    p?.coordenadas &&
-    typeof p.coordenadas.lat === "number" &&
-    typeof p.coordenadas.lng === "number"
-  ) {
-    const { lat, lng } = p.coordenadas;
-    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-  }
-
-  const q = sanitizeDireccion(ensureARContext(dir, base));
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    q
-  )}`;
-};
+const buildMapsLink = (p, base) => getPedidoMapsUrl(p, base);
 
 const formatPhoneARDisplay = (raw) => {
   let d = String(raw || "").replace(/\D/g, "");
@@ -249,23 +205,79 @@ const calcTotalFromProductos = (productos, descuentosProductos) => {
   };
 };
 
+const formatMoney = (n) => roundMoney(n).toLocaleString("es-AR");
+
+const limpiarPedidoVisible = (valor = "") => {
+  return String(valor || "")
+    .replace(/\s*\(\s*costo\s*\$?\s*[\d.,]+\s*\)/gi, "")
+    .replace(/\s*\|\s*COSTO:\s*\$?\s*[\d.,]+/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
+
+const getPedidoVisible = (p) => {
+  const productos = Array.isArray(p?.productos) ? p.productos : [];
+
+  if (productos.length > 0) {
+    const lineas = productos
+      .map((it) => {
+        const nombre = String(it?.nombre || it?.nombreBase || "").trim();
+        if (!nombre) return "";
+
+        const qty = getItemQty(it);
+        const unit = getItemUnitPrice(it);
+        if (unit === null) return `${nombre} x${qty}`;
+
+        return `${nombre} x${qty} ($${formatMoney(unit * qty)})`;
+      })
+      .filter(Boolean);
+
+    if (lineas.length > 0) {
+      const calc = calcTotalFromProductos(productos);
+      const total = calc?.totalOriginal ?? Number(p?.monto || 0);
+      return `${lineas.join(" - ")} | TOTAL: $${formatMoney(total)}`;
+    }
+  }
+
+  return limpiarPedidoVisible(p?.pedido);
+};
+
+const hasRealProductDiscount = (productos, descuentosProductos) => {
+  if (!Array.isArray(productos) || !Array.isArray(descuentosProductos)) return false;
+
+  return productos.some((_, index) => clampPct(descuentosProductos[index] ?? 0) > 0);
+};
+
 const getMontoCobrar = (p) => {
-  const montoOriginal = Number(p?.monto || 0);
-  const stored = Number(p?.montoConDescuento);
-
-  if (Number.isFinite(stored) && stored >= 0) return stored;
-
+  const montoOriginal = roundMoney(Number(p?.monto || 0));
   const modo = String(p?.descuentoModo || "").toLowerCase();
 
   if (modo === "productos") {
+    const hayDescuentoReal = hasRealProductDiscount(
+      p?.productos,
+      p?.descuentosProductos
+    );
+
+    // Si todos los descuentos por producto son 0, no se debe priorizar
+    // montoConDescuento porque puede haber quedado viejo de una edición anterior.
+    if (!hayDescuentoReal) return montoOriginal;
+
     const calc = calcTotalFromProductos(p?.productos, p?.descuentosProductos);
     if (calc) return calc.totalFinal;
+
+    const stored = Number(p?.montoConDescuento);
+    return Number.isFinite(stored) && stored >= 0 ? roundMoney(stored) : montoOriginal;
   }
 
   const pct = clampPct(p?.descuentoPct);
-  if (pct > 0) return roundMoney(montoOriginal * (1 - pct / 100));
+  if (pct > 0) {
+    const stored = Number(p?.montoConDescuento);
+    return Number.isFinite(stored) && stored >= 0
+      ? roundMoney(stored)
+      : roundMoney(montoOriginal * (1 - pct / 100));
+  }
 
-  return roundMoney(montoOriginal);
+  return montoOriginal;
 };
 
 function RepartidorView() {
@@ -280,8 +292,6 @@ function RepartidorView() {
   const [bloqueado, setBloqueado] = useState(false);
 
   const [showDescuentoById, setShowDescuentoById] = useState({});
-
-  const lastLoadKeyRef = useRef("");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -300,7 +310,10 @@ function RepartidorView() {
   const puedeBloquear = true;
 
   useEffect(() => {
-    if (!authReady || !provinciaId || !emailRepartidor) return;
+    if (!authReady || !provinciaId || !emailRepartidor) return undefined;
+
+    let cancelled = false;
+    let unsubscribePedidos = null;
 
     (async () => {
       try {
@@ -326,16 +339,24 @@ function RepartidorView() {
         // seguimos
       }
 
-      setShowDescuentoById({});
+      if (cancelled) return;
 
+      setShowDescuentoById({});
       verificarCierreIndividual(emailRepartidor);
-      await cargarPedidos(emailRepartidor);
+      unsubscribePedidos = escucharPedidos(emailRepartidor);
     })();
+
+    return () => {
+      cancelled = true;
+      if (typeof unsubscribePedidos === "function") unsubscribePedidos();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, fechaSeleccionada, provinciaId, emailRepartidor]);
 
   const normalizeDoc = (id, raw) => {
-    const monto = Number.isFinite(Number(raw.monto)) ? Number(raw.monto) : 0;
+    const totalProductos = calcTotalFromProductos(raw?.productos)?.totalOriginal;
+    const montoDoc = Number.isFinite(Number(raw.monto)) ? Number(raw.monto) : 0;
+    const monto = Number.isFinite(Number(totalProductos)) ? Number(totalProductos) : montoDoc;
     const ordenRuta = Number.isFinite(Number(raw.ordenRuta))
       ? Number(raw.ordenRuta)
       : 999;
@@ -403,65 +424,86 @@ function RepartidorView() {
     };
   };
 
-  const cargarPedidos = async (email) => {
+  const escucharPedidos = (email) => {
     const prov = (provinciaId || "").trim();
     const ref = colPedidos(prov);
 
     const inicio = Timestamp.fromDate(startOfDay(fechaSeleccionada));
     const finExcl = Timestamp.fromDate(startOfDay(addDays(fechaSeleccionada, 1)));
-    const loadKey = [prov, email, inicio.seconds, finExcl.seconds].join("|");
-    if (lastLoadKeyRef.current === loadKey) return;
-    lastLoadKeyRef.current = loadKey;
 
-    let docs = [];
-    let algunExito = false;
-    let ultimoPermError = null;
+    let unsubString = null;
 
-    try {
-      const qArray = query(
+    const ordenarYSetear = (docsSnap) => {
+      const lista = docsSnap.docs
+        .map((d) => normalizeDoc(d.id, d.data()))
+        .sort((a, b) => Number(a.ordenRuta ?? 999) - Number(b.ordenRuta ?? 999));
+
+      setPedidos(lista);
+    };
+
+    const escucharFallbackString = () => {
+      if (unsubString) return;
+
+      const qString = query(
         ref,
-        where("asignadoA", "array-contains", email),
+        where("asignadoA", "==", email),
         where("fecha", ">=", inicio),
         where("fecha", "<", finExcl)
       );
-      const snapArray = await getDocs(qArray);
-      docs = docs.concat(snapArray.docs);
-      algunExito = true;
-    } catch (e) {
-      if (e?.code === "permission-denied") ultimoPermError = e;
-    }
 
-    if (!docs.length) {
-      try {
-        const qString = query(
-          ref,
-          where("asignadoA", "==", email),
-          where("fecha", ">=", inicio),
-          where("fecha", "<", finExcl)
-        );
-        const snapString = await getDocs(qString);
-        docs = docs.concat(snapString.docs);
-        algunExito = true;
-      } catch (e) {
-        if (e?.code === "permission-denied") ultimoPermError = e;
-      }
-    }
-
-    if (!algunExito && ultimoPermError) {
-      Swal.fire(
-        "Sin resultados",
-        "No hay permiso para listar pedidos asignados. Revisá reglas o el rol del usuario.",
-        "info"
+      unsubString = onSnapshot(
+        qString,
+        ordenarYSetear,
+        (e) => {
+          if (e?.code === "permission-denied") {
+            Swal.fire(
+              "Sin resultados",
+              "No hay permiso para listar pedidos asignados. Revisá reglas o el rol del usuario.",
+              "info"
+            );
+          }
+          setPedidos([]);
+        }
       );
-      setPedidos([]);
-      return;
-    }
+    };
 
-    const lista = docs
-      .map((d) => normalizeDoc(d.id, d.data()))
-      .sort((a, b) => Number(a.ordenRuta ?? 999) - Number(b.ordenRuta ?? 999));
+    const qArray = query(
+      ref,
+      where("asignadoA", "array-contains", email),
+      where("fecha", ">=", inicio),
+      where("fecha", "<", finExcl)
+    );
 
-    setPedidos(lista);
+    const unsubArray = onSnapshot(
+      qArray,
+      (snapArray) => {
+        if (!snapArray.empty) {
+          if (unsubString) {
+            unsubString();
+            unsubString = null;
+          }
+          ordenarYSetear(snapArray);
+          return;
+        }
+
+        escucharFallbackString();
+      },
+      (e) => {
+        if (e?.code === "permission-denied") {
+          Swal.fire(
+            "Sin resultados",
+            "No hay permiso para listar pedidos asignados. Revisá reglas o el rol del usuario.",
+            "info"
+          );
+        }
+        setPedidos([]);
+      }
+    );
+
+    return () => {
+      unsubArray();
+      if (unsubString) unsubString();
+    };
   };
 
   const setDescuentoModoLocal = (pedidoId, modo) => {
@@ -610,28 +652,59 @@ function RepartidorView() {
     const len = productos.length;
 
     const descuentosProductos = Array.isArray(pedido.descuentosProductos)
-      ? pedido.descuentosProductos.map(clampPct)
+      ? Array.from({ length: len }, (_, i) => clampPct(pedido.descuentosProductos[i] ?? 0))
       : Array.from({ length: len }, () => 0);
 
+    const hayDescuentoReal = descuentosProductos.some((pct) => pct > 0);
     const calc = calcTotalFromProductos(productos, descuentosProductos);
 
-    const patch = {
-      descuentoModo: "productos",
-      descuentosProductos,
-      descuentoUpdatedAt: Timestamp.now(),
-      descuentoUpdatedBy: emailRepartidor,
-      descuentoPct: deleteField(),
-    };
-
-    if (calc) {
-      patch.montoConDescuento = calc.totalFinal;
-      patch.descuentoMonto = Math.max(
-        0,
-        roundMoney((Number(pedido.monto || 0) || 0) - calc.totalFinal)
-      );
-    }
-
     try {
+      if (!hayDescuentoReal) {
+        await updateDoc(ref, {
+          descuentoModo: deleteField(),
+          descuentosProductos: deleteField(),
+          descuentoPct: deleteField(),
+          montoConDescuento: deleteField(),
+          descuentoMonto: deleteField(),
+          descuentoUpdatedAt: Timestamp.now(),
+          descuentoUpdatedBy: emailRepartidor,
+        });
+
+        setPedidos((prev) =>
+          prev.map((p) =>
+            p.id === pedido.id
+              ? {
+                  ...p,
+                  descuentoModo: "",
+                  descuentosProductos: undefined,
+                  descuentoPct: 0,
+                  montoConDescuento: undefined,
+                  descuentoMonto: 0,
+                }
+              : p
+          )
+        );
+
+        Swal.fire("✅ Ok", "Descuento quitado.", "success");
+        return;
+      }
+
+      const patch = {
+        descuentoModo: "productos",
+        descuentosProductos,
+        descuentoUpdatedAt: Timestamp.now(),
+        descuentoUpdatedBy: emailRepartidor,
+        descuentoPct: deleteField(),
+      };
+
+      if (calc) {
+        patch.montoConDescuento = calc.totalFinal;
+        patch.descuentoMonto = Math.max(
+          0,
+          roundMoney((Number(pedido.monto || 0) || 0) - calc.totalFinal)
+        );
+      }
+
       await updateDoc(ref, patch);
 
       setPedidos((prev) =>
@@ -1155,7 +1228,7 @@ function RepartidorView() {
 
                   <div className="space-y-1">
                     <p>
-                      <strong>📦 Pedido:</strong> {p.pedido}
+                      <strong>📦 Pedido:</strong> {getPedidoVisible(p)}
                     </p>
 
                     {(() => {

@@ -41,6 +41,10 @@ import AdminNavbar from "../components/AdminNavbar";
 import MapaRutaRepartidor from "../components/MapaRutaRepartidor";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { baseDireccion } from "../constants/provincias";
+import {
+  getPedidoLocationIntent,
+  getPedidoWaypointText,
+} from "../utils/pedidoLocation.js";
 import { useJsApiLoader } from "@react-google-maps/api";
 
 /* ---------- Helpers ---------- */
@@ -241,25 +245,23 @@ const geocodeToLatLng = (address, baseContext, bounds, forceCity) =>
   });
 
 const resolveLocation = async (p, baseContext, bounds, baseCity) => {
-  if (p?.placeId) return { placeId: p.placeId };
+  const intent = getPedidoLocationIntent(p, baseContext);
 
-  if (
-    p?.coordenadas &&
-    Number.isFinite(p.coordenadas.lat) &&
-    Number.isFinite(p.coordenadas.lng)
-  ) {
-    return new window.google.maps.LatLng(
-      p.coordenadas.lat,
-      p.coordenadas.lng
-    );
+  if (intent?.type === "placeId") return { placeId: intent.placeId };
+
+  if (intent?.type === "latlng") {
+    return new window.google.maps.LatLng(intent.lat, intent.lng);
   }
 
-  if (p?.direccion) {
-    const cityFromDir = extractLocalityFromDireccion(p.direccion) || "";
+  const direccionParaRuta =
+    intent?.type === "address" ? intent.address : String(p?.direccion || "").trim();
+
+  if (direccionParaRuta) {
+    const cityFromDir = extractLocalityFromDireccion(direccionParaRuta) || "";
 
     try {
       const res = await geocodeToLatLng(
-        p.direccion,
+        direccionParaRuta,
         baseContext,
         bounds,
         null
@@ -277,7 +279,7 @@ const resolveLocation = async (p, baseContext, bounds, baseCity) => {
       const forced = cityFromDir || baseCity || null;
       if (forced) {
         const res2 = await geocodeToLatLng(
-          p.direccion,
+          direccionParaRuta,
           baseContext,
           bounds,
           forced
@@ -287,7 +289,7 @@ const resolveLocation = async (p, baseContext, bounds, baseCity) => {
 
       return res.geometry.location;
     } catch {
-      return sanitizeDireccion(ensureARContext(p.direccion, baseContext));
+      return sanitizeDireccion(ensureARContext(direccionParaRuta, baseContext));
     }
   }
 
@@ -1227,6 +1229,7 @@ export default function AdminHojaRuta() {
       orden: i + 1,
       nombre: p.nombre || "",
       direccion: softWrap(p.direccion || "", 54),
+      waypoint: getPedidoWaypointText(p, BASE_DIRECCION),
       observacion,
       telefono,
       vendedor,
@@ -1363,7 +1366,7 @@ export default function AdminHojaRuta() {
 
         const rutaURL = buildRouteUrl(
           BASE_DIRECCION,
-          lista.map((r) => r.direccion.replace(/\n/g, " "))
+          lista.map((r) => (r.waypoint || r.direccion).replace(/\n/g, " "))
         );
         setHyperlink(ws, 9, 1, rutaURL, "Abrir ruta en Google Maps");
 

@@ -5,6 +5,14 @@ import { collection, getDocs, getDoc, doc } from "firebase/firestore";
 import { db, auth } from "../firebase/firebase";
 import { useLoadScript, GoogleMap } from "@react-google-maps/api";
 import { useProvincia } from "../hooks/useProvincia.js";
+import {
+  PRECIO_PRINCIPAL_ID,
+  buildPriceSnapshot,
+  formatARS,
+  getDefaultPriceOption,
+  getPriceOptionById,
+  getProductPriceOptions,
+} from "../utils/productPrices.js";
 
 const LIBRARIES = ["places", "marker"];
 
@@ -45,18 +53,83 @@ const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
   return "";
 };
 
+const normalizeLocationUrl = (raw) => {
+  if (!raw) return "";
+  let s = String(raw).trim();
+  if (!s) return "";
+  if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+  return s;
+};
+
+const isFiniteCoord = (n) => typeof n === "number" && Number.isFinite(n);
+
+const parseMapsLinkLocation = (raw) => {
+  const normalized = normalizeLocationUrl(raw);
+  if (!normalized) return null;
+
+  try {
+    const url = new URL(normalized);
+    const host = String(url.hostname || "").toLowerCase();
+    const path = String(url.pathname || "");
+
+    const isGoogleMapsLike =
+      host.includes("google.") || host === "maps.app.goo.gl" || host.endsWith("goo.gl");
+
+    if (!isGoogleMapsLike) return null;
+
+    const queryPlaceId = String(url.searchParams.get("query_place_id") || "").trim();
+    if (queryPlaceId) return { type: "placeId", value: queryPlaceId };
+
+    const query = String(url.searchParams.get("query") || "").trim();
+    if (query) {
+      const matchCoords = query.match(
+        /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/
+      );
+      if (matchCoords) {
+        return {
+          type: "coords",
+          value: {
+            lat: Number(matchCoords[1]),
+            lng: Number(matchCoords[2]),
+          },
+        };
+      }
+      return { type: "address", value: query };
+    }
+
+    const pathCoords = path.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (pathCoords) {
+      return {
+        type: "coords",
+        value: {
+          lat: Number(pathCoords[1]),
+          lng: Number(pathCoords[2]),
+        },
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
 const buildGoogleMapsLink = ({
   linkUbicacion,
   placeId,
   coordenadas,
   direccion,
 }) => {
-  const manual = String(linkUbicacion || "").trim();
+  const manual = normalizeLocationUrl(linkUbicacion);
   if (manual) return manual;
 
   const dir = String(direccion || "").trim();
   const lat = coordenadas?.lat;
   const lng = coordenadas?.lng;
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  }
 
   if (placeId && dir) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -68,10 +141,6 @@ const buildGoogleMapsLink = ({
     return `https://www.google.com/maps/search/?api=1&query=Google%20Maps&query_place_id=${encodeURIComponent(
       placeId
     )}`;
-  }
-
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
   }
 
   if (dir) {
@@ -90,6 +159,7 @@ const PedidoForm = ({
   bloqueado,
   prefillDraft,
   onPrefillConsumed,
+  fechaPedido,
 }) => {
   const { provinciaId } = useProvincia();
 
@@ -113,6 +183,7 @@ const PedidoForm = ({
   const [errorTelefonoAlt, setErrorTelefonoAlt] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [linkUbicacion, setLinkUbicacion] = useState("");
+  const [ubicacionFuente, setUbicacionFuente] = useState("direccion");
 
   const [vendedoresProvincia, setVendedoresProvincia] = useState([]);
   const [vendedorEmailSeleccionado, setVendedorEmailSeleccionado] = useState("");
@@ -138,8 +209,25 @@ const PedidoForm = ({
     mapId: MAP_ID || undefined,
   };
 
-  const ahora = new Date();
-  const fechaStr = format(ahora, "yyyy-MM-dd");
+  const fechaPedidoDate = useMemo(() => {
+    if (fechaPedido?.toDate) {
+      const d = fechaPedido.toDate();
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+
+    if (fechaPedido instanceof Date && !Number.isNaN(fechaPedido.getTime())) {
+      return fechaPedido;
+    }
+
+    if (typeof fechaPedido === "string" || typeof fechaPedido === "number") {
+      const d = new Date(fechaPedido);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+
+    return new Date();
+  }, [fechaPedido]);
+
+  const fechaStr = format(fechaPedidoDate, "yyyy-MM-dd");
 
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
@@ -151,6 +239,33 @@ const PedidoForm = ({
   const lastPrefillTokenRef = useRef(null);
 
   const norm = (s) => String(s || "").trim().toLowerCase();
+
+  const stripPrefijoDevolucion = (nombre) => {
+    const raw = String(nombre || "").trim();
+    if (!raw) return "";
+    return raw.replace(/^devoluci[oó]n\s+de\s+/i, "").trim();
+  };
+
+  const esLineaDevolucion = (item) => {
+    if (!item) return false;
+    if (item.esDevolucion === true) return true;
+
+    const op = String(
+      item.operacion ?? item.tipoLinea ?? item.tipoMovimiento ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (op.startsWith("devol")) return true;
+
+    const nombreCheck = norm(item.nombreBase || item.nombre);
+    if (nombreCheck.startsWith("devolucion de ")) return true;
+
+    const precio = Number(item.precio ?? item.precioUnitario);
+    if (Number.isFinite(precio) && precio < 0) return true;
+
+    return false;
+  };
 
   const esEnvioNombre = (nombreProd) => {
     const n = norm(nombreProd);
@@ -175,13 +290,14 @@ const PedidoForm = ({
   }, [productosFirestore]);
 
   const getProductoKey = (item) => {
+    const scope = esLineaDevolucion(item) ? "devolucion" : "venta";
     const productoId = item?.productoId ?? item?.id ?? null;
-    if (productoId) return `id:${String(productoId)}`;
+    if (productoId) return `${scope}:id:${String(productoId)}`;
 
-    const nombreNorm = norm(item?.nombre);
-    if (nombreNorm) return `name:${nombreNorm}`;
+    const nombreNorm = norm(item?.nombreBase || item?.nombre);
+    if (nombreNorm) return `${scope}:name:${nombreNorm}`;
 
-    return `tmp:${String(item?.nombre || "sin-nombre")}`;
+    return `${scope}:tmp:${String(item?.nombre || "sin-nombre")}`;
   };
 
   const resolveCatalogProduct = (item) => {
@@ -195,6 +311,13 @@ const PedidoForm = ({
       return productosByNombreNorm[nombreNorm];
     }
 
+    if (esLineaDevolucion(item)) {
+      const nombreBaseNorm = norm(stripPrefijoDevolucion(item?.nombreBase || item?.nombre));
+      if (nombreBaseNorm && productosByNombreNorm[nombreBaseNorm]) {
+        return productosByNombreNorm[nombreBaseNorm];
+      }
+    }
+
     return null;
   };
 
@@ -204,25 +327,60 @@ const PedidoForm = ({
         ? Number(overrides.costo) || 0
         : Number(catalogProd?.costo ?? 0) || 0;
 
+    const esDevolucion =
+      overrides?.esDevolucion === true || esLineaDevolucion(overrides);
+
+    const optionFromCatalog = overrides?.precioVersionId
+      ? getPriceOptionById(catalogProd, overrides.precioVersionId, fechaPedidoDate)
+      : getDefaultPriceOption(catalogProd, fechaPedidoDate);
+
     const precioFinal =
       overrides?.precio === 0 || overrides?.precio
         ? Number(overrides.precio) || 0
-        : Number(catalogProd?.precio ?? 0) || 0;
+        : Number(optionFromCatalog?.precio ?? catalogProd?.precio ?? 0) || 0;
+
+    const priceSnapshot = buildPriceSnapshot(
+      overrides?.precioVersionId
+        ? {
+            ...optionFromCatalog,
+            id: overrides.precioVersionId,
+            nombre: overrides.precioNombre || optionFromCatalog?.nombre,
+            tipo: overrides.precioTipo || optionFromCatalog?.tipo,
+            desde: overrides.precioDesde ?? optionFromCatalog?.desde,
+            hasta: overrides.precioHasta ?? optionFromCatalog?.hasta,
+            mantenerAnteriorHasta:
+              overrides.precioMantenerAnteriorHasta ?? optionFromCatalog?.mantenerAnteriorHasta,
+          }
+        : optionFromCatalog
+    );
 
     return {
       ...catalogProd,
       id: catalogProd?.id ?? overrides?.id ?? overrides?.productoId ?? null,
       productoId: overrides?.productoId ?? catalogProd?.id ?? null,
       nombre: overrides?.nombre ?? catalogProd?.nombre ?? "",
+      nombreBase:
+        overrides?.nombreBase ??
+        catalogProd?.nombre ??
+        stripPrefijoDevolucion(overrides?.nombre) ??
+        "",
       cantidad: Math.max(1, Number(overrides?.cantidad || 1)),
       precio: precioFinal,
       costo: costoFinal,
+      precioVersionId: esDevolucion ? PRECIO_PRINCIPAL_ID : priceSnapshot.precioVersionId,
+      precioNombre: esDevolucion ? "Devolución" : priceSnapshot.precioNombre,
+      precioTipo: esDevolucion ? "devolucion" : priceSnapshot.precioTipo,
+      precioDesde: esDevolucion ? null : priceSnapshot.precioDesde,
+      precioHasta: esDevolucion ? null : priceSnapshot.precioHasta,
+      precioMantenerAnteriorHasta: esDevolucion ? null : priceSnapshot.precioMantenerAnteriorHasta,
       componentes:
         overrides?.componentes ??
         overrides?.componentesSnap ??
         catalogProd?.componentes ??
         undefined,
-      esCombo: overrides?.esCombo ?? undefined,
+      esCombo: overrides?.esCombo ?? catalogProd?.esCombo ?? undefined,
+      operacion: esDevolucion ? "devolucion" : overrides?.operacion ?? "venta",
+      esDevolucion,
     };
   };
 
@@ -231,11 +389,20 @@ const PedidoForm = ({
     id: item?.productoId ?? item?.id ?? null,
     productoId: item?.productoId ?? item?.id ?? null,
     nombre: String(item?.nombre || "").trim(),
+    nombreBase: String(item?.nombreBase || stripPrefijoDevolucion(item?.nombre) || "").trim(),
     cantidad: Math.max(1, Number(item?.cantidad || 1)),
     precio: Number(item?.precio || 0),
     costo: Number(item?.costo ?? 0),
+    precioVersionId: item?.precioVersionId || PRECIO_PRINCIPAL_ID,
+    precioNombre: item?.precioNombre || "Precio guardado",
+    precioTipo: item?.precioTipo || item?.tipoPrecio || "guardado",
+    precioDesde: item?.precioDesde || null,
+    precioHasta: item?.precioHasta || null,
+    precioMantenerAnteriorHasta: item?.precioMantenerAnteriorHasta || null,
     componentes: item?.componentes ?? item?.componentesSnap ?? undefined,
     esCombo: item?.esCombo ?? undefined,
+    operacion: esLineaDevolucion(item) ? "devolucion" : item?.operacion ?? "venta",
+    esDevolucion: item?.esDevolucion === true || esLineaDevolucion(item),
   });
 
   const mapPedidoItemToSelected = (item) => {
@@ -250,6 +417,23 @@ const PedidoForm = ({
     const cantidad = Math.max(1, parseInt(cantidadValue || "1", 10) || 1);
     setProductosSeleccionados((prev) =>
       prev.map((p) => (getProductoKey(p) === productKey ? { ...p, cantidad } : p))
+    );
+  };
+
+  const updatePrecioByKey = (productKey, catalogProd, optionId) => {
+    const option = getPriceOptionById(catalogProd, optionId, fechaPedidoDate);
+    const snapshot = buildPriceSnapshot(option);
+
+    setProductosSeleccionados((prev) =>
+      prev.map((p) =>
+        getProductoKey(p) === productKey
+          ? {
+              ...p,
+              precio: Number(option?.precio ?? 0) || 0,
+              ...snapshot,
+            }
+          : p
+      )
     );
   };
 
@@ -381,8 +565,7 @@ const PedidoForm = ({
   };
 
   const costoUnitarioDeLinea = (p) => {
-    const n = norm(p?.nombre);
-    const esDev = n.startsWith("devolución de");
+    const esDev = esLineaDevolucion(p);
     const esEnvio = esEnvioNombre(p?.nombre);
 
     if (esDev || esEnvio) return 0;
@@ -426,6 +609,41 @@ const PedidoForm = ({
       }
     } catch (e) {
       console.error("Error al setear valor del autocomplete:", e);
+    }
+  };
+
+  const syncLocationFromLink = (rawLink) => {
+    const parsed = parseMapsLinkLocation(rawLink);
+    if (!parsed) return;
+
+    if (
+      parsed.type === "coords" &&
+      isFiniteCoord(parsed.value?.lat) &&
+      isFiniteCoord(parsed.value?.lng)
+    ) {
+      setCoordenadas({
+        lat: parsed.value.lat,
+        lng: parsed.value.lng,
+      });
+      setPlaceId(null);
+      setUbicacionFuente("link-coords");
+      return;
+    }
+
+    if (parsed.type === "placeId" && parsed.value) {
+      setPlaceId(parsed.value);
+      setUbicacionFuente("link-placeId");
+      return;
+    }
+
+    if (parsed.type === "address") {
+      if (!String(direccion || "").trim()) {
+        setDireccion(parsed.value);
+        setPacValue(parsed.value);
+      }
+      setCoordenadas(null);
+      setPlaceId(null);
+      setUbicacionFuente("link-address");
     }
   };
 
@@ -536,6 +754,7 @@ const PedidoForm = ({
         setDireccion(dir);
         setPacValue(dir);
         setPlaceId(nextPlaceId);
+        setUbicacionFuente(nextPlaceId ? "autocomplete" : nextCoords ? "coordenadas" : "direccion");
 
         const autoLink = buildGoogleMapsLink({
           linkUbicacion: "",
@@ -550,6 +769,18 @@ const PedidoForm = ({
       }
     };
 
+    const onInput = (ev) => {
+      const value = String(ev?.target?.value ?? pacInstanceRef.current?.value ?? "").trim();
+      setDireccion(value);
+
+      // Si el usuario escribe/corrige manualmente, la fuente real vuelve a ser la dirección.
+      // Esto evita que queden coordenadas viejas pegadas a una dirección nueva.
+      setCoordenadas(null);
+      setPlaceId(null);
+      setLinkUbicacion("");
+      setUbicacionFuente("direccion");
+    };
+
     (async () => {
       const { PlaceAutocompleteElement } = await window.google.maps.importLibrary("places");
       el = new PlaceAutocompleteElement();
@@ -558,6 +789,7 @@ const PedidoForm = ({
       el.style.width = "100%";
       el.disabled = !!bloqueado;
       el.addEventListener("gmp-select", onSelect);
+      el.addEventListener("input", onInput);
 
       pacHostRef.current.innerHTML = "";
       pacHostRef.current.appendChild(el);
@@ -568,7 +800,10 @@ const PedidoForm = ({
     })();
 
     return () => {
-      if (el) el.removeEventListener("gmp-select", onSelect);
+      if (el) {
+        el.removeEventListener("gmp-select", onSelect);
+        el.removeEventListener("input", onInput);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, bloqueado, pacRefresh]);
@@ -681,6 +916,11 @@ const PedidoForm = ({
       setDireccion(pedidoAEditar.direccion || "");
       setPacValue(pedidoAEditar.direccion || "");
       setPlaceId(pedidoAEditar.placeId || null);
+      setUbicacionFuente(
+        pedidoAEditar.ubicacionFuente ||
+          pedidoAEditar.ubicacionRuta?.fuente ||
+          (pedidoAEditar.placeId ? "autocomplete" : pedidoAEditar.coordenadas ? "coordenadas" : "direccion")
+      );
       setEntreCalles(pedidoAEditar.entreCalles || "");
       setPartido(pedidoAEditar.partido || "");
       setTelefonoAlt(pedidoAEditar.telefonoAlt || "");
@@ -711,9 +951,7 @@ const PedidoForm = ({
       }
 
       setProductosSeleccionados(nuevosProductos);
-      setMostrarDevolucion(
-        nuevosProductos.some((p) => String(p.nombre || "").toLowerCase().startsWith("devolución de"))
-      );
+      setMostrarDevolucion(nuevosProductos.some((p) => esLineaDevolucion(p)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoAEditar, productosFirestore]);
@@ -736,6 +974,11 @@ const PedidoForm = ({
     setTelefonoAlt(String(d.telefonoAlt || "").replace(/\D/g, ""));
     setDireccion(d.direccion || "");
     setPlaceId(d.placeId || null);
+    setUbicacionFuente(
+      d.ubicacionFuente ||
+        d.ubicacionRuta?.fuente ||
+        (d.placeId ? "autocomplete" : d.coordenadas ? "coordenadas" : "direccion")
+    );
     setEntreCalles(d.entreCalles || "");
     setPartido(d.partido || d.localidad || "");
 
@@ -769,9 +1012,7 @@ const PedidoForm = ({
     }
 
     setProductosSeleccionados(mapped);
-    setMostrarDevolucion(
-      mapped.some((p) => String(p.nombre || "").toLowerCase().startsWith("devolución de"))
-    );
+    setMostrarDevolucion(mapped.some((p) => esLineaDevolucion(p)));
 
     setBusqueda("");
   }, [prefillDraft, pedidoAEditar, productosFirestore]);
@@ -781,12 +1022,8 @@ const PedidoForm = ({
       .map((p) => {
         const cant = Number(p.cantidad || 1);
         const precioUnit = Number(p.precio || 0);
-        const costoUnit = costoUnitarioDeLinea(p);
-
         const sub = precioUnit * cant;
-        const subCosto = costoUnit * cant;
-
-        return `${p.nombre} x${cant} ($${sub.toLocaleString()}) (costo $${subCosto.toLocaleString()})`;
+        return `${p.nombre} x${cant} ($${sub.toLocaleString()})`;
       })
       .join(" - ");
 
@@ -816,6 +1053,7 @@ const PedidoForm = ({
     setLinkUbicacion("");
     setCoordenadas(null);
     setPlaceId(null);
+    setUbicacionFuente("direccion");
     setMostrarDevolucion(false);
     setBusqueda("");
     setErrorNombre("");
@@ -859,9 +1097,12 @@ const PedidoForm = ({
       return Swal.fire("❌ Por favor completá todos los campos requeridos y agregá al menos un producto.");
     }
 
+    const ahora = fechaPedidoDate;
     const { resumen, total, costoTotal } = calcularResumenPedido();
 
-    const pedidoFinal = `${resumen} | TOTAL: $${total.toLocaleString()} | COSTO: $${costoTotal.toLocaleString()}`;
+    // El costo se guarda en campos internos (productos[].costo y costoTotal).
+    // No se incluye en el texto público del pedido para que no lo vea el repartidor/cliente.
+    const pedidoFinal = `${resumen} | TOTAL: $${total.toLocaleString()}`;
 
     const vendedorEmailAuth = String(auth?.currentUser?.email || "").toLowerCase();
 
@@ -880,15 +1121,28 @@ const PedidoForm = ({
     const productosDb = productosSeleccionados.map((p) => {
       const pid = p.id ?? p.productoId ?? null;
       const cant = Number(p.cantidad || 1);
+      const esDevolucion = esLineaDevolucion(p);
 
       const costoUnitReal = costoUnitarioDeLinea(p);
+      const nombreBaseLinea = String(
+        p.nombreBase || stripPrefijoDevolucion(p.nombre) || p.nombre || ""
+      ).trim();
 
       const base = {
         productoId: pid,
         nombre: p.nombre,
+        nombreBase: nombreBaseLinea,
         cantidad: cant,
         precio: Number(p.precio || 0),
         costo: Number(costoUnitReal || 0),
+        precioVersionId: p.precioVersionId || PRECIO_PRINCIPAL_ID,
+        precioNombre: p.precioNombre || "Precio principal",
+        precioTipo: p.precioTipo || "principal",
+        precioDesde: p.precioDesde || null,
+        precioHasta: p.precioHasta || null,
+        precioMantenerAnteriorHasta: p.precioMantenerAnteriorHasta || null,
+        operacion: esDevolucion ? "devolucion" : "venta",
+        esDevolucion,
       };
 
       if (pid && esComboRealPorId(pid)) {
@@ -903,12 +1157,63 @@ const PedidoForm = ({
       return base;
     });
 
+    const parsedLinkLocation = parseMapsLinkLocation(linkUbicacion);
+    const fuenteActual = String(ubicacionFuente || "direccion").trim();
+
+    const direccionFinal =
+      String(direccion || "").trim() ||
+      (parsedLinkLocation?.type === "address" ? String(parsedLinkLocation.value || "").trim() : "");
+
+    let coordenadasFinal = null;
+    let placeIdFinal = null;
+    let ubicacionFuenteFinal = fuenteActual || "direccion";
+
+    if (
+      parsedLinkLocation?.type === "coords" &&
+      isFiniteCoord(parsedLinkLocation.value?.lat) &&
+      isFiniteCoord(parsedLinkLocation.value?.lng)
+    ) {
+      coordenadasFinal = {
+        lat: parsedLinkLocation.value.lat,
+        lng: parsedLinkLocation.value.lng,
+      };
+      placeIdFinal = null;
+      ubicacionFuenteFinal = "link-coords";
+    } else if (parsedLinkLocation?.type === "placeId" && parsedLinkLocation.value) {
+      coordenadasFinal = coordenadas || null;
+      placeIdFinal = parsedLinkLocation.value;
+      ubicacionFuenteFinal = "link-placeId";
+    } else if (parsedLinkLocation?.type === "address") {
+      coordenadasFinal = null;
+      placeIdFinal = null;
+      ubicacionFuenteFinal = "link-address";
+    } else if (fuenteActual === "autocomplete") {
+      coordenadasFinal = coordenadas || null;
+      placeIdFinal = placeId || null;
+    } else if (fuenteActual === "coordenadas") {
+      coordenadasFinal = coordenadas || null;
+      placeIdFinal = null;
+    } else {
+      // Dirección manual: NO se arrastran coordenadas/placeId anteriores.
+      coordenadasFinal = null;
+      placeIdFinal = null;
+      ubicacionFuenteFinal = "direccion";
+    }
+
     const linkUbicacionFinal = buildGoogleMapsLink({
       linkUbicacion,
-      placeId,
-      coordenadas,
-      direccion,
+      placeId: placeIdFinal,
+      coordenadas: coordenadasFinal,
+      direccion: direccionFinal,
     });
+
+    const ubicacionRuta = {
+      fuente: ubicacionFuenteFinal,
+      direccion: direccionFinal,
+      linkUbicacion: linkUbicacionFinal || null,
+      placeId: placeIdFinal || null,
+      coordenadas: coordenadasFinal || null,
+    };
 
     const pedidoConProductos = {
       vendedorEmail: vendedorEmailAuth,
@@ -918,19 +1223,25 @@ const PedidoForm = ({
       telefono,
       telefonoAlt: telefonoAlt?.trim() ? telefonoAlt : null,
       partido,
-      direccion,
+      direccion: direccionFinal,
       entreCalles,
       linkUbicacion: linkUbicacionFinal,
-      placeId: placeId || null,
+      placeId: placeIdFinal,
+      ubicacionFuente: ubicacionFuenteFinal,
+      ubicacionRuta,
       pedido: pedidoFinal,
-      coordenadas,
+      coordenadas: coordenadasFinal,
       productos: productosDb,
       costoTotal: Number(costoTotal || 0),
       fecha: ahora,
       fechaStr,
       monto: total,
-      entregado: false,
-      asignadoA: [],
+      ...(pedidoAEditar
+        ? {}
+        : {
+            entregado: false,
+            asignadoA: [],
+          }),
     };
 
     if (pedidoAEditar) {
@@ -1032,6 +1343,11 @@ const PedidoForm = ({
                 className="w-full input input-bordered"
                 value={linkUbicacion}
                 onChange={(e) => setLinkUbicacion(e.target.value)}
+                onBlur={(e) => {
+                  const normalized = normalizeLocationUrl(e.target.value);
+                  setLinkUbicacion(normalized);
+                  syncLocationFromLink(normalized);
+                }}
                 placeholder="Pegá acá el link que te mandó el cliente"
                 disabled={bloqueado}
               />
@@ -1185,11 +1501,35 @@ const PedidoForm = ({
                   const prodKey = getProductoKey(prod);
                   const seleccionado = productosSeleccionados.find((p) => getProductoKey(p) === prodKey);
                   const cantidad = seleccionado?.cantidad || 0;
+                  const opcionesPrecio = getProductPriceOptions(prod, fechaPedidoDate);
+                  const defaultPriceOption = getDefaultPriceOption(prod, fechaPedidoDate);
+                  const precioElegidoId = opcionesPrecio.some(
+                    (op) => String(op.id) === String(seleccionado?.precioVersionId)
+                  )
+                    ? seleccionado?.precioVersionId
+                    : defaultPriceOption?.id || PRECIO_PRINCIPAL_ID;
+                  const opcionPrecioElegida =
+                    opcionesPrecio.find((op) => String(op.id) === String(precioElegidoId)) ||
+                    defaultPriceOption ||
+                    null;
+                  const precioVisible = Number(
+                    seleccionado?.precio ?? opcionPrecioElegida?.precio ?? defaultPriceOption?.precio ?? prod.precio ?? 0
+                  );
+                  const tipoPrecioSeleccionado = opcionPrecioElegida?.esPromocion
+                    ? "Promoción seleccionada"
+                    : opcionPrecioElegida?.esCambioDefinitivo
+                      ? "Nuevo precio seleccionado"
+                      : "Precio base seleccionado";
+                  const selectPrecioClass = opcionPrecioElegida?.esPromocion
+                    ? "border-success text-success"
+                    : opcionPrecioElegida?.esCambioDefinitivo
+                      ? "border-info text-info"
+                      : "border-success text-success";
 
                   return (
                     <div
                       key={prod.id || prod.nombre || idx}
-                      className="flex items-center justify-between gap-3 py-2 border-b border-base-200"
+                      className="flex flex-col gap-3 py-3 border-b sm:flex-row sm:items-center sm:justify-between border-base-200"
                     >
                       <div className="flex items-center flex-1 min-w-0 gap-2">
                         <input
@@ -1204,7 +1544,7 @@ const PedidoForm = ({
                                   buildSelectedFromCatalog(prod, {
                                     cantidad: 1,
                                     costo: Number(prod?.costo ?? 0),
-                                    precio: Number(prod?.precio ?? 0),
+                                    precioVersionId: defaultPriceOption?.id || PRECIO_PRINCIPAL_ID,
                                   }),
                                 ];
                               });
@@ -1217,45 +1557,110 @@ const PedidoForm = ({
                         />
                         <div>
                           <p className="font-semibold">{prod.nombre}</p>
-                          <p className="text-sm text-gray-500">${Number(prod.precio || 0).toLocaleString()}</p>
+                          <p className="text-sm font-semibold text-base-content/80">{formatARS(precioVisible)}</p>
+                          {opcionesPrecio.length > 1 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {opcionesPrecio.map((op) => {
+                                const esPrecioSeleccionado = String(op.id) === String(precioElegidoId);
+                                return (
+                                  <span
+                                    key={op.id}
+                                    className={`badge badge-xs border transition-colors ${
+                                      esPrecioSeleccionado
+                                        ? "badge-success border-success text-success-content shadow-sm"
+                                        : op.esCambioDefinitivo
+                                          ? "badge-outline border-info/50 text-info"
+                                          : op.esPromocion
+                                            ? "badge-outline border-success/50 text-success"
+                                            : "badge-outline border-base-300 text-base-content/70"
+                                    }`}
+                                    title={[
+                                      op.desde ? `Desde ${op.desde}` : null,
+                                      op.hasta ? `Hasta ${op.hasta}` : null,
+                                      op.mantenerAnteriorHasta
+                                        ? `Precio anterior disponible hasta ${op.mantenerAnteriorHasta}`
+                                        : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  >
+                                    {op.esPromocion
+                                      ? "Promo"
+                                      : op.esCambioDefinitivo
+                                        ? "Nuevo"
+                                        : "Base"}{" "}
+                                    {formatARS(op.precio)}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {!!seleccionado && (
-                        <div className="join shrink-0">
-                          <button
-                            type="button"
-                            className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
-                            onClick={() => cambiarCantidad(prodKey, -1)}
-                            disabled={bloqueado || cantidad <= 1}
-                            title="Restar"
-                          >
-                            −
-                          </button>
+                        <div className="flex flex-col items-stretch w-full gap-2 sm:w-auto sm:items-end shrink-0">
+                          {opcionesPrecio.length > 1 && (
+                            <div
+                              className={`w-full sm:w-[250px] rounded-xl border-2 bg-base-100 px-2 py-1 shadow-sm transition-colors ${selectPrecioClass}`}
+                            >
+                              <span className="block mb-0.5 text-[10px] font-bold uppercase tracking-wide opacity-80">
+                                {tipoPrecioSeleccionado}
+                              </span>
+                              <select
+                                className="w-full h-8 px-0 font-semibold bg-transparent min-h-8 select select-ghost select-xs md:select-sm focus:outline-none"
+                                value={precioElegidoId}
+                                onChange={(e) => updatePrecioByKey(prodKey, prod, e.target.value)}
+                                disabled={bloqueado}
+                              >
+                                {opcionesPrecio.map((op) => (
+                                  <option key={op.id} value={op.id}>
+                                    {op.esPromocion
+                                      ? "Promo"
+                                      : op.esCambioDefinitivo
+                                        ? "Nuevo"
+                                        : "Base"} — {formatARS(op.precio)}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
 
-                          <input
-                            type="number"
-                            min="1"
-                            value={cantidad}
-                            onChange={(e) => {
-                              const cant = Math.max(1, parseInt(e.target.value || "1", 10));
-                              updateCantidadByKey(prodKey, cant);
-                            }}
-                            className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
-                            disabled={bloqueado}
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                          />
+                          <div className="self-end join sm:self-auto">
+                            <button
+                              type="button"
+                              className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
+                              onClick={() => cambiarCantidad(prodKey, -1)}
+                              disabled={bloqueado || cantidad <= 1}
+                              title="Restar"
+                            >
+                              −
+                            </button>
 
-                          <button
-                            type="button"
-                            className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
-                            onClick={() => cambiarCantidad(prodKey, +1)}
-                            disabled={bloqueado}
-                            title="Sumar"
-                          >
-                            +
-                          </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={cantidad}
+                              onChange={(e) => {
+                                const cant = Math.max(1, parseInt(e.target.value || "1", 10));
+                                updateCantidadByKey(prodKey, cant);
+                              }}
+                              className="join-item input input-xs md:input-sm text-center touch-manipulation w-[60px] md:w-[72px] h-8 md:h-9 [font-size:16px]"
+                              disabled={bloqueado}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                            />
+
+                            <button
+                              type="button"
+                              className="join-item btn btn-xs md:btn-sm btn-outline min-w-[36px] h-8 md:h-9 px-2 leading-none"
+                              onClick={() => cambiarCantidad(prodKey, +1)}
+                              disabled={bloqueado}
+                              title="Sumar"
+                            >
+                              +
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1281,7 +1686,14 @@ const PedidoForm = ({
                 <div className="pr-1 overflow-x-hidden overflow-y-auto max-h-64">
                   {productosFirestore.map((prod, idx) => {
                     const nombreDevolucion = `Devolución de ${prod.nombre}`;
-                    const devolucionKey = getProductoKey({ nombre: nombreDevolucion });
+                    const devolucionBase = {
+                      productoId: prod.id ?? null,
+                      nombre: nombreDevolucion,
+                      nombreBase: prod.nombre || "",
+                      operacion: "devolucion",
+                      esDevolucion: true,
+                    };
+                    const devolucionKey = getProductoKey(devolucionBase);
                     const seleccionado = productosSeleccionados.find((p) => getProductoKey(p) === devolucionKey);
                     const cantidad = seleccionado?.cantidad || 1;
                     const estaSeleccionado = !!seleccionado;
@@ -1301,13 +1713,17 @@ const PedidoForm = ({
                                   if (prev.some((p) => getProductoKey(p) === devolucionKey)) return prev;
                                   return [
                                     ...prev,
-                                    {
-                                      nombre: nombreDevolucion,
-                                      precio: -Math.abs(prod.precio || 0),
+                                    buildSelectedFromCatalog(prod, {
                                       cantidad: 1,
-                                      productoId: null,
+                                      nombre: nombreDevolucion,
+                                      nombreBase: prod.nombre || "",
+                                      precio: -Math.abs(
+                                        Number(getDefaultPriceOption(prod, fechaPedidoDate)?.precio ?? prod?.precio ?? 0)
+                                      ),
                                       costo: 0,
-                                    },
+                                      operacion: "devolucion",
+                                      esDevolucion: true,
+                                    }),
                                   ];
                                 });
                               } else {
@@ -1319,7 +1735,9 @@ const PedidoForm = ({
                           />
                           <div>
                             <p className="font-semibold text-error">{nombreDevolucion}</p>
-                            <p className="text-sm text-error">${(prod.precio || 0).toLocaleString()}</p>
+                            <p className="text-sm text-error">
+                              -{formatARS(getDefaultPriceOption(prod, fechaPedidoDate)?.precio ?? prod.precio)}
+                            </p>
                           </div>
                         </div>
 
@@ -1395,9 +1813,7 @@ const PedidoForm = ({
                           .map((p) => {
                             const cant = Number(p.cantidad || 1);
                             const sub = Number(p.precio || 0) * cant;
-                            const costoUnit = costoUnitarioDeLinea(p);
-                            const subCosto = costoUnit * cant;
-                            return `${p.nombre} x${cant} ($${sub.toLocaleString()}) (costo $${subCosto.toLocaleString()})`;
+                            return `${p.nombre} x${cant} ($${sub.toLocaleString()})`;
                           })
                           .join(" - ") + ` | TOTAL: $${total.toLocaleString()} `
                       );

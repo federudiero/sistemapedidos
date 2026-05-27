@@ -17,10 +17,18 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../firebase/firebase";
 import { nanoid } from "nanoid";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia.js";
 import * as XLSX from "xlsx";
+import {
+  PRECIO_TIPO_DEFINITIVO,
+  PRECIO_TIPO_PROMOCION,
+  getDefinitivePriceToApply,
+  normalizePriceVersions,
+  todayISO,
+} from "../utils/productPrices.js";
 
 function yyyyMmDd(d) {
   const y = d.getFullYear();
@@ -37,6 +45,7 @@ const ARS = new Intl.NumberFormat("es-AR", {
 const formatARS = (n) => ARS.format(Number(n || 0));
 
 function AdminStock() {
+  const navigate = useNavigate();
   const { provinciaId } = useProvincia();
 
   const [productos, setProductos] = useState([]);
@@ -51,6 +60,7 @@ function AdminStock() {
     stockMinimo: 10,
     esCombo: false,
     componentes: [],
+    preciosVenta: [],
   });
 
   // ===================== REMITO / INGRESO DE STOCK =====================
@@ -98,6 +108,7 @@ function AdminStock() {
             .filter((c) => c.id && c.cantidad > 0)
         : []
       : [],
+    preciosVenta: normalizePriceVersions(obj.preciosVenta || []),
   };
 };
 
@@ -109,7 +120,9 @@ function AdminStock() {
       Number(a.stock || 0) !== Number(b.stock || 0) ||
       Number(a.stockMinimo || 0) !== Number(b.stockMinimo || 0) ||
       Boolean(a.esCombo) !== Boolean(b.esCombo) ||
-      JSON.stringify(a.componentes || []) !== JSON.stringify(b.componentes || [])
+      JSON.stringify(a.componentes || []) !== JSON.stringify(b.componentes || []) ||
+      JSON.stringify(normalizePriceVersions(a.preciosVenta || [])) !==
+        JSON.stringify(normalizePriceVersions(b.preciosVenta || []))
     ) {
       return false;
     }
@@ -125,10 +138,50 @@ function AdminStock() {
       _busy: false,
       ...d.data(),
     }));
-    setProductos(data);
+
+    // Aplica cambios definitivos vencidos cuando el administrador abre Stock.
+    // PedidoForm igualmente calcula el precio efectivo aunque este sync todavía no haya corrido.
+    const updatesDefinitivos = [];
+    const dataNormalizada = data.map((producto) => {
+      const precioAplicable = getDefinitivePriceToApply(producto);
+      if (!precioAplicable) return producto;
+
+      const preciosVenta = normalizePriceVersions(producto.preciosVenta || []).map((pv) =>
+        pv.id === precioAplicable.id
+          ? {
+              ...pv,
+              activo: false,
+              aplicado: true,
+              aplicadoAtLocal: new Date().toISOString(),
+            }
+          : pv
+      );
+
+      const productoActualizado = {
+        ...producto,
+        precio: Number(precioAplicable.precio) || 0,
+        preciosVenta,
+      };
+
+      updatesDefinitivos.push(
+        updateDoc(doc(db, "provincias", provinciaId, "productos", producto.id), {
+          precio: productoActualizado.precio,
+          preciosVenta,
+          updatedAt: serverTimestamp(),
+        })
+      );
+
+      return productoActualizado;
+    });
+
+    if (updatesDefinitivos.length) {
+      await Promise.all(updatesDefinitivos);
+    }
+
+    setProductos(dataNormalizada);
 
     const ori = {};
-    for (const p of data) {
+    for (const p of dataNormalizada) {
       ori[p.id] = normalizarPayload(p);
     }
     setOriginales(ori);
@@ -259,6 +312,7 @@ function AdminStock() {
         stockMinimo: 10,
         esCombo: false,
         componentes: [],
+        preciosVenta: [],
       });
 
       Swal.fire({
@@ -296,6 +350,288 @@ function AdminStock() {
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se pudo eliminar el producto", "error");
+    }
+  };
+
+
+  const programarPrecioProducto = async (producto) => {
+    if (!producto?.id) return;
+
+    const actual = Number(producto.precio || 0);
+    const result = await Swal.fire({
+      title: "Programar precio",
+      html: `
+        <div style="text-align:left;display:grid;gap:12px;">
+          <div style="font-size:13px;opacity:.8;line-height:1.35;">
+            Producto: <b>${producto.nombre || "Producto"}</b><br/>
+            Precio principal actual: <b>${formatARS(actual)}</b>
+          </div>
+
+          <div style="display:grid;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+            <div style="font-size:13px;font-weight:700;">Tipo de precio</div>
+            <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.35;cursor:pointer;">
+              <input type="radio" name="swal-precio-tipo" value="${PRECIO_TIPO_PROMOCION}" checked />
+              <span>
+                <b>Promoción / precio temporal</b><br/>
+                <span style="opacity:.75;">Aparece solo entre las fechas indicadas y después desaparece. El precio principal no cambia.</span>
+              </span>
+            </label>
+            <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.35;cursor:pointer;">
+              <input type="radio" name="swal-precio-tipo" value="${PRECIO_TIPO_DEFINITIVO}" />
+              <span>
+                <b>Cambio definitivo de precio</b><br/>
+                <span style="opacity:.75;">Desde la fecha indicada el nuevo precio pasa a ser el default. El precio anterior puede convivir unos días.</span>
+              </span>
+            </label>
+          </div>
+
+          <label style="font-size:13px;font-weight:600;">Etiqueta del precio</label>
+          <input id="swal-precio-nombre" class="swal2-input" style="margin:0;width:100%;" value="Precio nuevo" placeholder="Ej: Lista nueva mayo, Promo semana" />
+
+          <label style="font-size:13px;font-weight:600;">Nuevo precio</label>
+          <input id="swal-precio-valor" type="number" min="1" class="swal2-input" style="margin:0;width:100%;" placeholder="Ej: 32000" />
+
+          <label id="swal-precio-desde-label" style="font-size:13px;font-weight:600;">Vigente desde</label>
+          <input
+            id="swal-precio-desde"
+            type="date"
+            class="swal2-input"
+            style="margin:0;width:100%;cursor:pointer;"
+            value="${todayISO()}"
+            inputmode="none"
+            autocomplete="off"
+          />
+
+          <label id="swal-precio-hasta-label" style="font-size:13px;font-weight:600;">Vigente hasta</label>
+          <input
+            id="swal-precio-hasta"
+            type="date"
+            class="swal2-input"
+            style="margin:0;width:100%;cursor:pointer;"
+            inputmode="none"
+            autocomplete="off"
+          />
+
+          <div id="swal-precio-ayuda" style="font-size:12px;opacity:.75;line-height:1.35;">
+            Promoción: el vendedor verá este precio solo durante el rango elegido. Cuando vence, vuelve a quedar únicamente el precio principal actual.
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Guardar precio",
+      cancelButtonText: "Cancelar",
+      focusConfirm: false,
+      didOpen: () => {
+        const nombreInput = document.getElementById("swal-precio-nombre");
+        const desdeLabel = document.getElementById("swal-precio-desde-label");
+        const hastaLabel = document.getElementById("swal-precio-hasta-label");
+        const ayuda = document.getElementById("swal-precio-ayuda");
+
+        const abrirCalendarioNativo = (input) => {
+          if (!input) return;
+          input.focus({ preventScroll: true });
+
+          if (typeof input.showPicker === "function") {
+            try {
+              input.showPicker();
+              return;
+            } catch {
+              // Algunos navegadores solo permiten showPicker dentro de una acción directa del usuario.
+            }
+          }
+
+          // Si showPicker no está disponible, el click/tap normal del input date
+          // abre el calendario nativo del navegador.
+        };
+
+        const prepararInputFecha = (inputId) => {
+          const input = document.getElementById(inputId);
+          if (!input) return;
+
+          // Evita escritura manual. La selección queda por calendario.
+          input.addEventListener("keydown", (e) => e.preventDefault());
+          input.addEventListener("paste", (e) => e.preventDefault());
+          input.addEventListener("drop", (e) => e.preventDefault());
+
+          // Al tocar directamente el campo se abre el calendario.
+          input.addEventListener("click", () => abrirCalendarioNativo(input));
+        };
+
+        prepararInputFecha("swal-precio-desde");
+        prepararInputFecha("swal-precio-hasta");
+
+        const syncTipo = () => {
+          const tipo = document.querySelector('input[name="swal-precio-tipo"]:checked')?.value;
+          if (tipo === PRECIO_TIPO_DEFINITIVO) {
+            if (nombreInput && nombreInput.value === "Precio nuevo") nombreInput.value = "Lista nueva";
+            if (desdeLabel) desdeLabel.textContent = "Aplicar nuevo precio desde";
+            if (hastaLabel) hastaLabel.textContent = "Mantener precio anterior hasta (opcional)";
+            if (ayuda) {
+              ayuda.textContent = "Cambio definitivo: desde la fecha indicada el nuevo precio será el default. Si completás la fecha hasta, el precio anterior seguirá disponible hasta ese día.";
+            }
+          } else {
+            if (nombreInput && nombreInput.value === "Lista nueva") nombreInput.value = "Promo";
+            if (desdeLabel) desdeLabel.textContent = "Vigente desde";
+            if (hastaLabel) hastaLabel.textContent = "Vigente hasta";
+            if (ayuda) {
+              ayuda.textContent = "Promoción: el vendedor verá este precio solo durante el rango elegido. Cuando vence, vuelve a quedar únicamente el precio principal actual.";
+            }
+          }
+        };
+
+        document.querySelectorAll('input[name="swal-precio-tipo"]').forEach((input) => {
+          input.addEventListener("change", syncTipo);
+        });
+        syncTipo();
+      },
+      preConfirm: () => {
+        const tipo = String(
+          document.querySelector('input[name="swal-precio-tipo"]:checked')?.value || PRECIO_TIPO_PROMOCION
+        );
+        const nombre = String(document.getElementById("swal-precio-nombre")?.value || "Precio nuevo").trim();
+        const precio = Number(document.getElementById("swal-precio-valor")?.value || 0);
+        const desde = String(document.getElementById("swal-precio-desde")?.value || "").trim();
+        const hasta = String(document.getElementById("swal-precio-hasta")?.value || "").trim();
+
+        if (!nombre) {
+          Swal.showValidationMessage("Ingresá una etiqueta para identificar el precio.");
+          return false;
+        }
+        if (!Number.isFinite(precio) || precio <= 0) {
+          Swal.showValidationMessage("Ingresá un precio válido mayor a 0.");
+          return false;
+        }
+        if (!desde) {
+          Swal.showValidationMessage("Ingresá la fecha desde.");
+          return false;
+        }
+        if (tipo === PRECIO_TIPO_PROMOCION && !hasta) {
+          Swal.showValidationMessage("Para una promoción temporal, ingresá la fecha hasta.");
+          return false;
+        }
+        if (hasta && hasta < desde) {
+          Swal.showValidationMessage("La fecha hasta no puede ser anterior a la fecha desde.");
+          return false;
+        }
+
+        return { tipo, nombre, precio, desde, hasta: hasta || null };
+      },
+    });
+
+    if (!result.isConfirmed || !result.value) return;
+
+    const tipo = result.value.tipo;
+    const desde = result.value.desde;
+    const hasta = result.value.hasta;
+    const precioNuevo = Number(result.value.precio);
+    const hoy = todayISO();
+    const aplicarDefinitivoAhora =
+      tipo === PRECIO_TIPO_DEFINITIVO && desde <= hoy && (!hasta || hoy > hasta);
+
+    const nuevoPrecio = {
+      id: nanoid(10),
+      tipo,
+      nombre: result.value.nombre,
+      precio: precioNuevo,
+      desde,
+      hasta: tipo === PRECIO_TIPO_PROMOCION ? hasta : null,
+      mantenerAnteriorHasta: tipo === PRECIO_TIPO_DEFINITIVO ? hasta || null : null,
+      activo: !aplicarDefinitivoAhora,
+      esDefault: tipo === PRECIO_TIPO_DEFINITIVO,
+      aplicado: aplicarDefinitivoAhora,
+      aplicadoAtLocal: aplicarDefinitivoAhora ? new Date().toISOString() : null,
+      createdAtLocal: new Date().toISOString(),
+      createdBy: auth.currentUser?.email || null,
+    };
+
+    const preciosVenta = normalizePriceVersions([...(producto.preciosVenta || []), nuevoPrecio]);
+    const nuevoPrecioPrincipal = aplicarDefinitivoAhora ? precioNuevo : Number(producto.precio || 0);
+
+    try {
+      await updateDoc(doc(db, "provincias", provinciaId, "productos", producto.id), {
+        precio: nuevoPrecioPrincipal,
+        preciosVenta,
+        updatedAt: serverTimestamp(),
+      });
+
+      setProductos((prev) =>
+        prev.map((p) =>
+          p.id === producto.id ? { ...p, precio: nuevoPrecioPrincipal, preciosVenta } : p
+        )
+      );
+      setOriginales((prev) => ({
+        ...prev,
+        [producto.id]: {
+          ...(prev[producto.id] || normalizarPayload(producto)),
+          precio: nuevoPrecioPrincipal,
+          preciosVenta,
+        },
+      }));
+
+      Swal.fire({
+        icon: "success",
+        title: tipo === PRECIO_TIPO_DEFINITIVO ? "Cambio definitivo guardado" : "Promoción guardada",
+        text:
+          tipo === PRECIO_TIPO_DEFINITIVO
+            ? "Desde la fecha indicada el nuevo precio será el default. El precio anterior solo convivirá si cargaste fecha para mantenerlo disponible."
+            : "El producto mantiene su precio principal y esta promoción aparecerá solo durante la vigencia indicada.",
+        toast: true,
+        position: "top-end",
+        timer: 3000,
+        showConfirmButton: false,
+      });
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudo guardar el precio programado.", "error");
+    }
+  };
+
+  const eliminarPrecioProducto = async (producto, precioId) => {
+    if (!producto?.id || !precioId) return;
+
+    const conf = await Swal.fire({
+      icon: "warning",
+      title: "¿Quitar precio programado?",
+      text: "No elimina pedidos ya cargados. Solo deja de mostrar esta opción para nuevos pedidos.",
+      showCancelButton: true,
+      confirmButtonText: "Sí, quitar",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!conf.isConfirmed) return;
+
+    const preciosVenta = normalizePriceVersions(producto.preciosVenta || []).filter(
+      (pv) => String(pv.id) !== String(precioId)
+    );
+
+    try {
+      await updateDoc(doc(db, "provincias", provinciaId, "productos", producto.id), {
+        preciosVenta,
+        updatedAt: serverTimestamp(),
+      });
+
+      setProductos((prev) =>
+        prev.map((p) => (p.id === producto.id ? { ...p, preciosVenta } : p))
+      );
+      setOriginales((prev) => ({
+        ...prev,
+        [producto.id]: {
+          ...(prev[producto.id] || normalizarPayload(producto)),
+          preciosVenta,
+        },
+      }));
+
+      Swal.fire({
+        icon: "success",
+        title: "Precio quitado",
+        toast: true,
+        position: "top-end",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudo quitar el precio programado.", "error");
     }
   };
 
@@ -470,6 +806,7 @@ function AdminStock() {
         "Costo (stock)",
         "Stock",
         "Stock mínimo",
+        "Precios programados",
         "¿Es combo?",
         "Componentes (id×cant | nombre×cant)",
       ];
@@ -483,6 +820,26 @@ function AdminStock() {
           !!p.esCombo || String(p.nombre || "").toLowerCase().includes("combo");
 
         let compStr = "";
+        const preciosTransicion = normalizePriceVersions(p.preciosVenta || [])
+          .map((pv) => {
+            const tipoTxt = pv.tipo === PRECIO_TIPO_DEFINITIVO ? "Definitivo" : "Promoción";
+            const rango =
+              pv.tipo === PRECIO_TIPO_DEFINITIVO
+                ? `desde ${pv.desde || "sin fecha"}${
+                    pv.mantenerAnteriorHasta
+                      ? ` | precio anterior hasta ${pv.mantenerAnteriorHasta}`
+                      : " | sin convivencia con precio anterior"
+                  }`
+                : `${pv.desde || "sin fecha"} a ${pv.hasta || "sin fecha hasta"}`;
+            const estado = pv.aplicado
+              ? " [aplicado]"
+              : pv.activo === false
+                ? " [inactivo]"
+                : "";
+            return `${tipoTxt} - ${pv.nombre}: ${formatARS(pv.precio)} (${rango})${estado}`;
+          })
+          .join(" | ");
+
         if (esCombo && Array.isArray(p.componentes) && p.componentes.length) {
           compStr = p.componentes
             .map((c) => {
@@ -500,6 +857,7 @@ function AdminStock() {
           costo,
           stock,
           stockMin,
+          preciosTransicion,
           esCombo ? "Sí" : "No",
           compStr,
         ];
@@ -518,6 +876,7 @@ function AdminStock() {
         { wch: 14 },
         { wch: 8 },
         { wch: 12 },
+        { wch: 48 },
         { wch: 9 },
         { wch: 60 },
       ];
@@ -831,6 +1190,14 @@ function AdminStock() {
                   onChange={(e) => setIncluirCombosEnRemito(e.target.checked)}
                 />
               </label>
+
+              <button
+                className="btn btn-outline btn-sm"
+                type="button"
+                onClick={() => navigate("/admin/control-remitos")}
+              >
+                🚚 Control de remitos
+              </button>
 
               <button
                 className={`btn btn-outline btn-sm ${loadingHist ? "btn-disabled" : ""}`}
@@ -1186,6 +1553,8 @@ function AdminStock() {
               .filter((p) => !p.esCombo && p.id !== prod.id)
               .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
 
+            const preciosTransicion = normalizePriceVersions(prod.preciosVenta || []);
+
             return (
               <div
                 key={prod.id}
@@ -1217,6 +1586,13 @@ function AdminStock() {
                           onClick={() => iniciarEdicion(prod.id)}
                         >
                           ✏️ Editar
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => programarPrecioProducto(prod)}
+                          disabled={!!prod._busy}
+                        >
+                          💲 Programar precio
                         </button>
                         <button
                           className={`btn btn-error btn-sm ${prod._busy ? "btn-disabled" : ""}`}
@@ -1347,6 +1723,82 @@ function AdminStock() {
                     }
                     placeholder="Stock mínimo"
                   />
+                </div>
+
+                <div className="p-3 mt-4 border rounded-xl bg-base-100/70 border-base-300">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="font-semibold">💲 Precios programados</div>
+                      <div className="text-xs opacity-70">
+                        El precio principal sigue siendo {formatARS(prod.precio)}. Las promociones aparecen durante su vigencia y los cambios definitivos quedan como precio default desde la fecha indicada.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => programarPrecioProducto(prod)}
+                      disabled={!!prod._busy}
+                    >
+                      Agregar precio
+                    </button>
+                  </div>
+
+                  {preciosTransicion.length > 0 ? (
+                    <div className="grid gap-2 mt-3">
+                      {preciosTransicion.map((pv) => (
+                        <div
+                          key={pv.id}
+                          className="flex flex-col gap-2 p-2 border rounded-lg md:flex-row md:items-center md:justify-between border-base-300 bg-base-200/50"
+                        >
+                          <div className="text-sm">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`badge badge-sm ${
+                                  pv.tipo === PRECIO_TIPO_DEFINITIVO ? "badge-primary" : "badge-accent"
+                                }`}
+                              >
+                                {pv.tipo === PRECIO_TIPO_DEFINITIVO ? "Definitivo" : "Promoción"}
+                              </span>
+                              <b>{pv.nombre}</b>
+                              <span>{formatARS(pv.precio)}</span>
+                              {pv.aplicado === true && (
+                                <span className="badge badge-success badge-sm">Aplicado</span>
+                              )}
+                              {pv.activo === false && pv.aplicado !== true && (
+                                <span className="badge badge-warning badge-sm">Inactivo</span>
+                              )}
+                            </div>
+                            <div className="mt-1 opacity-70">
+                              {pv.tipo === PRECIO_TIPO_DEFINITIVO ? (
+                                <>
+                                  Aplica desde {pv.desde || "—"}
+                                  {pv.mantenerAnteriorHasta
+                                    ? ` · precio anterior disponible hasta ${pv.mantenerAnteriorHasta}`
+                                    : " · sin convivencia con precio anterior"}
+                                </>
+                              ) : (
+                                <>
+                                  Vigente desde {pv.desde || "—"} hasta {pv.hasta || "—"}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-outline btn-error"
+                            onClick={() => eliminarPrecioProducto(prod, pv.id)}
+                            disabled={!!prod._busy}
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-sm opacity-70">
+                      Sin precios programados.
+                    </div>
+                  )}
                 </div>
 
                 {prod._editing && (

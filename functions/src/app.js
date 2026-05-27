@@ -21,11 +21,14 @@ function createApp() {
     return res.status(404).json({
       ok: false,
       error: "Ruta no encontrada",
+      method: req.method,
+      path: req.originalUrl || req.url,
     });
   });
 
-  app.use((err, _req, res) => {
+  app.use((err, _req, res, _next) => {
     console.error("UNHANDLED ERROR:", err);
+
     return res.status(500).json({
       ok: false,
       error: err?.message || "Internal server error",

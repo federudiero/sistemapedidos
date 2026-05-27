@@ -8,6 +8,7 @@ import MetaTemplatesModal from "../crmchat/MetaTemplatesModal";
 
 import { PRESET_LABELS } from "./crmChatConstants";
 import { buildTimeline, normalizeEmail } from "./crmChatUtils";
+import { setConversationOptIn as setConversationOptInApi } from "../../../services/crmConsentApi";
 
 import {
   useChatAutoScroll,
@@ -76,10 +77,10 @@ function Toast({ notice, onClose }) {
 
   const toneClass =
     notice.kind === "error"
-      ? "border-[#ff7676]/40 bg-[#3b1d1d] text-[#ffd6d6]"
+      ? "border-[var(--crm-danger-border)]/40 bg-[var(--crm-danger-soft)] text-[var(--crm-danger-text)]"
       : notice.kind === "success"
-      ? "border-[#25d366]/30 bg-[#123227] text-[#dcfce7]"
-      : "border-white/10 bg-[#1f2c33] text-[#e9edef]";
+      ? "border-[var(--crm-accent)]/30 bg-[var(--crm-success-soft)] text-[var(--crm-success-text)]"
+      : "border-[var(--crm-border-soft)] bg-[var(--crm-menu)] text-[var(--crm-text)]";
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-3 z-[120] flex justify-center px-3">
@@ -90,7 +91,7 @@ function Toast({ notice, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="px-2 py-1 text-xs transition rounded-full opacity-80 hover:bg-white/10 hover:opacity-100"
+          className="px-2 py-1 text-xs transition rounded-full opacity-80 hover:bg-[var(--crm-hover)] hover:opacity-100"
         >
           ✕
         </button>
@@ -103,14 +104,14 @@ function ComposerReplyBar({ replyTarget, onClose }) {
   if (!replyTarget) return null;
 
   return (
-    <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#2f434c] bg-[#1b262d] px-2.5 py-1.5">
-      <div className="text-xs text-[#25d366]">↩</div>
+    <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--crm-border-soft)] bg-[var(--crm-reply-bg)] px-2.5 py-1.5">
+      <div className="text-xs text-[var(--crm-accent)]">↩</div>
 
       <div className="flex-1 min-w-0 overflow-hidden">
-        <div className="truncate text-[11px] font-semibold text-[#25d366]">
+        <div className="truncate text-[11px] font-semibold text-[var(--crm-accent)]">
           Respondiendo a {replyTarget.author || "mensaje"}
         </div>
-        <div className="truncate text-[11px] text-[#c7d1d6]">
+        <div className="truncate text-[11px] text-[var(--crm-soft)]">
           {replyTarget.textPreview || "Mensaje"}
         </div>
       </div>
@@ -118,7 +119,7 @@ function ComposerReplyBar({ replyTarget, onClose }) {
       <button
         type="button"
         onClick={onClose}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[#9fb0b8] transition hover:bg-white/10 hover:text-white"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)] hover:text-[var(--crm-text)]"
         title="Cancelar respuesta"
       >
         ✕
@@ -131,9 +132,9 @@ function PinnedMessageBar({ pinnedMessage, onJump, onUnpin }) {
   if (!pinnedMessage) return null;
 
   return (
-    <div className="shrink-0 border-b border-[#2a3942] bg-[#182229] px-2 py-1.5">
+    <div className="shrink-0 border-b border-[var(--crm-border)] bg-[var(--crm-elevated-2)] px-2 py-1.5">
       <div className="flex items-center max-w-5xl gap-2 mx-auto">
-        <span className="text-xs text-[#25d366]">📌</span>
+        <span className="text-xs text-[var(--crm-accent)]">📌</span>
 
         <button
           type="button"
@@ -141,10 +142,10 @@ function PinnedMessageBar({ pinnedMessage, onJump, onUnpin }) {
           className="flex-1 min-w-0 text-left"
           title="Ir al mensaje fijado"
         >
-          <div className="truncate text-[11px] font-semibold text-[#25d366]">
+          <div className="truncate text-[11px] font-semibold text-[var(--crm-accent)]">
             Mensaje fijado
           </div>
-          <div className="truncate text-[11px] text-[#c7d1d6]">
+          <div className="truncate text-[11px] text-[var(--crm-soft)]">
             {pinnedMessage?.textPreview || "Mensaje"}
           </div>
         </button>
@@ -152,7 +153,7 @@ function PinnedMessageBar({ pinnedMessage, onJump, onUnpin }) {
         <button
           type="button"
           onClick={onUnpin}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#9fb0b8] transition hover:bg-white/10 hover:text-white"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)] hover:text-[var(--crm-text)]"
           title="Desfijar mensaje"
         >
           ✕
@@ -198,6 +199,7 @@ export default function CrmChat({
   const viewportRef = useRef(null);
   const inputRef = useRef(null);
   const messageRefs = useRef(new Map());
+  const [savingConsent, setSavingConsent] = useState(false);
 
   const pushNotice = useCallback((kind, message) => {
     if (!message) return;
@@ -481,6 +483,37 @@ export default function CrmChat({
     [pinnedMessage?.id, pushNotice, userMetaRef]
   );
 
+  const handleSaveConsent = useCallback(
+  async ({ optIn, marketingOptIn }) => {
+    if (!provinciaId || !effectiveConversationId) {
+      pushNotice("error", "No hay conversación activa.");
+      return;
+    }
+
+    try {
+      setSavingConsent(true);
+
+      await setConversationOptInApi({
+        provinciaId,
+        convId: effectiveConversationId,
+        optIn,
+        marketingOptIn,
+      });
+
+      pushNotice("success", "Consentimiento WhatsApp actualizado.");
+    } catch (e) {
+      console.error(e);
+      pushNotice(
+        "error",
+        e?.message || "No se pudo actualizar el consentimiento."
+      );
+    } finally {
+      setSavingConsent(false);
+    }
+  },
+  [effectiveConversationId, provinciaId, pushNotice]
+);
+
   const handleJumpToPinned = useCallback(() => {
     if (!pinnedMessage?.id) return;
     const ok = scrollToMessage(pinnedMessage.id);
@@ -679,11 +712,11 @@ export default function CrmChat({
 
   if (!effectiveConversationId) {
     return (
-      <div className="grid h-full min-h-0 place-items-center bg-[#0b141a] p-6 text-[#e9edef]">
+      <div className="grid h-full min-h-0 place-items-center bg-[var(--crm-app)] p-6 text-[var(--crm-text)]">
         <style>{localCss}</style>
         <div className="text-center">
           <div className="text-lg font-semibold">Elegí un chat</div>
-          <div className="mt-1 text-sm text-[#8696a0]">
+          <div className="mt-1 text-sm text-[var(--crm-muted)]">
             Seleccioná una conversación del inbox para empezar.
           </div>
         </div>
@@ -692,11 +725,11 @@ export default function CrmChat({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#0b141a] text-[#e9edef]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--crm-app)] text-[var(--crm-text)]">
       <style>{localCss}</style>
       <Toast notice={notice} onClose={() => setNotice(null)} />
 
-      <header className="shrink-0 border-b border-[#2a3942] bg-[#202c33]/95 backdrop-blur">
+      <header className="shrink-0 border-b border-[var(--crm-border)] bg-[var(--crm-elevated)]/95 backdrop-blur">
         <div className="flex items-center justify-between gap-2 px-2 py-2 sm:px-3 sm:py-3">
           <div className="flex items-center flex-1 min-w-0 gap-2 sm:gap-3">
             {onBack ? (
@@ -710,16 +743,16 @@ export default function CrmChat({
               </button>
             ) : null}
 
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#6b7c85] text-sm font-semibold text-white">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--crm-avatar)] text-sm font-semibold text-white">
               {initialLetter}
-              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#202c33] bg-[#25d366]" />
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[var(--crm-elevated)] bg-[var(--crm-accent)]" />
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="truncate text-sm font-semibold sm:text-[15px]">
                 {displayName}
               </div>
-              <div className="truncate text-[11px] text-[#8696a0] sm:text-xs">
+              <div className="truncate text-[11px] text-[var(--crm-muted)] sm:text-xs">
                 {displayPhone}
               </div>
 
@@ -730,14 +763,14 @@ export default function CrmChat({
                     return (
                       <span
                         key={slug}
-                        className={`badge badge-xs sm:badge-sm ${l.color} border border-white/10`}
+                        className={`badge badge-xs sm:badge-sm ${l.color} border border-[var(--crm-border-soft)]`}
                       >
                         {l.name}
                       </span>
                     );
                   })}
                   {labels.length > labelsPreview.length ? (
-                    <span className="badge badge-xs sm:badge-sm border border-white/10 bg-transparent text-[#8696a0]">
+                    <span className="badge badge-xs sm:badge-sm border border-[var(--crm-border-soft)] bg-transparent text-[var(--crm-muted)]">
                       +{labels.length - labelsPreview.length}
                     </span>
                   ) : null}
@@ -787,7 +820,7 @@ export default function CrmChat({
               type="button"
               onClick={markAsSold}
               title="Marcar como vendido"
-              className="crm-pill-btn bg-[#005c4b] text-white hover:bg-[#0a6b58]"
+              className="crm-pill-btn bg-[var(--crm-accent-strong)] text-white hover:bg-[var(--crm-accent)]"
             >
               💰 Vendido
             </button>
@@ -809,7 +842,7 @@ export default function CrmChat({
               </button>
               <ul
                 tabIndex={0}
-                className="menu dropdown-content z-[60] mt-2 w-56 rounded-2xl border border-[#2a3942] bg-[#202c33] p-2 text-[#e9edef] shadow-2xl"
+                className="menu dropdown-content z-[60] mt-2 w-56 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-menu)] p-2 text-[var(--crm-text)] shadow-2xl"
               >
                 <li>
                   <button type="button" onClick={() => setShowCrearPedido(true)}>
@@ -840,7 +873,7 @@ export default function CrmChat({
                   <button
                     type="button"
                     onClick={markAsSold}
-                    className="text-[#25d366]"
+                    className="text-[var(--crm-accent)]"
                   >
                     💰 Marcar vendido
                   </button>
@@ -863,7 +896,7 @@ export default function CrmChat({
           className="h-full px-2 py-2 overflow-y-auto crm-chat-wall sm:px-3 sm:py-3 md:px-4"
         >
           {timeline.length === 0 ? (
-            <div className="mx-auto mt-6 max-w-lg rounded-2xl border border-[#2a3942] bg-[#202c33]/80 px-4 py-3 text-sm text-[#8696a0]">
+            <div className="mx-auto mt-6 max-w-lg rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-elevated)]/80 px-4 py-3 text-sm text-[var(--crm-muted)]">
               No hay mensajes todavía.
             </div>
           ) : (
@@ -872,7 +905,7 @@ export default function CrmChat({
                 if (item.__type === "day") {
                   return (
                     <div key={item.id} className="flex justify-center py-2">
-                      <span className="rounded-lg bg-[#182229] px-3 py-1 text-[11px] text-[#8696a0] shadow-sm">
+                      <span className="rounded-lg bg-[var(--crm-elevated-2)] px-3 py-1 text-[11px] text-[var(--crm-muted)] shadow-sm">
                         {item.day}
                       </span>
                     </div>
@@ -902,22 +935,22 @@ export default function CrmChat({
         </div>
       </div>
 
-      <footer className="shrink-0 border-t border-[#2a3942] bg-[#202c33] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3">
+      <footer className="shrink-0 border-t border-[var(--crm-border)] bg-[var(--crm-elevated)] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3">
         <ComposerReplyBar
           replyTarget={replyTarget}
           onClose={() => setReplyTarget(null)}
         />
 
         {busyLabel ? (
-          <div className="mb-2 flex items-center gap-2 rounded-2xl border border-[#2f434c] bg-[#1b262d] px-3 py-2 text-[12px] text-[#b9c7ce]">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#25d366]" />
+          <div className="mb-2 flex items-center gap-2 rounded-2xl border border-[var(--crm-border-soft)] bg-[var(--crm-reply-bg)] px-3 py-2 text-[12px] text-[var(--crm-soft)]">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--crm-accent)]" />
             {busyLabel}
           </div>
         ) : null}
 
         <div className="sm:hidden">
           <div className="flex items-end gap-2">
-            <div className="flex flex-1 items-end gap-1 rounded-[26px] bg-[#2a3942] px-2 py-1.5">
+            <div className="flex flex-1 items-end gap-1 rounded-[26px] bg-[var(--crm-chip)] px-2 py-1.5">
               <button
                 type="button"
                 className="crm-composer-icon"
@@ -972,7 +1005,7 @@ export default function CrmChat({
             )}
           </div>
 
-          <div className="mt-1 text-[10px] text-[#8696a0]">
+          <div className="mt-1 text-[10px] text-[var(--crm-muted)]">
             Enter envía · Shift+Enter salto de línea
           </div>
         </div>
@@ -988,7 +1021,7 @@ export default function CrmChat({
             😊
           </button>
 
-          <div className="flex flex-1 items-end gap-1 rounded-[28px] bg-[#2a3942] px-2 py-1.5">
+          <div className="flex flex-1 items-end gap-1 rounded-[28px] bg-[var(--crm-chip)] px-2 py-1.5">
             <button
               type="button"
               className="crm-composer-icon"
@@ -1115,17 +1148,27 @@ export default function CrmChat({
         }}
       />
 
-      <ProfileDrawer
-        open={showProfile}
-        onClose={() => setShowProfile(false)}
-        displayName={displayName}
-        displayPhone={displayPhone}
-        clientDoc={clientDoc}
-        onOpenClientModal={() => {
-          setShowProfile(false);
-          setShowClientModal(true);
-        }}
-      />
+    <ProfileDrawer
+  open={showProfile}
+  onClose={() => setShowProfile(false)}
+  displayName={displayName}
+  displayPhone={displayPhone}
+  clientDoc={clientDoc}
+  optIn={conversation?.optIn === true}
+  marketingOptIn={
+    conversation?.marketingOptIn === true
+      ? true
+      : conversation?.marketingOptIn === false
+      ? false
+      : null
+  }
+  savingConsent={savingConsent}
+  onSaveConsent={handleSaveConsent}
+  onOpenClientModal={() => {
+    setShowProfile(false);
+    setShowClientModal(true);
+  }}
+/>
 
       <ClientModal
         open={showClientModal}
@@ -1162,10 +1205,10 @@ export default function CrmChat({
 
 const localCss = `
   .crm-chat-wall {
-    background-color: #0b141a;
+    background-color: var(--crm-app);
     background-image:
-      radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(11,20,26,0.72), rgba(11,20,26,0.90));
+      radial-gradient(var(--crm-chat-wall-dot) 1px, transparent 1px),
+      linear-gradient(180deg, var(--crm-chat-wall-grad-start), var(--crm-chat-wall-grad-end));
     background-size: 18px 18px, 100% 100%;
   }
 
@@ -1176,13 +1219,13 @@ const localCss = `
     width: 2.25rem;
     height: 2.25rem;
     border-radius: 9999px;
-    color: #e9edef;
+    color: var(--crm-text);
     background: transparent;
     transition: background-color .15s ease, transform .12s ease, opacity .15s ease;
   }
 
   .crm-icon-btn:hover:not(:disabled) {
-    background: rgba(255,255,255,.08);
+    background: var(--crm-hover);
   }
 
   .crm-icon-btn:active:not(:disabled) {
@@ -1221,14 +1264,14 @@ const localCss = `
     height: 2.25rem;
     flex-shrink: 0;
     border-radius: 9999px;
-    color: #8696a0;
+    color: var(--crm-muted);
     background: transparent;
     transition: background-color .15s ease, color .15s ease, opacity .15s ease;
   }
 
   .crm-composer-icon:hover:not(:disabled) {
-    background: rgba(255,255,255,.06);
-    color: #e9edef;
+    background: var(--crm-hover);
+    color: var(--crm-text);
   }
 
   .crm-composer-icon:disabled {
@@ -1244,14 +1287,14 @@ const localCss = `
     border: 0;
     outline: 0;
     background: transparent;
-    color: #e9edef;
+    color: var(--crm-text);
     padding: .55rem .25rem;
     font-size: 14px;
     line-height: 1.35;
   }
 
   .crm-textarea::placeholder {
-    color: #8696a0;
+    color: var(--crm-muted);
   }
 
   .crm-textarea:disabled {
@@ -1267,7 +1310,7 @@ const localCss = `
     height: 3rem;
     flex-shrink: 0;
     border-radius: 9999px;
-    background: #00a884;
+    background: var(--crm-accent);
     color: white;
     font-size: 1rem;
     transition: transform .12s ease, filter .15s ease, opacity .15s ease;
@@ -1292,7 +1335,7 @@ const localCss = `
     min-height: 3rem;
     border-radius: 9999px;
     border: 0;
-    background: #00a884;
+    background: var(--crm-accent);
     color: white;
     padding: 0;
   }

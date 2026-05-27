@@ -10,9 +10,57 @@ const {
 } = require("../repositories/vendor.repository");
 const { pickRoundRobinIndex } = require("../repositories/roundRobin.repository");
 
+const CONNECTED_STATUS = "connected";
+const PENDING_STATUS = "pending";
+const DISCONNECTED_STATUS = "disconnected";
+const ERROR_STATUS = "error";
+const DISABLED_STATUS = "disabled";
+
 function normalizePhoneNumberId(value) {
   const v = safeStr(value);
   return v ? String(v).trim() : null;
+}
+
+function normalizeConnectionStatus(value) {
+  const v = safeStr(value).toLowerCase();
+
+  if ([CONNECTED_STATUS, PENDING_STATUS, DISCONNECTED_STATUS, ERROR_STATUS, DISABLED_STATUS].includes(v)) {
+    return v;
+  }
+
+  return "";
+}
+
+function hasAnyToken(vendorData = {}) {
+  return Boolean(
+    safeStr(vendorData.token || vendorData.waToken) || safeStr(process.env.META_WA_TOKEN || "")
+  );
+}
+
+function resolveConnectionStatusFromData(data = {}) {
+  const explicit = normalizeConnectionStatus(data.connectionStatus);
+
+  if (data.crmActivo === false) return DISABLED_STATUS;
+  if (explicit) return explicit;
+
+  const phoneNumberId = normalizePhoneNumberId(
+    data.phoneNumberId || data.waPhoneNumberId || data.metaPhoneNumberId
+  );
+
+  // Compatibilidad: vendedores ya configurados antes de este cambio siguen activos
+  // aunque no tengan connectionStatus en Firestore.
+  if (phoneNumberId && hasAnyToken(data)) return CONNECTED_STATUS;
+
+  return PENDING_STATUS;
+}
+
+function isVendorConnectionUsable(vendorData = {}) {
+  if (!vendorData || vendorData.crmActivo === false) return false;
+
+  const status = resolveConnectionStatusFromData(vendorData);
+  if (status !== CONNECTED_STATUS) return false;
+
+  return Boolean(vendorData.phoneNumberId && (vendorData.token || process.env.META_WA_TOKEN));
 }
 
 function resolveConversationPhoneNumberId(convData) {
@@ -83,20 +131,31 @@ async function getCrmVendedoresConfig(prov) {
         data.metaWabaId
     );
 
+    const connectionStatus = resolveConnectionStatusFromData(data);
+    const connectionMode = safeStr(data.connectionMode || "cloud_api_only") || "cloud_api_only";
+
     byEmail[email] = {
       email,
       nombre: safeStr(data.nombre || data.name || ""),
       crmActivo: data.crmActivo !== false,
       asignacionAutomatica: data.asignacionAutomatica !== false,
+      connectionMode,
+      connectionStatus,
+      connectionError: safeStr(data.connectionError || ""),
       phoneNumberId: phoneNumberId || null,
       displayPhoneNumber: displayPhoneNumber || null,
       token: token || null,
+      tokenMode: safeStr(data.tokenMode || (token ? "vendor" : "env_fallback")),
       wabaId: wabaId || null,
+      connectedAt: data.connectedAt || null,
+      disconnectedAt: data.disconnectedAt || null,
+      lastWebhookAt: data.lastWebhookAt || null,
+      lastConnectionCheckAt: data.lastConnectionCheckAt || null,
     };
 
     emails.push(email);
 
-    if (phoneNumberId) {
+    if (phoneNumberId && isVendorConnectionUsable(byEmail[email])) {
       byPhoneNumberId[phoneNumberId] = email;
     }
   });
@@ -128,7 +187,7 @@ async function getCrmVendorContext(prov) {
     if (!emailLo || !crmData) continue;
 
     if (!vendedoresHabilitados.has(emailLo)) continue;
-    if (crmData.crmActivo === false) continue;
+    if (!isVendorConnectionUsable(crmData)) continue;
 
     byEmail[emailLo] = crmData;
     emails.push(emailLo);
@@ -165,6 +224,20 @@ async function isAdminProv({ prov, email }) {
   return admins.includes(emailLo);
 }
 
+async function assertVendorListedProv({ prov, email }) {
+  const emailLo = normalizeEmail(email);
+  if (!emailLo) {
+    throw new Error("Email vacio");
+  }
+
+  const cfg = await getUsuariosConfig(prov);
+  if (!(cfg.vendedores || []).includes(emailLo)) {
+    throw new Error("No sos vendedor CRM habilitado en esta provincia");
+  }
+
+  return true;
+}
+
 async function assertVendorEnabledProv({ prov, email }) {
   const emailLo = normalizeEmail(email);
   if (!emailLo) {
@@ -173,7 +246,7 @@ async function assertVendorEnabledProv({ prov, email }) {
 
   const vendedores = await getVendedoresProv(prov);
   if (!vendedores.includes(emailLo)) {
-    throw new Error("No sos vendedor CRM habilitado en esta provincia");
+    throw new Error("No sos vendedor CRM habilitado o tu WhatsApp CRM no está conectado");
   }
 
   return true;
@@ -214,6 +287,14 @@ function resolvePhoneNumberIdForSend({ convData, vendorCfg }) {
     if (assigned && mappedEmail && mappedEmail !== assigned) {
       throw new Error(
         `La conversación está asociada a la línea ${convPhoneNumberId}, pero esa línea pertenece a ${mappedEmail} y no al usuario asignado ${assigned}.`
+      );
+    }
+
+    // Si hay conversación asignada pero la línea ya no está conectada/mapeada,
+    // no hacemos fallback silencioso al token global.
+    if (assigned && !mappedEmail) {
+      throw new Error(
+        `La línea ${convPhoneNumberId} no está conectada a ningún vendedor CRM habilitado.`
       );
     }
 
@@ -284,7 +365,15 @@ function resolveWabaIdForSender({ assignedEmail, vendorCfg, convData = null }) {
 }
 
 module.exports = {
+  CONNECTED_STATUS,
+  PENDING_STATUS,
+  DISCONNECTED_STATUS,
+  ERROR_STATUS,
+  DISABLED_STATUS,
   normalizePhoneNumberId,
+  normalizeConnectionStatus,
+  resolveConnectionStatusFromData,
+  isVendorConnectionUsable,
   resolveConversationPhoneNumberId,
   getUsuariosConfig,
   getCrmVendedoresConfig,
@@ -292,6 +381,7 @@ module.exports = {
   getVendedoresProv,
   getAdminsProv,
   isAdminProv,
+  assertVendorListedProv,
   assertVendorEnabledProv,
   pickNextVendorEmail,
   resolveVendorEmailForPhoneNumberId,

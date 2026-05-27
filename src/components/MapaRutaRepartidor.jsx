@@ -9,6 +9,7 @@ import {
 } from "@react-google-maps/api";
 import { baseDireccion } from "../constants/provincias";
 import { useProvincia } from "../hooks/useProvincia.js";
+import { getPedidoLocationIntent } from "../utils/pedidoLocation.js";
 
 const mapContainerStyle = { width: "100%", height: "400px" };
 const options = {
@@ -35,6 +36,34 @@ const ensureARContext = (addr, base) => {
     .map((t) => t.trim());
   const ctx = parts.slice(-3).join(", "); // "Ciudad, Provincia, Argentina"
   return `${s}, ${ctx}`;
+};
+
+const resolvePedidoLocation = (p, baseContext) => {
+  const intent = getPedidoLocationIntent(p, baseContext);
+  if (!intent) return null;
+
+  if (intent.type === "latlng") {
+    return {
+      location: { lat: intent.lat, lng: intent.lng },
+      source: intent.source || "latlng",
+    };
+  }
+
+  if (intent.type === "placeId") {
+    return {
+      location: { placeId: intent.placeId },
+      source: intent.source || "placeId",
+    };
+  }
+
+  if (intent.type === "address") {
+    return {
+      location: intent.address,
+      source: intent.source || "direccion",
+    };
+  }
+
+  return null;
 };
 
 const MAX_WAYPOINTS = 25;
@@ -205,39 +234,29 @@ export default function MapaRutaRepartidor({
     libraries: ["places"],
   });
 
+  const pedidosConUbicacion = useMemo(() => {
+    return (pedidos || []).reduce((acc, p) => {
+      if (!p) return acc;
+      const resolved = resolvePedidoLocation(p, baseContext);
+      if (!resolved) return acc;
+      acc.push({ pedido: p, resolved });
+      return acc;
+    }, []);
+  }, [pedidos, baseContext]);
+
   // Orden actual
   const pedidosValidos = useMemo(
-    () =>
-      pedidos.filter(
-        (p) =>
-          p &&
-          (p.direccion ||
-            (p.coordenadas &&
-              typeof p.coordenadas.lat === "number" &&
-              typeof p.coordenadas.lng === "number") ||
-            p.placeId)
-      ),
-    [pedidos]
+    () => pedidosConUbicacion.map(({ pedido }) => pedido),
+    [pedidosConUbicacion]
   );
 
   // Normalizamos cada "location" para Directions
   const locations = useMemo(() => {
-    return pedidosValidos.map((p) => {
-      if (p.placeId) return { location: { placeId: p.placeId }, stopover: true };
-      if (
-        p.coordenadas &&
-        typeof p.coordenadas.lat === "number" &&
-        typeof p.coordenadas.lng === "number"
-      ) {
-        return {
-          location: { lat: p.coordenadas.lat, lng: p.coordenadas.lng },
-          stopover: true,
-        };
-      }
-      const addr = sanitizeDireccion(ensureARContext(p.direccion || "", baseContext));
-      return { location: addr, stopover: true };
-    });
-  }, [pedidosValidos, baseContext]);
+    return pedidosConUbicacion.map(({ resolved }) => ({
+      location: resolved.location,
+      stopover: true,
+    }));
+  }, [pedidosConUbicacion]);
 
   // Geocodifica la base para centrar el mapa
   useEffect(() => {
@@ -408,15 +427,15 @@ export default function MapaRutaRepartidor({
       const direccion = String(p?.direccion || "").trim();
 
       const phones = getPhones(p);
-const phonesDisp = phones.length
-  ? phones.map((x) => formatPhoneARDisplay(x)).filter(Boolean).join(" / ")
-  : "No informado";
+      const phonesDisp = phones.length
+        ? phones.map((x) => formatPhoneARDisplay(x)).filter(Boolean).join(" / ")
+        : "No informado";
 
-lines.push(
-  `${globalN}) ${cliente} | Tel: ${phonesDisp}` +
-    ` | Vendedor: ${vendedor}` +
-    (direccion ? ` | Dir: ${direccion}` : "")
-);
+      lines.push(
+        `${globalN}) ${cliente} | Tel: ${phonesDisp}` +
+          ` | Vendedor: ${vendedor}` +
+          (direccion ? ` | Dir: ${direccion}` : "")
+      );
     });
 
     return lines.join("\n");

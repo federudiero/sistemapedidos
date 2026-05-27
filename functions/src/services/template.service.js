@@ -303,11 +303,6 @@ async function sendTemplateBatch(req) {
 
   if (!adminMode) {
     await assertVendorEnabledProv({ prov, email: actorEmailLo });
-    if (convIds.length !== 1) {
-      throw new Error(
-        "Un vendedor solo puede enviar plantillas a una conversación por vez"
-      );
-    }
   }
 
   if (!templateName) {
@@ -318,6 +313,10 @@ async function sendTemplateBatch(req) {
     throw new Error("languageCode requerido");
   }
 
+  if (!templateCategory) {
+    throw new Error("templateCategory requerido");
+  }
+
   const components = buildTemplateComponentsFromRequest({
     headerVars,
     bodyVars,
@@ -326,7 +325,9 @@ async function sendTemplateBatch(req) {
   });
 
   const vendorCfg = await getCrmVendorContext(prov);
-  const results = [];
+  const preparedTargets = [];
+  const validationErrors = new Map();
+  const vendorLineIds = new Set();
 
   for (const convId of convIds) {
     try {
@@ -351,8 +352,10 @@ async function sendTemplateBatch(req) {
         templateCategory,
       });
 
-      if (templateCategory && !policy.allowed) {
-        throw new Error(policy.summary || "La conversación no cumple la política de envío.");
+      if (!policy.allowed) {
+        throw new Error(
+          policy.summary || "La conversación no cumple la política de envío."
+        );
       }
 
       const phoneNumberId = resolvePhoneNumberIdForSend({
@@ -370,6 +373,75 @@ async function sendTemplateBatch(req) {
         );
       }
 
+      if (!adminMode) {
+        const assignedToEmail = normalizeEmail(convData?.assignedToEmail);
+        if (assignedToEmail !== actorEmailLo) {
+          throw new Error("Esta conversación no está asignada a tu usuario");
+        }
+        vendorLineIds.add(String(phoneNumberId).trim());
+      }
+
+      preparedTargets.push({
+        convId,
+        convData,
+        policy,
+        phoneNumberId,
+        token,
+      });
+    } catch (e) {
+      validationErrors.set(convId, {
+        ok: false,
+        convId,
+        error:
+          e?.response?.data?.error?.message ||
+          e?.message ||
+          "No se pudo preparar la plantilla",
+      });
+    }
+  }
+
+  if (!adminMode && vendorLineIds.size > 1) {
+    const mixedLineError =
+      "Las conversaciones seleccionadas usan líneas/casillas distintas. Armá campañas separadas por línea.";
+
+    const results = convIds.map((convId) => {
+      const prepared = preparedTargets.find((x) => x.convId === convId);
+      const existingError = validationErrors.get(convId);
+
+      if (existingError) return existingError;
+
+      return {
+        ok: false,
+        convId,
+        telefonoE164:
+          prepared?.convData?.telefonoE164 || toDisplayE164(convId),
+        nombre: prepared?.convData?.nombre || null,
+        assignedToEmail:
+          normalizeEmail(prepared?.convData?.assignedToEmail) || null,
+        phoneNumberId: prepared?.phoneNumberId || null,
+        error: mixedLineError,
+      };
+    });
+
+    return {
+      ok: true,
+      prov,
+      templateName,
+      languageCode,
+      templateCategory,
+      mode: adminMode ? "admin" : "vendor",
+      successCount: 0,
+      errorCount: results.length,
+      results,
+    };
+  }
+
+  const sentResults = new Map();
+
+  for (const target of preparedTargets) {
+    const { convId, convData, policy, phoneNumberId, token } = target;
+
+    try {
       const sent = await sendTemplateMessageToConversation({
         prov,
         convId,
@@ -383,7 +455,7 @@ async function sendTemplateBatch(req) {
         actorEmail: actorEmailLo,
       });
 
-      results.push({
+      sentResults.set(convId, {
         ok: true,
         convId,
         telefonoE164: convData?.telefonoE164 || toDisplayE164(convId),
@@ -391,13 +463,17 @@ async function sendTemplateBatch(req) {
         assignedToEmail: sent.assignedToEmail,
         waMsgId: sent.waMsgId,
         phoneNumberId: sent.phoneNumberId,
-        templateCategory: templateCategory || null,
+        templateCategory,
         policy,
       });
     } catch (e) {
-      results.push({
+      sentResults.set(convId, {
         ok: false,
         convId,
+        telefonoE164: convData?.telefonoE164 || toDisplayE164(convId),
+        nombre: convData?.nombre || null,
+        assignedToEmail: normalizeEmail(convData?.assignedToEmail) || null,
+        phoneNumberId: phoneNumberId || null,
         error:
           e?.response?.data?.error?.message ||
           e?.message ||
@@ -405,6 +481,20 @@ async function sendTemplateBatch(req) {
       });
     }
   }
+
+  const results = convIds.map((convId) => {
+    if (validationErrors.has(convId)) {
+      return validationErrors.get(convId);
+    }
+
+    return (
+      sentResults.get(convId) || {
+        ok: false,
+        convId,
+        error: "No se pudo resolver el envío de la plantilla",
+      }
+    );
+  });
 
   const successCount = results.filter((r) => r.ok).length;
   const errorCount = results.length - successCount;
@@ -414,14 +504,13 @@ async function sendTemplateBatch(req) {
     prov,
     templateName,
     languageCode,
-    templateCategory: templateCategory || null,
+    templateCategory,
     mode: adminMode ? "admin" : "vendor",
     successCount,
     errorCount,
     results,
   };
 }
-
 module.exports = {
   listMetaTemplates,
   sendTemplateBatch,

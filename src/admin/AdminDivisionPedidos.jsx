@@ -14,12 +14,7 @@ import { useNavigate } from "react-router-dom";
 import MapaPedidos from "../components/MapaPedidos";
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia";
-
-const SUPER_ADMINS = [
-  "federudiero@gmail.com",
-  "franco.coronel.134@gmail.com",
-  "eliascalderon731@gmail.com",
-].map((e) => e.toLowerCase());
+import { getProvinciaUsuariosConfig, normalizeEmail, requireProvinciaAdmin } from "../utils/adminAccess";
 
 function AdminDivisionPedidos() {
   const navigate = useNavigate();
@@ -48,48 +43,74 @@ function AdminDivisionPedidos() {
     [provinciaId]
   );
 
-  // ==== 1) Autorización mínima por pantalla (no sólo localStorage)
+  // ==== 1) Autorización mínima por pantalla (contra provincia/config/usuarios + superadmin)
   useEffect(() => {
-    const adminAuth = localStorage.getItem("adminAutenticado");
-    if (!adminAuth) navigate("/admin");
-  }, [navigate]);
+    let cancelled = false;
+
+    const run = async () => {
+      if (!provinciaId) return;
+
+      try {
+        const emailAuth = normalizeEmail(auth.currentUser?.email);
+        const access = await requireProvinciaAdmin({
+          db,
+          provinciaId,
+          email: emailAuth,
+        });
+
+        if (!cancelled && !access.ok) {
+          navigate("/admin", { replace: true });
+        }
+      } catch (error) {
+        console.error("Error validando acceso admin en división de pedidos:", error);
+        if (!cancelled) navigate("/admin", { replace: true });
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, navigate, provinciaId]);
 
   // ==== 2) Cargar repartidores y chequear si el usuario es admin de la provincia
   useEffect(() => {
     let mounted = true;
+
     const run = async () => {
       if (!provinciaId) return;
+
       try {
-        // Siempre desde config/usuarios
-        const cfgRef = doc(db, "provincias", provinciaId, "config", "usuarios");
-        const cfg = await getDoc(cfgRef);
-        const data = cfg.exists() ? cfg.data() : {};
-        const toArr = (v) => (Array.isArray(v) ? v : v ? Object.keys(v) : []);
+        const cfg = await getProvinciaUsuariosConfig(db, provinciaId);
+        const data = cfg.data || {};
 
         // 📛 Mapa de nombres { email(lower): "Nombre" }
         const nombresMapRaw = data.nombres || {};
         const nombresMap = Object.fromEntries(
           Object.entries(nombresMapRaw).map(([k, v]) => [
-            String(k || "").toLowerCase(),
+            normalizeEmail(k),
             String(v || ""),
           ])
         );
 
         // Repartidores con label = nombre (o antes del @)
-        const reps = toArr(data.repartidores).map((email, i) => {
+        const reps = (cfg.repartidores || []).map((email, i) => {
           const em = String(email || "");
-          const emLower = em.toLowerCase();
+          const emLower = normalizeEmail(em);
           const label = nombresMap[emLower] || em.split("@")[0] || `R${i + 1}`;
           return { email: em, label };
         });
 
-        const admins = toArr(data.admins).map((e) => String(e || "").toLowerCase());
-        const emailAuth = String(auth.currentUser?.email || "").toLowerCase();
-        const esAdminLocal = admins.includes(emailAuth) || SUPER_ADMINS.includes(emailAuth);
+        const emailAuth = normalizeEmail(auth.currentUser?.email);
+        const access = await requireProvinciaAdmin({
+          db,
+          provinciaId,
+          email: emailAuth,
+        });
 
         if (mounted) {
           setRepartidores(reps);
-          setSoyAdminProv(esAdminLocal);
+          setSoyAdminProv(access.ok);
         }
       } catch (e) {
         console.error("Error leyendo config/usuarios:", e);
@@ -99,8 +120,11 @@ function AdminDivisionPedidos() {
         }
       }
     };
+
     run();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [provinciaId, auth]);
 
   // ==== 3) Cargar pedidos del día (rango inclusivo, igual a tus otras pantallas)
@@ -139,17 +163,16 @@ function AdminDivisionPedidos() {
   }, [fechaSeleccionada, colCierres]);
 
   useEffect(() => {
-    const adminAuth = localStorage.getItem("adminAutenticado");
-    if (!adminAuth) navigate("/admin");
-    else cargarPedidosPorFecha(fechaSeleccionada);
-  }, [fechaSeleccionada, navigate, provinciaId]); // recarga si cambia provincia
+    if (!provinciaId) return;
+    cargarPedidosPorFecha(fechaSeleccionada);
+  }, [fechaSeleccionada, provinciaId]); // recarga si cambia provincia
 
   // ==== 5) Asignar / desasignar con guards alineados a reglas
   const handleAsignar = async (pedidoId, email, asignar = true) => {
     try {
       if (!provinciaId) return;
 
-      const emailAuth = String(auth.currentUser?.email || "").toLowerCase();
+      const emailAuth = normalizeEmail(auth.currentUser?.email);
       if (!soyAdminProv) {
         alert(`No tenés permisos de administrador en la provincia ${provinciaId} con ${emailAuth}.`);
         return;

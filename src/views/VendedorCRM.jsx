@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase/firebase";
 import CrmInbox from "../components/crm/CrmInbox";
 import CrmChat from "../components/crm/crmchat/CrmChat";
+import ConnectWhatsAppBusinessButton from "../components/crm/ConnectWhatsAppBusinessButton";
+import { getWhatsAppConnectionStatus } from "../services/crmConnectionApi";
 import { useProvincia } from "../hooks/useProvincia";
 
 function lo(x) {
@@ -24,9 +26,33 @@ export default function VendedorCRM() {
 
   const [selectedConvId, setSelectedConvId] = useState(null);
 
+  const [checkingConnection, setCheckingConnection] = useState(false);
+  const [connection, setConnection] = useState(null);
+  const [connectionError, setConnectionError] = useState("");
+
   const canUseCrm = useMemo(() => {
-    return Boolean(authReady && provinciaId && emailLo && soyVendedorProv);
-  }, [authReady, provinciaId, emailLo, soyVendedorProv]);
+    return Boolean(authReady && provinciaId && emailLo && soyVendedorProv && connection?.connected);
+  }, [authReady, provinciaId, emailLo, soyVendedorProv, connection?.connected]);
+
+  const refreshConnectionStatus = useCallback(async () => {
+    if (!provinciaId || !emailLo || !soyVendedorProv) return null;
+
+    setCheckingConnection(true);
+    setConnectionError("");
+
+    try {
+      const result = await getWhatsAppConnectionStatus({ provinciaId });
+      const nextConnection = result?.connection || null;
+      setConnection(nextConnection);
+      return nextConnection;
+    } catch (err) {
+      setConnection(null);
+      setConnectionError(err?.message || "No se pudo validar la conexión de WhatsApp.");
+      return null;
+    } finally {
+      setCheckingConnection(false);
+    }
+  }, [provinciaId, emailLo, soyVendedorProv]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -98,7 +124,18 @@ export default function VendedorCRM() {
   }, [authReady, provinciaId, emailLo, retryRoleKey]);
 
   useEffect(() => {
-    const shouldRun = Boolean(provinciaId && emailLo && soyVendedorProv);
+    if (!authReady || !provinciaId || !emailLo || !soyVendedorProv) {
+      setConnection(null);
+      setConnectionError("");
+      setCheckingConnection(false);
+      return;
+    }
+
+    refreshConnectionStatus();
+  }, [authReady, provinciaId, emailLo, soyVendedorProv, refreshConnectionStatus]);
+
+  useEffect(() => {
+    const shouldRun = Boolean(provinciaId && emailLo && soyVendedorProv && connection?.connected);
     if (!shouldRun) return;
 
     const normalizedEmail = lo(emailLo);
@@ -178,7 +215,7 @@ export default function VendedorCRM() {
       window.removeEventListener("beforeunload", onUnload);
       void setOffline();
     };
-  }, [provinciaId, emailLo, soyVendedorProv]);
+  }, [provinciaId, emailLo, soyVendedorProv, connection?.connected]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -187,8 +224,8 @@ export default function VendedorCRM() {
 
   if (!provinciaId) {
     return (
-      <div className="min-h-screen bg-[#0b141a] text-[#e9edef] flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-2xl border border-[#2a3942] bg-[#111b21] p-5">
+      <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
           <div className="text-lg font-semibold">Seleccioná una provincia primero.</div>
           <button className="mt-4 btn btn-outline" onClick={() => navigate("/")}>Ir a Provincias</button>
         </div>
@@ -198,8 +235,8 @@ export default function VendedorCRM() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen bg-[#0b141a] text-[#e9edef] flex items-center justify-center p-6">
-        <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-5">
+      <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-6">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
           <span className="loading loading-spinner loading-md" />
           <div className="mt-3 opacity-80">Cargando sesión...</div>
         </div>
@@ -209,8 +246,8 @@ export default function VendedorCRM() {
 
   if (checkingRole) {
     return (
-      <div className="min-h-screen bg-[#0b141a] text-[#e9edef] flex items-center justify-center p-6">
-        <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-5">
+      <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-6">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
           <span className="loading loading-spinner loading-md" />
           <div className="mt-3 opacity-80">Validando acceso CRM...</div>
         </div>
@@ -220,8 +257,8 @@ export default function VendedorCRM() {
 
   if (!soyVendedorProv) {
     return (
-      <div className="min-h-screen bg-[#0b141a] text-[#e9edef] flex items-center justify-center p-6">
-        <div className="max-w-lg w-full rounded-2xl border border-[#2a3942] bg-[#111b21] p-5">
+      <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-6">
+        <div className="max-w-lg w-full rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
           <div className="text-lg font-semibold">No tenés acceso al CRM en esta provincia.</div>
           <div className="mt-3 text-sm opacity-80">{roleError || "Sin permisos."}</div>
 
@@ -238,15 +275,58 @@ export default function VendedorCRM() {
     );
   }
 
+  if (checkingConnection) {
+    return (
+      <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-6">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+          <span className="loading loading-spinner loading-md" />
+          <div className="mt-3 opacity-80">Validando conexión de WhatsApp...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (connectionError) {
+    return (
+      <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-6">
+        <div className="max-w-lg w-full rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+          <div className="text-lg font-semibold">No pude validar la conexión de WhatsApp.</div>
+          <div className="mt-3 text-sm opacity-80">{connectionError}</div>
+
+          <div className="flex gap-2 mt-5">
+            <button className="btn btn-outline" onClick={refreshConnectionStatus}>
+              Reintentar
+            </button>
+            <button className="btn btn-ghost" onClick={handleLogout}>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!connection?.connected) {
+    return (
+      <ConnectWhatsAppBusinessButton
+        provinciaId={provinciaId}
+        email={emailLo}
+        connection={connection}
+        onRefresh={refreshConnectionStatus}
+        onConnected={refreshConnectionStatus}
+      />
+    );
+  }
+
   return (
-    <div className="h-[100dvh] overflow-hidden bg-[#111b21] text-[#e9edef] md:p-3">
-      <div className="mx-auto h-full max-w-[1600px] overflow-hidden bg-[#0b141a] md:rounded-[28px] md:border md:border-[#2a3942] md:shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+    <div className="h-[100dvh] overflow-hidden bg-[var(--crm-surface)] text-[var(--crm-text)] md:p-3">
+      <div className="mx-auto h-full max-w-[1600px] overflow-hidden bg-[var(--crm-app)] md:rounded-[28px] md:border md:border-[var(--crm-border)] md:shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
         <div className="flex flex-col h-full min-h-0">
-          <header className="shrink-0 border-b border-[#2a3942] bg-[#111b21] px-3 py-2.5 md:hidden">
+          <header className="shrink-0 border-b border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2.5 md:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-lg font-semibold leading-tight truncate">CRM Vendedor</div>
-                <div className="truncate text-[11px] text-[#8696a0]">
+                <div className="truncate text-[11px] text-[var(--crm-muted)]">
                   Provincia: {provinciaId} · Usuario: {emailLo}
                 </div>
               </div>
@@ -254,7 +334,7 @@ export default function VendedorCRM() {
               <div className="flex items-center gap-2 shrink-0">
                 {selectedConvId ? (
                   <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#2a3942] bg-[#202c33] text-sm text-[#d1d7db]"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--crm-border)] bg-[var(--crm-elevated)] text-sm text-[var(--crm-soft)]"
                     onClick={() => setSelectedConvId(null)}
                     type="button"
                     title="Volver al inbox"
@@ -264,7 +344,7 @@ export default function VendedorCRM() {
                 ) : null}
 
                 <button
-                  className="rounded-full border border-[#d1d7db] px-3 py-2 text-sm font-medium text-[#e9edef] transition hover:bg-[#202c33]"
+                  className="rounded-full border border-[var(--crm-border)] px-3 py-2 text-sm font-medium text-[var(--crm-text)] transition hover:bg-[var(--crm-hover)]"
                   onClick={handleLogout}
                   type="button"
                 >
@@ -276,7 +356,7 @@ export default function VendedorCRM() {
 
           <main className="grid flex-1 min-h-0 overflow-hidden md:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)]">
             <section
-              className={`min-h-0 overflow-hidden bg-[#111b21] md:border-r md:border-[#2a3942] ${
+              className={`min-h-0 overflow-hidden bg-[var(--crm-surface)] md:border-r md:border-[var(--crm-border)] ${
                 selectedConvId ? "hidden md:flex" : "flex"
               } flex-col`}
             >
@@ -288,7 +368,7 @@ export default function VendedorCRM() {
             </section>
 
             <section
-              className={`min-h-0 overflow-hidden bg-[#0b141a] ${
+              className={`min-h-0 overflow-hidden bg-[var(--crm-app)] ${
                 selectedConvId ? "flex" : "hidden md:flex"
               } flex-col`}
             >

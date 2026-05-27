@@ -98,6 +98,15 @@ service cloud.firestore {
         && string(r.data.assignedToEmail).toLowerCase() == emailActual();
     }
 
+    // ✅ NUEVO: versión para list/query evaluando el data del propio doc
+    function esAgenteConvData(prov, data) {
+      return isSignedIn()
+        && esVendedorProv(prov)
+        && data != null
+        && data.assignedToEmail != null
+        && string(data.assignedToEmail).toLowerCase() == emailActual();
+    }
+
     // Comodín global
     match /{document=**} {
       allow read: if esSuperAdmin();
@@ -157,47 +166,50 @@ service cloud.firestore {
       allow update, delete: if esVendedorProv(prov) && !resource.data.entregado;
 
       allow update: if esRepartidorProv(prov)
-  && (
-       (resource.data.asignadoA is list && (resource.data.asignadoA.hasAny([emailToken()]) || resource.data.asignadoA.hasAny([emailActual()])))
-    || (resource.data.asignadoA is map  && (resource.data.asignadoA.keys().hasAny([emailToken()]) || resource.data.asignadoA.keys().hasAny([emailActual()])))
-  )
-  && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-       "entregado","metodoPago","comprobante","notasRepartidor",
-       "bloqueadoVendedor","editLockByCourierAt",
-       "pagoMixtoEfectivo","pagoMixtoTransferencia","pagoMixtoCon10",
+        && (
+             (resource.data.asignadoA is list && (resource.data.asignadoA.hasAny([emailToken()]) || resource.data.asignadoA.hasAny([emailActual()])))
+          || (resource.data.asignadoA is map  && (resource.data.asignadoA.keys().hasAny([emailToken()]) || resource.data.asignadoA.keys().hasAny([emailActual()])))
+        )
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+             "entregado","metodoPago","comprobante","notasRepartidor",
+             "bloqueadoVendedor","editLockByCourierAt",
+             "pagoMixtoEfectivo","pagoMixtoTransferencia","pagoMixtoCon10",
 
-       // ✅ DESCUENTO
-       "descuentoModo","descuentoPct","montoConDescuento","descuentoMonto",
-       "descuentoUpdatedAt","descuentoUpdatedBy",
-       "descuentosProductos" // 👈 si implementás el recomendado de abajo
-     ]);
+             // ✅ DESCUENTO
+             "descuentoModo","descuentoPct","montoConDescuento","descuentoMonto",
+             "descuentoUpdatedAt","descuentoUpdatedBy",
+             "descuentosProductos"
+           ]);
 
       allow create: if esAdminProv(prov) || esVendedorProv(prov);
     }
 
-    // ---- CRM: CONVERSACIONES (NUEVO FLUJO BASE)
-match /provincias/{prov}/conversaciones/{convId} {
-  allow get: if esAdminProv(prov) || esAgenteConv(prov, convId);
+    // ---- CRM: CONVERSACIONES (BASE)
+    match /provincias/{prov}/conversaciones/{convId} {
+      // Admin puede leer todo.
+      // Vendedor solo si la conversación está asignada a su email.
+      allow get: if esAdminProv(prov) || esAgenteConv(prov, convId);
 
-  // IMPORTANTE:
-  // Para que el inbox nuevo funcione leyendo desde /conversaciones,
-  // el vendedor necesita poder listar.
-  // Firestore Rules no permite validar estrictamente en rules
-  // que el query venga con where assignedToEmail == emailActual().
-  allow list: if esAdminProv(prov) || esVendedorProv(prov);
+      // IMPORTANTE:
+      // esto cierra el listado para que un vendedor solo pueda consultar
+      // conversaciones cuyo assignedToEmail sea su propio usuario.
+      allow list: if esAdminProv(prov)
+        || esAgenteConvData(prov, resource.data);
 
-  allow update: if (esAdminProv(prov) || esAgenteConv(prov, convId))
-    && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-      "status","updatedAt",
-      "labels",
-      "lastMessageText","lastMessageAt","lastFrom",
-      "nombre","telefonoE164","clienteId"
-    ]);
+      allow update: if (esAdminProv(prov) || esAgenteConv(prov, convId))
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "status","updatedAt","updatedBy",
+          "labels",
+          "lastMessageText","lastMessageAt","lastFrom",
+          "nombre","telefonoE164","clienteId",
+          "internalNote","internalNoteAt",
+          "nextFollowUpAt","nextFollowUpNote","followUpDoneAt"
+        ]);
 
-  allow create, delete: if esAdminProv(prov);
-}
+      allow create, delete: if esAdminProv(prov);
+    }
 
-    // ---- CRM: MENSAJES (LEGACY)
+    // ---- CRM: MENSAJES
     match /provincias/{prov}/conversaciones/{convId}/mensajes/{msgId} {
       allow get, list: if esAdminProv(prov) || esAgenteConv(prov, convId);
 
@@ -209,53 +221,54 @@ match /provincias/{prov}/conversaciones/{convId} {
         && request.resource.data.keys().hasOnly([
           "direction","type","text","from",
           "agentEmail","timestamp","status",
-          "media","audio","location"
+          "media","audio","location",
+          "waPhoneNumberId","clienteWaId","rawType"
         ]);
 
       allow update, delete: if false;
     }
-    
+
     // ---- CRM: USER META POR USUARIO
-// /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail}
-match /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail} {
+    // /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail}
+    match /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail} {
 
-  // Leer: admin o vendedor asignado, pero solo su propio doc userMeta
-  allow get: if esAdminProv(prov)
-    || (esAgenteConv(prov, convId) && userEmail.toLowerCase() == emailActual());
+      // Leer: admin o vendedor asignado, pero solo su propio doc userMeta
+      allow get: if esAdminProv(prov)
+        || (esAgenteConv(prov, convId) && userEmail.toLowerCase() == emailActual());
 
-  // No hace falta listar toda la subcolección
-  allow list: if false;
+      // No hace falta listar toda la subcolección
+      allow list: if false;
 
-  // Crear: admin o vendedor asignado sobre SU propio meta
-  allow create: if (
-      esAdminProv(prov)
-      || (esAgenteConv(prov, convId) && userEmail.toLowerCase() == emailActual())
-    )
-    && request.resource.data.keys().hasOnly([
-      "favorite","favoriteAt",
-      "pinned","pinnedAt",
-      "unread","unreadAt",
-      "archived","archivedAt","archivedBy",
-      "lastReadAt",
-      "updatedAt","updatedBy"
-    ]);
+      // Crear: admin o vendedor asignado sobre SU propio meta
+      allow create: if (
+          esAdminProv(prov)
+          || (esAgenteConv(prov, convId) && userEmail.toLowerCase() == emailActual())
+        )
+        && request.resource.data.keys().hasOnly([
+          "favorite","favoriteAt",
+          "pinned","pinnedAt",
+          "unread","unreadAt",
+          "archived","archivedAt","archivedBy",
+          "lastReadAt",
+          "updatedAt","updatedBy"
+        ]);
 
-  // Update: admin o vendedor asignado sobre SU propio meta
-  allow update: if (
-      esAdminProv(prov)
-      || (esAgenteConv(prov, convId) && userEmail.toLowerCase() == emailActual())
-    )
-    && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-      "favorite","favoriteAt",
-      "pinned","pinnedAt",
-      "unread","unreadAt",
-      "archived","archivedAt","archivedBy",
-      "lastReadAt",
-      "updatedAt","updatedBy"
-    ]);
+      // Update: admin o vendedor asignado sobre SU propio meta
+      allow update: if (
+          esAdminProv(prov)
+          || (esAgenteConv(prov, convId) && userEmail.toLowerCase() == emailActual())
+        )
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "favorite","favoriteAt",
+          "pinned","pinnedAt",
+          "unread","unreadAt",
+          "archived","archivedAt","archivedBy",
+          "lastReadAt",
+          "updatedAt","updatedBy"
+        ]);
 
-  allow delete: if false;
-}
+      allow delete: if false;
+    }
 
     // ---- CRM: CLIENTES (ficha)
     match /provincias/{prov}/crmClientes/{clientId} {
@@ -276,25 +289,25 @@ match /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail} {
     // ==========================================================
     match /provincias/{prov}/crmUserConversations/{userEmail}/conversations/{convId} {
 
-     function _crmConvAllowedKeys() {
-  return [
-    "status","updatedAt",
-    "labels",
-    "lastMessageText","lastMessageAt",
-    "nombre","telefonoE164","clienteId",
+      function _crmConvAllowedKeys() {
+        return [
+          "status","updatedAt",
+          "labels",
+          "lastMessageText","lastMessageAt",
+          "nombre","telefonoE164","clienteId",
 
-    // ⭐📌 meta por usuario
-    "favorite","pinned","favoriteAt","pinnedAt",
+          // ⭐📌 meta por usuario
+          "favorite","pinned","favoriteAt","pinnedAt",
 
-    // 🔔 no leídos
-    "unread","unreadAt","lastReadAt",
+          // 🔔 no leídos
+          "unread","unreadAt","lastReadAt",
 
-    // 🗄️ archivados
-    "archived","archivedAt","archivedBy",
+          // 🗄️ archivados
+          "archived","archivedAt","archivedBy",
 
-    "updatedBy"
-  ];
-}
+          "updatedBy"
+        ];
+      }
 
       // Leer: admin o dueño del path
       allow get, list: if isSignedIn() && (
@@ -345,8 +358,14 @@ match /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail} {
     // ---- CRM: PRESENCIA (ONLINE/OFFLINE)
     // /provincias/{prov}/crmUserPresence/{userEmail}
     match /provincias/{prov}/crmUserPresence/{userEmail} {
-      allow get, list: if esAdminProv(prov) || (isSignedIn() && userEmail.toLowerCase() == emailActual());
-      allow create, update: if isSignedIn() && userEmail.toLowerCase() == emailActual();
+      allow get, list: if isSignedIn() && (
+        esAdminProv(prov) || userEmail.toLowerCase() == emailActual()
+      );
+
+      allow create, update: if isSignedIn() && (
+        esAdminProv(prov) || userEmail.toLowerCase() == emailActual()
+      );
+
       allow delete: if false;
     }
 
@@ -354,7 +373,7 @@ match /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail} {
     // /provincias/{prov}/crmAdminStats/{userEmail}/days/{dayId}
     match /provincias/{prov}/crmAdminStats/{userEmail}/days/{dayId} {
       allow get, list: if esAdminProv(prov);
-      allow create, update, delete: if false; // lo escribe Functions (admin SDK)
+      allow create, update, delete: if false;
     }
 
     // ==========================================================
@@ -423,20 +442,58 @@ match /provincias/{prov}/conversaciones/{convId}/userMeta/{userEmail} {
       );
     }
 
+    // ---- CRM: PLANTILLAS PRIVADAS POR USUARIO
+    // Ruta: /provincias/{prov}/crmUserTemplates/{userEmail}/items/{itemId}
+    match /provincias/{prov}/crmUserTemplates/{userEmail}/items/{itemId} {
+
+      allow get, list: if isSignedIn() && (
+        esAdminProv(prov) || userEmail.toLowerCase() == emailActual()
+      );
+
+      allow create: if isSignedIn() && (
+        esAdminProv(prov) || userEmail.toLowerCase() == emailActual()
+      );
+
+      allow update, delete: if isSignedIn() && (
+        esAdminProv(prov) || userEmail.toLowerCase() == emailActual()
+      );
+    }
+
     // ---- CRM: SETTINGS (roundRobin)
     match /provincias/{prov}/settings/{docId} {
       allow read, write: if esAdminProv(prov);
     }
 
     // Logs / Cierres / Resumen (sin cambios)
-    match /provincias/{prov}/anulacionesCierre/{docId} { allow create, read: if esAdminProv(prov); allow update, delete: if false; }
-    match /provincias/{prov}/gastosReparto/{fechaId}   { allow read, write: if esRepartidorProv(prov) || esAdminProv(prov); }
-    match /provincias/{prov}/cierresPorRepartidor/{docId} { allow read, write: if esRepartidorProv(prov) || esAdminProv(prov); }
-    match /provincias/{prov}/cierresRepartidor/{docId} { allow read, write: if esRepartidorProv(prov) || esAdminProv(prov); }
-    match /provincias/{prov}/cierres/{docId}          { allow write: if esAdminProv(prov); allow read: if esRepartidorProv(prov) || esVendedorProv(prov) || esAdminProv(prov); }
-    match /provincias/{prov}/resumenVentas/{fechaId}  { allow read, write: if esAdminProv(prov); }
+    match /provincias/{prov}/anulacionesCierre/{docId} {
+      allow create, read: if esAdminProv(prov);
+      allow update, delete: if false;
+    }
+
+    match /provincias/{prov}/gastosReparto/{fechaId} {
+      allow read, write: if esRepartidorProv(prov) || esAdminProv(prov);
+    }
+
+    match /provincias/{prov}/cierresPorRepartidor/{docId} {
+      allow read, write: if esRepartidorProv(prov) || esAdminProv(prov);
+    }
+
+    match /provincias/{prov}/cierresRepartidor/{docId} {
+      allow read, write: if esRepartidorProv(prov) || esAdminProv(prov);
+    }
+
+    match /provincias/{prov}/cierres/{docId} {
+      allow write: if esAdminProv(prov);
+      allow read: if esRepartidorProv(prov) || esVendedorProv(prov) || esAdminProv(prov);
+    }
+
+    match /provincias/{prov}/resumenVentas/{fechaId} {
+      allow read, write: if esAdminProv(prov);
+    }
 
     // Deny por defecto
-    match /{document=**} { allow read, write: if false; }
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

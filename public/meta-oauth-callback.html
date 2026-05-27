@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conexión WhatsApp Business</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: system-ui, sans-serif;
+      text-align: center;
+      padding: 1rem;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 1.25rem;
+      padding: 2rem 2.5rem;
+      max-width: 380px;
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    p  { font-size: 0.875rem; color: #94a3b8; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Conexión recibida</h1>
+    <p>Podés cerrar esta ventana.</p>
+  </div>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var code             = params.get("code")              || "";
+      var state            = params.get("state")             || "";
+      var error            = params.get("error")             || "";
+      var errorDescription = params.get("error_description") || "";
+
+      if (window.opener) {
+        try {
+          window.opener.postMessage(
+            {
+              type: "META_OAUTH_CODE",
+              code: code,
+              state: state,
+              error: error,
+              error_description: errorDescription,
+            },
+            window.location.origin
+          );
+        } catch (_) {}
+      }
+
+      try { window.close(); } catch (_) {}
+    })();
+  </script>
+</body>
+</html>

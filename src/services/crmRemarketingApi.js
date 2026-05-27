@@ -49,7 +49,11 @@ async function fetchJson(path, { method = "GET", body } = {}) {
   return data;
 }
 
-export async function fetchMetaTemplates({ provinciaId, senderEmails = [], approvedOnly = true }) {
+export async function fetchMetaTemplates({
+  provinciaId,
+  senderEmails = [],
+  approvedOnly = true,
+}) {
   return fetchJson("/crm/meta/templates", {
     method: "POST",
     body: {
@@ -66,11 +70,18 @@ export async function sendTemplateBatch({
   templateName,
   languageCode,
   templatePreviewText,
+  templateCategory,
   headerVars,
   bodyVars,
   buttonVars,
   rawComponents,
 }) {
+  const normalizedCategory = String(templateCategory || "").trim().toUpperCase();
+
+  if (!normalizedCategory) {
+    throw new Error("La plantilla seleccionada no tiene templateCategory.");
+  }
+
   return fetchJson("/crm/sendTemplateBatch", {
     method: "POST",
     body: {
@@ -79,6 +90,7 @@ export async function sendTemplateBatch({
       templateName,
       languageCode,
       templatePreviewText,
+      templateCategory: normalizedCategory,
       headerVars,
       bodyVars,
       buttonVars,

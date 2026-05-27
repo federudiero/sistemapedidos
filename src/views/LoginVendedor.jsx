@@ -1,6 +1,7 @@
 // src/views/LoginVendedor.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { auth, db } from "../firebase/firebase";
 import {
   signInWithEmailAndPassword,
@@ -19,6 +20,7 @@ export default function LoginVendedor() {
 
   const [emailForm, setEmailForm] = useState("");
   const [passForm, setPassForm] = useState("");
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -100,17 +102,32 @@ export default function LoginVendedor() {
         <div className="space-y-2">
           <input
             className="w-full input input-bordered"
+            type="email"
+            autoComplete="username"
             placeholder="email@dominio.com"
             value={emailForm}
             onChange={(e) => setEmailForm(e.target.value)}
           />
-          <input
-            className="w-full input input-bordered"
-            type="password"
-            placeholder="Contraseña"
-            value={passForm}
-            onChange={(e) => setPassForm(e.target.value)}
-          />
+
+          <div className="relative">
+            <input
+              className="w-full pr-12 input input-bordered"
+              type={mostrarPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="Contraseña"
+              value={passForm}
+              onChange={(e) => setPassForm(e.target.value)}
+            />
+            <button
+              type="button"
+              className="absolute -translate-y-1/2 btn btn-ghost btn-sm right-1 top-1/2"
+              onClick={() => setMostrarPassword((prev) => !prev)}
+              aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              title={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {mostrarPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
           <button
             className="w-full btn btn-primary"
             onClick={loginEmailPass}

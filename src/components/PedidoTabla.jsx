@@ -1,7 +1,7 @@
 // src/components/PedidoTabla.jsx
 import React, { useMemo, useState } from "react";
 import Swal from "sweetalert2";
-import SeguimientoPedidoButton from "./SeguimientoPedidoButton.jsx"; // 👈
+import SeguimientoPedidoButton from "./SeguimientoPedidoButton.jsx";
 
 const normalizar = (s = "") =>
   String(s).toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
@@ -16,15 +16,19 @@ const emailUsername = (v) => {
 /** Helper universal para WhatsApp → E.164 sin "+" (para wa.me/<num>) */
 const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
   if (!raw) return "";
+
   let s = String(raw).trim();
 
-  // Internacional con + o 00
   let intl = "";
-  if (s.startsWith("+")) intl = s.slice(1).replace(/\D/g, "");
-  else if (s.startsWith("00")) s = s.slice(2).replace(/\D/g, "");
+
+  if (s.startsWith("+")) {
+    intl = s.slice(1).replace(/\D/g, "");
+  } else if (s.startsWith("00")) {
+    s = s.slice(2).replace(/\D/g, "");
+  }
+
   if (intl) return intl;
 
-  // Local (sin país)
   let d = s.replace(/\D/g, "");
   if (!d) return "";
 
@@ -32,12 +36,13 @@ const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
     if (d.startsWith("54")) d = d.slice(2);
 
     let hadTrunkZero = false;
+
     if (d.startsWith("0")) {
       hadTrunkZero = true;
       d = d.slice(1);
     }
 
-    // Quitar "15" SOLO si vino con 0 (formato nacional)
+    // Quitar "15" SOLO si vino con 0, formato nacional.
     if (hadTrunkZero) {
       d = d
         .replace(/^(\d{4})15(\d{5,7})$/, "$1$2")
@@ -46,47 +51,106 @@ const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
     }
 
     if (!d.startsWith("9")) d = "9" + d;
+
     return "54" + d;
   }
 
   return "";
 };
 
-// 🔗 Google Maps (solo para UI, NO para copiado)
+// 🔗 Google Maps, solo para UI, no para copiado.
 const mapsLink = (direccion = "", partido = "", coords) => {
   if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
     const { lat, lng } = coords;
     return `https://maps.google.com/?q=${lat},${lng}`;
   }
+
   const q = [direccion, partido].filter(Boolean).join(", ");
   return `https://maps.google.com/?q=${encodeURIComponent(q)}`;
 };
 
-// ✅ Normalizar link de ubicación (WhatsApp / Maps) para que salga bien
+// ✅ Normalizar link de ubicación.
 const normalizeLocationUrl = (raw = "") => {
   let s = String(raw).trim();
+
   if (!s) return "";
+
   if (!/^https?:\/\//i.test(s)) {
     s = "https://" + s;
   }
+
   return s;
 };
 
-// 🔧 Separador robusto para items (string → bullets)
+// 🔧 Separador robusto para items.
 const ITEM_SEP = /\s*(?:\r?\n|,|;|•|-\s+|–\s+|—\s+|\|)\s*/gu;
 
-// ✅ Separar detalle y total sin arrastrar el costo
+// ✅ Limpia caracteres invisibles que rompen formatos.
+const cleanForCopy = (s) =>
+  String(s || "")
+    .replace(/[\u00A0\u202F\u200B-\u200D\uFEFF]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// ✅ Separar detalle y total sin arrastrar el costo.
 const parsePedidoParts = (pedido = "") => {
   const raw = String(pedido || "");
   const [detalle, totalPart = ""] = raw.split(" | TOTAL: $");
   const totalSolo = String(totalPart || "").split(" | COSTO: $")[0].trim();
+
   return {
     detalle: detalle || "",
     total: totalSolo || "",
   };
 };
 
-// 🧩 Renderiza el detalle de productos en la tarjeta (UI)
+// ✅ Parsear fecha desde Timestamp, fechaStr yyyy-MM-dd, string o number.
+const parseFechaPedido = (value) => {
+  if (!value) return null;
+
+  if (value?.toDate) {
+    const d = value.toDate();
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const d = new Date(`${value}T12:00:00`);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === "number") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+};
+
+// ✅ Texto sugerido para el día de entrega en el mensaje al cliente.
+const getEntregaSugerida = (pedido) => {
+  const fecha =
+    parseFechaPedido(pedido?.fechaEntrega) ||
+    parseFechaPedido(pedido?.fechaProgramada) ||
+    parseFechaPedido(pedido?.fechaStr) ||
+    parseFechaPedido(pedido?.fecha);
+
+  if (!fecha) return "";
+
+  const formatted = new Intl.DateTimeFormat("es-AR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(fecha);
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+};
+
+// 🧩 Renderiza el detalle de productos en la tarjeta.
 const DetalleProductos = ({ pedidoStr, productos }) => {
   if (Array.isArray(productos) && productos.length > 0) {
     return (
@@ -95,7 +159,12 @@ const DetalleProductos = ({ pedidoStr, productos }) => {
           const nombre = it?.nombre ?? it?.product ?? "Producto";
           const cant = Number(it?.cantidad ?? it?.qty ?? 1);
           const precio =
-            it?.precio ?? it?.price ?? it?.montoUnitario ?? it?.unitPrice ?? null;
+            it?.precio ??
+            it?.price ??
+            it?.montoUnitario ??
+            it?.unitPrice ??
+            null;
+
           return (
             <li key={idx} className="whitespace-pre-wrap">
               {nombre} x{cant}
@@ -111,10 +180,16 @@ const DetalleProductos = ({ pedidoStr, productos }) => {
     .replace(/\s*\|\s*TOTAL\s*:\s*\$.*$/iu, "")
     .trim();
 
-  let items = detalleLimpio.split(ITEM_SEP).map((s) => s.trim()).filter(Boolean);
+  let items = detalleLimpio
+    .split(ITEM_SEP)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   if (items.length <= 1 && detalleLimpio.includes(" - ")) {
-    items = detalleLimpio.split(" - ").map((s) => s.trim()).filter(Boolean);
+    items = detalleLimpio
+      .split(" - ")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
   if (items.length === 0) {
@@ -132,17 +207,24 @@ const DetalleProductos = ({ pedidoStr, productos }) => {
   );
 };
 
-/** 🔧 Formatear el detalle para el texto copiado (bullets, sin links) */
+/** 🔧 Formatear el detalle para el texto copiado. */
 function formatDetalleForCopy({ pedidoStr, productos }) {
   if (Array.isArray(productos) && productos.length > 0) {
     const lines = productos.map((it) => {
       const nombre = it?.nombre ?? it?.product ?? "Producto";
       const cant = Number(it?.cantidad ?? it?.qty ?? 1);
       const precio =
-        it?.precio ?? it?.price ?? it?.montoUnitario ?? it?.unitPrice ?? null;
+        it?.precio ??
+        it?.price ??
+        it?.montoUnitario ??
+        it?.unitPrice ??
+        null;
+
       const precioTxt = Number.isFinite(Number(precio)) ? ` ($${precio})` : "";
+
       return `• ${nombre} x${cant}${precioTxt}`;
     });
+
     return lines.join("\n");
   }
 
@@ -152,12 +234,20 @@ function formatDetalleForCopy({ pedidoStr, productos }) {
 
   if (!limpio) return "";
 
-  let items = limpio.split(ITEM_SEP).map((s) => s.trim()).filter(Boolean);
+  let items = limpio
+    .split(ITEM_SEP)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   if (items.length <= 1 && limpio.includes(" - ")) {
-    items = limpio.split(" - ").map((s) => s.trim()).filter(Boolean);
+    items = limpio
+      .split(" - ")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
   if (items.length === 0) return limpio;
+
   return items.map((it) => `• ${it}`).join("\n");
 }
 
@@ -167,7 +257,8 @@ const PedidoTabla = ({
   onEliminar,
   bloqueado,
   currentUserEmail,
-  provinciaId, // 👈 nuevo prop
+  provinciaId,
+  stickySearch = false,
 }) => {
   const [q, setQ] = useState("");
 
@@ -176,30 +267,54 @@ const PedidoTabla = ({
       .filter(Boolean)
       .filter((v, i, a) => a.indexOf(v) === i);
 
-  const copiarPedidoCompleto = (pedido) => {
-    const { detalle: detalleSolo, total: totalSolo } = parsePedidoParts(pedido.pedido);
+  const pedirTextoEntrega = async (pedido) => {
+    const sugerido = getEntregaSugerida(pedido);
 
-    // Limpia caracteres invisibles que rompen formatos
-    const clean = (s) =>
-      String(s || "")
-        .replace(/[\u00A0\u202F\u200B-\u200D\uFEFF]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+    const res = await Swal.fire({
+      title: "Día de entrega",
+      text: "Este texto va a salir en el mensaje que copiás para el cliente.",
+      input: "text",
+      inputValue: sugerido,
+      inputPlaceholder: "Ej: sábado, sábado por la mañana, mañana, etc.",
+      showCancelButton: true,
+      confirmButtonText: "Copiar pedido",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#2563eb",
+      inputAttributes: {
+        autocapitalize: "sentences",
+      },
+    });
 
-    // 👉 Resaltar SOLO el TOTAL (monospace)
+    if (!res.isConfirmed) return null;
+
+    return cleanForCopy(res.value);
+  };
+
+  const copiarPedidoCompleto = async (pedido) => {
+    const textoEntrega = await pedirTextoEntrega(pedido);
+
+    if (textoEntrega === null) return;
+
+    const { detalle: detalleSolo, total: totalSolo } = parsePedidoParts(
+      pedido.pedido
+    );
+
+    // 👉 Resaltar SOLO el TOTAL en monospace para WhatsApp.
     const banner = (txt) =>
       ["━━━━━━━━━━━━━━━━", "```" + txt + "```", "━━━━━━━━━━━━━━━━"].join("\n");
 
     let totalLinea = "";
+
     if (typeof totalSolo === "string" && totalSolo.trim()) {
-      const t = clean(totalSolo);
+      const t = cleanForCopy(totalSolo);
       totalLinea = banner(`💵 TOTAL: $${t}`);
     } else if (Number.isFinite(Number(pedido.monto))) {
-      const t = clean(new Intl.NumberFormat("es-AR").format(Number(pedido.monto)));
+      const t = cleanForCopy(
+        new Intl.NumberFormat("es-AR").format(Number(pedido.monto))
+      );
       totalLinea = banner(`💵 TOTAL: $${t}`);
     }
 
-    // Detalle en bullets (texto plano)
     const detalleBullets = formatDetalleForCopy({
       pedidoStr: detalleSolo || pedido.pedido,
       productos: pedido.productos,
@@ -209,38 +324,66 @@ const PedidoTabla = ({
       ? `📝 Pedido:\n${detalleBullets}`
       : `📝 Pedido: ${detalleSolo || pedido.pedido || "—"}`;
 
-    // Teléfonos en texto plano
     const phones = [pedido.telefono, pedido.telefonoAlt]
       .filter(Boolean)
       .filter((v, i, a) => a.indexOf(v) === i);
 
     const waLines = phones
       .map((ph, idx) => {
-        const mostrado = clean(ph);
-        return `${idx === 0 ? "📱 Teléfono principal" : "📱 Teléfono alternativo"}: ${mostrado}`;
+        const mostrado = cleanForCopy(ph);
+
+        return `${
+          idx === 0 ? "📱 Teléfono principal" : "📱 Teléfono alternativo"
+        }: ${mostrado}`;
       })
       .join("\n");
 
-    const direccionPlano = [clean(pedido.direccion), clean(pedido.partido)]
+    const direccionPlano = [
+      cleanForCopy(pedido.direccion),
+      cleanForCopy(pedido.partido),
+    ]
       .filter(Boolean)
       .join(", ");
 
+    const entregaLinea = textoEntrega
+      ? `🚚 Entrega: ${textoEntrega}`
+      : "";
+
     const textoCompleto = `
-👤 Nombre: ${clean(pedido.nombre)}
+👤 Nombre: ${cleanForCopy(pedido.nombre)}
 📌 Dirección: ${direccionPlano || "—"}
-🌐 Entre calles: ${clean(pedido.entreCalles)}
-📍 Ciudad/partido: ${clean(pedido.partido)}
+${entregaLinea}
+🌐 Entre calles: ${cleanForCopy(pedido.entreCalles)}
+📍 Ciudad/partido: ${cleanForCopy(pedido.partido)}
 ${waLines ? `${waLines}\n` : ""}${bloquePedido}
 ${totalLinea ? `\n${totalLinea}\n` : ""}
 ⚠️ Pago con transferencia se le agrega un 10% al total de la compra.
-`.trim();
+`
+      .split("\n")
+      .filter((line, idx, arr) => {
+        const isEmpty = !line.trim();
+        const prevEmpty = idx > 0 && !arr[idx - 1].trim();
+        return !(isEmpty && prevEmpty);
+      })
+      .join("\n")
+      .trim();
 
     navigator.clipboard
       .writeText(textoCompleto)
       .then(() =>
-        Swal.fire("✅ Copiado", "El pedido completo fue copiado al portapapeles.", "success")
+        Swal.fire(
+          "✅ Copiado",
+          "El pedido completo fue copiado al portapapeles.",
+          "success"
+        )
       )
-      .catch(() => Swal.fire("⚠️ Error", "No se pudo copiar al portapapeles.", "error"));
+      .catch(() =>
+        Swal.fire(
+          "⚠️ Error",
+          "No se pudo copiar al portapapeles.",
+          "error"
+        )
+      );
   };
 
   const handleEliminar = async (p) => {
@@ -253,7 +396,9 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
       cancelButtonText: "Cancelar",
       confirmButtonColor: "#ef4444",
     });
+
     if (!res.isConfirmed) return;
+
     try {
       await onEliminar?.(p.id);
     } catch (e) {
@@ -261,10 +406,11 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
     }
   };
 
-  // 🔎 Filtro local
   const filtrados = useMemo(() => {
     if (!q.trim()) return pedidos;
+
     const nq = normalizar(q);
+
     return pedidos.filter((p) => {
       const campos = [
         p?.nombre,
@@ -280,6 +426,7 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
         .filter(Boolean)
         .map(normalizar)
         .join(" | ");
+
       return campos.includes(nq);
     });
   }, [q, pedidos]);
@@ -288,20 +435,29 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
     <div className="container px-4 py-4 mx-auto">
       {bloqueado && pedidos.length > 0 && (
         <div className="p-4 mb-4 text-center text-warning-content bg-warning rounded-xl">
-          🛑 Este día ya fue cerrado. Podés visualizar los pedidos, pero no editarlos ni eliminarlos.
+          🛑 Este día ya fue cerrado. Podés visualizar los pedidos, pero no
+          editarlos ni eliminarlos.
         </div>
       )}
 
-      {/* 🔎 Buscador */}
-      <div className="flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between">
+      <div
+        className={`flex flex-col gap-2 mb-4 md:flex-row md:items-center md:justify-between ${
+          stickySearch
+            ? "sticky top-2 z-20 p-3 border shadow-sm bg-base-100/95 backdrop-blur border-base-300 rounded-xl"
+            : ""
+        }`}
+      >
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por nombre, dirección, teléfono, ciudad, detalle o vendedor…"
           className="w-full input input-bordered"
         />
+
         <div className="text-sm opacity-70 md:ml-4">
-          {q ? `Mostrando ${filtrados.length} de ${pedidos.length}` : `Total: ${pedidos.length}`}
+          {q
+            ? `Mostrando ${filtrados.length} de ${pedidos.length}`
+            : `Total: ${pedidos.length}`}
         </div>
       </div>
 
@@ -318,8 +474,8 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
 
             const { detalle, total } = parsePedidoParts(p.pedido);
 
-            // 🚚 Repartidor asignado (si existe)
             let repartidorAsignado = "";
+
             if (Array.isArray(p.asignadoA) && p.asignadoA.length > 0) {
               repartidorAsignado = emailUsername(p.asignadoA[0]);
             } else if (p.asignadoA) {
@@ -334,11 +490,11 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                 className="border-l-4 shadow-lg border-primary card bg-base-200"
               >
                 <div className="card-body">
-                  {/* HEADER: título + botones */}
                   <div className="flex flex-col gap-2 mb-2 md:flex-row md:items-center md:justify-between">
-                    <h2 className="font-bold text-primary">📦 Pedido #{i + 1}</h2>
+                    <h2 className="font-bold text-primary">
+                      📦 Pedido #{i + 1}
+                    </h2>
 
-                    {/* Botones alineados */}
                     <div className="flex flex-col w-full gap-2 md:w-auto md:flex-row md:items-center md:justify-end">
                       <button
                         className="w-full btn btn-sm btn-ghost md:w-auto"
@@ -352,7 +508,7 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                         <SeguimientoPedidoButton
                           pedido={p}
                           numeroPedido={i + 1}
-                          provinciaId={provinciaId} // 👈 se pasa la provincia
+                          provinciaId={provinciaId}
                         />
                       </div>
                     </div>
@@ -368,7 +524,11 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                       {p.direccion ? (
                         <a
                           className="link link-primary"
-                          href={mapsLink(p.direccion, p.partido, p.coordenadas)}
+                          href={mapsLink(
+                            p.direccion,
+                            p.partido,
+                            p.coordenadas
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                           title="Abrir en Google Maps"
@@ -381,7 +541,8 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                     </li>
 
                     <li>
-                      <strong>🌐 Observación (Entre calles):</strong> {p.entreCalles}
+                      <strong>🌐 Observación (Entre calles):</strong>{" "}
+                      {p.entreCalles}
                     </li>
 
                     <li>
@@ -405,12 +566,16 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
 
                     <li>
                       <strong>📱 Teléfonos:</strong>
+
                       <div className="flex flex-col gap-1">
                         {getPhones(p).length === 0 ? (
                           <span className="opacity-70">—</span>
                         ) : (
                           getPhones(p).map((ph, idx) => {
-                            const e164 = phoneToWaE164(ph, { defaultCountry: "AR" });
+                            const e164 = phoneToWaE164(ph, {
+                              defaultCountry: "AR",
+                            });
+
                             return e164 ? (
                               <a
                                 key={idx}
@@ -419,11 +584,17 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                {idx === 0 ? "Principal: " : "Alternativo: "} {ph}
+                                {idx === 0
+                                  ? "Principal: "
+                                  : "Alternativo: "}
+                                {ph}
                               </a>
                             ) : (
                               <span key={idx} className="opacity-70">
-                                {idx === 0 ? "Principal: " : "Alternativo: "} {ph}
+                                {idx === 0
+                                  ? "Principal: "
+                                  : "Alternativo: "}
+                                {ph}
                               </span>
                             );
                           })
@@ -433,7 +604,12 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
 
                     <li>
                       <strong>📝 Detalle:</strong>
-                      <DetalleProductos pedidoStr={detalle || p.pedido} productos={p.productos} />
+
+                      <DetalleProductos
+                        pedidoStr={detalle || p.pedido}
+                        productos={p.productos}
+                      />
+
                       {total && (
                         <p className="mt-2 text-lg font-extrabold tracking-tight text-success md:text-xl">
                           TOTAL: ${total}
@@ -444,7 +620,9 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                     <li>
                       <strong>👤 Vendedor:</strong>{" "}
                       <span title={p.vendedorEmail || ""}>
-                        {emailUsername(p.vendedorEmail || p.vendedor || p.seller || "—")}
+                        {emailUsername(
+                          p.vendedorEmail || p.vendedor || p.seller || "—"
+                        )}
                       </span>
                     </li>
 
@@ -461,7 +639,8 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
 
                     <li>
                       <strong>
-                        pago con transferencia se le agrega un 10% al total de la compra
+                        pago con transferencia se le agrega un 10% al total de
+                        la compra
                       </strong>
                     </li>
                   </ul>
@@ -475,10 +654,17 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
 
                 {!(bloqueado || p.entregado || !isOwner) && (
                   <div className="justify-end px-4 pb-4 card-actions">
-                    <button className="btn btn-sm btn-warning" onClick={() => onEditar?.(p)}>
+                    <button
+                      className="btn btn-sm btn-warning"
+                      onClick={() => onEditar?.(p)}
+                    >
                       ✏️ Editar
                     </button>
-                    <button className="btn btn-sm btn-error" onClick={() => handleEliminar(p)}>
+
+                    <button
+                      className="btn btn-sm btn-error"
+                      onClick={() => handleEliminar(p)}
+                    >
                       🗑️ Eliminar
                     </button>
                   </div>

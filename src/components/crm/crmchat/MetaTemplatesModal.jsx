@@ -161,17 +161,18 @@ export default function MetaTemplatesModal({
       setSending(true);
 
       const resp = await sendTemplateBatch({
-        provinciaId,
-        convIds: [String(convId)],
-        templateName: selectedTemplate.name,
-        languageCode: selectedTemplate.language,
-        templatePreviewText:
-          selectedTemplate.previewText || `[Plantilla] ${selectedTemplate.name}`,
-        headerVars,
-        bodyVars,
-        buttonVars: buttonVarsPayload,
-        rawComponents,
-      });
+  provinciaId,
+  convIds: [String(convId)],
+  templateName: selectedTemplate.name,
+  languageCode: selectedTemplate.language,
+  templatePreviewText:
+    selectedTemplate.previewText || `[Plantilla] ${selectedTemplate.name}`,
+  templateCategory: selectedTemplate.category || null,
+  headerVars,
+  bodyVars,
+  buttonVars: buttonVarsPayload,
+  rawComponents,
+});
 
       const first = Array.isArray(resp?.results) ? resp.results[0] : null;
       if (first?.ok) {

@@ -4,6 +4,8 @@ import VendedorView from "./views/VendedorView";
 import VendedorCRM from "./views/VendedorCRM";
 import AdminLogin from "./views/AdminLogin";
 import AdminPedidos from "./views/AdminPedidos";
+import AdminDashboard from "./views/AdminDashboard";
+import AdminBuscadorGlobal from "./views/AdminBuscadorGlobal";
 import LoginVendedor from "./views/LoginVendedor";
 import Home from "./views/Home";
 import LoginRepartidor from "./views/LoginRepartidor";
@@ -17,57 +19,211 @@ import LiquidacionesComisiones from "./components/LiquidacionesComisiones";
 import RepartidorView from "./views/RepartidorView";
 import AdminDepositoPedidos from "./views/AdminDepositoPedidos";
 import HistorialMovimientosStock from "./components/HistorialMovimientosStock";
+import ControlRemitosStock from "./components/ControlRemitosStock";
 import SeleccionarProvincia from "./views/SeleccionarProvincia";
 import AdminCRMPanel from "./views/AdminCRMPanel";
-import AdminCRMRemarketing from "./views/AdminCRMRemarketing";
 import AdminControlCierres from "./views/AdminControlCierres";
 import AuditoriaProductos from "./views/AuditoriaProductos";
 import AdminPreCargaProductos from "./views/AdminPreCargaProductos";
-import VendedorCRMRemarketing from "./views/VendedorCRMRemarketing";
+import { AdminPermissionsProvider } from "./context/AdminPermissionsContext";
+import { ADMIN_SECTIONS } from "./constants/adminSections.js";
+import RequireAdminRoute from "./components/auth/RequireAdminRoute.jsx";
+import RequireAdminSection from "./components/auth/RequireAdminSection.jsx";
+import ThemeToggle from "./components/ThemeToggle.jsx";
 
 function App() {
   return (
-    <div className="min-h-screen">
-      <Routes>
-        <Route path="/" element={<SeleccionarProvincia />} />
-        <Route path="/home" element={<Home />} />
+    <AdminPermissionsProvider>
+      <>
+        <ThemeToggle />
 
-        <Route path="/login-vendedor" element={<LoginVendedor />} />
-        <Route path="/vendedor" element={<VendedorView />} />
-        <Route path="/vendedor/crm" element={<VendedorCRM />} />
-        <Route path="/vendedor/crm/:convId" element={<VendedorCRM />} />
+        <div className="min-h-screen">
+          <Routes>
+            <Route path="/" element={<SeleccionarProvincia />} />
+            <Route path="/seleccionar-provincia" element={<SeleccionarProvincia />} />
+            <Route path="/home" element={<Home />} />
 
-        <Route path="/admin" element={<AdminLogin />} />
-        <Route path="/admin/deposito" element={<AdminDepositoPedidos />} />
-        <Route path="/admin/pedidos" element={<AdminPedidos />} />
-        <Route path="/admin/dividir-pedidos" element={<AdminDivisionPedidos />} />
-        <Route path="/admin/hoja-de-ruta" element={<AdminHojaRuta />} />
-        <Route path="/admin/stock" element={<AdminStock />} />
-        <Route path="/admin/cierre-caja" element={<CierreCaja />} />
-        <Route path="/admin/AdminCRMPanel" element={<AdminCRMPanel />} />
-        <Route path="/admin/crm-remarketing" element={<AdminCRMRemarketing />} />
-        <Route path="/admin/panel-stock" element={<PanelStock />} />
-        <Route path="/admin/AdminControlCierres" element={<AdminControlCierres />} />
-        <Route path="/admin/AuditoriaProductos" element={<AuditoriaProductos />} />
-        <Route path="/admin/AdminPreCargaProductos" element={<AdminPreCargaProductos />} />
-        <Route
-          path="/admin/resumen-financiero"
-          element={<ResumenFinancieroMensual />}
-        />
-        <Route
-          path="/admin/liquidaciones-comisiones"
-          element={<LiquidacionesComisiones />}
-        />
-        <Route path="/vendedor/crm-remarketing" element={<VendedorCRMRemarketing />} />
-        <Route path="/admin/historial-stock" element={<HistorialMovimientosStock />} />
+            <Route path="/login-vendedor" element={<LoginVendedor />} />
+            <Route path="/vendedor" element={<VendedorView />} />
+            <Route path="/vendedor/crm" element={<VendedorCRM />} />
+            <Route path="/vendedor/crm/:convId" element={<VendedorCRM />} />
 
-        <Route path="/login-repartidor" element={<LoginRepartidor />} />
-        <Route path="/repartidor" element={<RepartidorView />} />
+            {/* Login administrador */}
+            <Route path="/admin" element={<AdminLogin />} />
 
-        {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+            {/* Dashboard administrador */}
+            <Route
+              path="/admin/dashboard"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.DASHBOARD_ADMIN}>
+                  <AdminDashboard />
+                </RequireAdminSection>
+              }
+            />
+
+            {/* Buscador global */}
+            <Route
+              path="/admin/buscar"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.BUSCADOR_GLOBAL}>
+                  <AdminBuscadorGlobal />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/deposito"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.DEPOSITO}>
+                  <AdminDepositoPedidos />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/pedidos"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.PEDIDOS}>
+                  <AdminPedidos />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/dividir-pedidos"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.DIVIDIR_PEDIDOS}>
+                  <AdminDivisionPedidos />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/hoja-de-ruta"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.HOJA_RUTA}>
+                  <AdminHojaRuta />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/stock"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.STOCK}>
+                  <AdminStock />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/cierre-caja"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.CIERRE_CAJA}>
+                  <CierreCaja />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/AdminCRMPanel"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.CRM_PANEL}>
+                  <AdminCRMPanel />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/panel-stock"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.PANEL_STOCK}>
+                  <PanelStock />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/AdminControlCierres"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.CONTROL_CIERRES}>
+                  <AdminControlCierres />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/AuditoriaProductos"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.AUDITORIA_PRODUCTOS}>
+                  <AuditoriaProductos />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/AdminPreCargaProductos"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.PRE_CARGA_PRODUCTOS}>
+                  <AdminPreCargaProductos />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/resumen-financiero"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.RESUMEN_FINANCIERO}>
+                  <ResumenFinancieroMensual />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/liquidaciones-comisiones"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.LIQUIDACIONES}>
+                  <LiquidacionesComisiones />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/historial-stock"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.HISTORIAL_STOCK}>
+                  <HistorialMovimientosStock />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/control-remitos"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.CONTROL_REMITOS}>
+                  <ControlRemitosStock />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route path="/login-repartidor" element={<LoginRepartidor />} />
+            <Route path="/repartidor" element={<RepartidorView />} />
+
+            {/* Fallback admin: ahora vuelve al dashboard, no a pedidos */}
+            <Route
+              path="/admin/*"
+              element={
+                <RequireAdminRoute>
+                  <Navigate to="/admin/dashboard" replace />
+                </RequireAdminRoute>
+              }
+            />
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </>
+    </AdminPermissionsProvider>
   );
 }
 

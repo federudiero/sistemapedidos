@@ -23,6 +23,16 @@ const {
 const {
   getConversationSendPolicy,
 } = require("./send-policy.service");
+const {
+  setConversationOptIn,
+} = require("./consent.service");
+const {
+  getWhatsAppConnectionStatus,
+  startWhatsAppConnection,
+  completeEmbeddedWhatsAppConnection,
+  completeManualWhatsAppConnection,
+  disconnectWhatsAppConnection,
+} = require("./connection.service");
 
 function getHealth() {
   return {
@@ -31,6 +41,7 @@ function getHealth() {
     region: "us-central1",
     apiVersion: META_WA_API_VERSION,
     defaultProv: DEFAULT_PROV,
+    connectionRoutesVersion: "fase2-meta-embedded-signup",
   };
 }
 
@@ -83,6 +94,7 @@ async function handleWebhook(req) {
   };
 }
 
+
 module.exports = {
   getHealth,
   verifyWebhook,
@@ -95,4 +107,10 @@ module.exports = {
   sendText,
   sendMedia,
   sendLocation,
+  setConversationOptIn,
+  getWhatsAppConnectionStatus,
+  startWhatsAppConnection,
+  completeEmbeddedWhatsAppConnection,
+  completeManualWhatsAppConnection,
+  disconnectWhatsAppConnection,
 };

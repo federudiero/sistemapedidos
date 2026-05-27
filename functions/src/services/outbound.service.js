@@ -17,6 +17,10 @@ const {
   ensureOutboundAudioReadyForWhatsApp,
 } = require("../utils/outbound-audio");
 const {
+  normalizeVideoMimeType,
+  ensureOutboundVideoReadyForWhatsApp,
+} = require("../utils/outbound-video");
+const {
   addMessage,
   mergeConversation,
 } = require("../repositories/conversation.repository");
@@ -273,6 +277,7 @@ async function sendMedia(req) {
   let generatedBucket = null;
   let generatedSize = null;
   let preparedAudioBuffer = null;
+  let preparedVideoBuffer = null;
   let uploadedMetaMediaId = null;
 
   if (mediaType === "audio") {
@@ -306,6 +311,37 @@ async function sendMedia(req) {
     uploadedMetaMediaId = uploadedMetaAudio.mediaId;
   }
 
+  if (mediaType === "video") {
+    const preparedVideo = await ensureOutboundVideoReadyForWhatsApp({
+      prov,
+      convId,
+      mediaUrl: finalMediaUrl,
+      mimeType: finalMimeType,
+      filename: finalFilename,
+    });
+
+    finalMediaUrl = preparedVideo.mediaUrl;
+    finalMimeType = normalizeVideoMimeType(
+      preparedVideo.mimeType || finalMimeType
+    );
+    finalFilename = preparedVideo.filename || finalFilename || "video.mp4";
+    generatedStoragePath = preparedVideo.storagePath || null;
+    generatedBucket = preparedVideo.bucket || null;
+    generatedSize = preparedVideo.size || null;
+    preparedVideoBuffer = preparedVideo.buffer || null;
+
+    const uploadedMetaVideo = await uploadMediaToMeta({
+      phoneNumberId,
+      token,
+      buffer: preparedVideoBuffer,
+      mimeType: finalMimeType || "video/mp4",
+      filename: preparedVideo.filename || finalFilename || "video.mp4",
+      timeout: 90000,
+    });
+
+    uploadedMetaMediaId = uploadedMetaVideo.mediaId;
+  }
+
   const effectiveIsVoiceNote =
     mediaType === "audio" &&
     normalizeAudioMimeType(finalMimeType) === "audio/ogg"
@@ -324,6 +360,14 @@ async function sendMedia(req) {
   if (mediaType === "audio") {
     if (!uploadedMetaMediaId) {
       throw new Error("No se pudo subir el audio a Meta antes del envío.");
+    }
+
+    mediaObject = {
+      id: uploadedMetaMediaId,
+    };
+  } else if (mediaType === "video") {
+    if (!uploadedMetaMediaId) {
+      throw new Error("No se pudo subir el video a Meta antes del envío.");
     }
 
     mediaObject = {
@@ -368,6 +412,9 @@ async function sendMedia(req) {
     scopedPhoneNumberId: convData?.scopedPhoneNumberId || null,
     convertedAudio:
       mediaType === "audio" &&
+      finalMediaUrl !== String(mediaUrl || "").trim(),
+    convertedVideo:
+      mediaType === "video" &&
       finalMediaUrl !== String(mediaUrl || "").trim(),
     uploadedMetaMediaId: uploadedMetaMediaId || null,
     effectiveIsVoiceNote,
@@ -441,7 +488,12 @@ async function sendMedia(req) {
     msgPayload.video = {
       url: finalMediaUrl,
       mimeType: finalMimeType || null,
+      filename: cleanFilename || null,
       error: null,
+      storagePath: generatedStoragePath,
+      bucket: generatedBucket,
+      size: generatedSize,
+      metaMediaId: uploadedMetaMediaId,
     };
   }
 

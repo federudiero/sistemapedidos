@@ -74,6 +74,94 @@ export default function CargaDelDiaRepartidor({
     return false;
   };
 
+  const esItemDevolucion = (item) => {
+    if (!item) return false;
+    if (item.esDevolucion === true) return true;
+
+    const op = String(
+      item.operacion ?? item.tipoLinea ?? item.tipoMovimiento ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (op.startsWith("devol")) return true;
+
+    const nombreCheck = norm(item.nombreBase || item.nombre);
+    if (nombreCheck.startsWith("devolucion de ")) return true;
+
+    const precio = Number(item.precio ?? item.precioUnitario);
+    if (Number.isFinite(precio) && precio < 0) return true;
+
+    return false;
+  };
+
+  const getItemProductoId = (item) => {
+    let id = item?.productoId ?? item?.id ?? item?.idProducto ?? null;
+    if (!id && item?.productoRefPath) {
+      const segs = String(item.productoRefPath).split("/").filter(Boolean);
+      id = segs[segs.length - 1] || null;
+    }
+    return id ? String(id) : null;
+  };
+
+  const getComponentesFromProducto = (prod) => {
+    if (!prod) return [];
+    const cand =
+      prod.componentes ??
+      prod.comboComponentes ??
+      prod.componentesCombo ??
+      prod.items ??
+      prod.productos ??
+      prod.combo ??
+      prod.componentesItems ??
+      null;
+
+    if (Array.isArray(cand)) return cand;
+
+    if (cand && typeof cand === "object") {
+      return Object.entries(cand).map(([k, v]) => ({
+        productoId: k,
+        cantidad: v,
+      }));
+    }
+
+    return [];
+  };
+
+  const getCompId = (comp) => {
+    if (!comp) return null;
+    if (typeof comp === "string") return comp;
+
+    return String(
+      comp.productoId ??
+      comp.idProducto ??
+      comp.id ??
+      comp.productId ??
+      comp.refId ??
+      comp.ref ??
+      comp.producto ??
+      ""
+    ).trim() || null;
+  };
+
+  const getCompQty = (comp) => {
+    if (!comp) return 0;
+    if (typeof comp === "number") return Number.isFinite(comp) ? comp : 0;
+    if (typeof comp === "string") return 1;
+
+    const raw =
+      comp.cantidad ??
+      comp.qty ??
+      comp.cant ??
+      comp.cantidadPorCombo ??
+      comp.unidades ??
+      comp.cantidadCombo ??
+      1;
+
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   // Catálogo en memoria
   const [catalogoById, setCatalogoById] = useState(new Map());
   const [catalogoByNombreExacto, setCatalogoByNombreExacto] = useState(new Map());
@@ -209,12 +297,11 @@ export default function CargaDelDiaRepartidor({
             const qty = Number(it?.cantidad || 0);
             if (!qty) continue;
 
-            // Resolver ID del item
-            let id = it?.productoId || it?.id || null;
-            if (!id && it?.productoRefPath) {
-              const segs = String(it.productoRefPath).split("/").filter(Boolean);
-              id = segs[segs.length - 1] || null;
+            if (esItemDevolucion(it)) {
+              continue;
             }
+
+            const id = getItemProductoId(it);
 
             let prod = null;
             if (id) {
@@ -225,7 +312,7 @@ export default function CargaDelDiaRepartidor({
               }
             } else {
               // fallback por nombre exacto si hay catálogo
-              const nombreExacto = String(it?.nombre || "").trim();
+              const nombreExacto = String(it?.nombreBase || it?.nombre || "").trim();
               if (!nombreExacto) {
                 obs.push(`Pedido ${p.id}: item sin ID ni nombre (ignorado).`);
                 continue;
@@ -244,18 +331,20 @@ export default function CargaDelDiaRepartidor({
             }
 
             // Desglose de combos
-            const esCombo = !!prod.esCombo && Array.isArray(prod.componentes);
+            const componentes = getComponentesFromProducto(prod);
+            const esCombo = componentes.length > 0;
             if (desglosarCombos && esCombo) {
-              for (const comp of prod.componentes) {
-                const compCant = qty * Number(comp?.cantidad || 0);
+              for (const comp of componentes) {
+                const compId = getCompId(comp);
+                const compCant = qty * Number(getCompQty(comp) || 0);
                 if (!compCant) continue;
-                if (!comp?.id) {
+                if (!compId) {
                   obs.push(`Pedido ${p.id}: combo ${prod.id} con componente sin id (ignorado).`);
                   continue;
                 }
-                const compProd = catalogoById.get(comp.id) || (await fetchProductoByIdOnce(comp.id));
+                const compProd = catalogoById.get(compId) || (await fetchProductoByIdOnce(compId));
                 if (!compProd) {
-                  obs.push(`Pedido ${p.id}: combo ${prod.id} componente ${comp.id} no encontrado (ignorado).`);
+                  obs.push(`Pedido ${p.id}: combo ${prod.id} componente ${compId} no encontrado (ignorado).`);
                   continue;
                 }
                 if (esEnvioOServicio(compProd)) {

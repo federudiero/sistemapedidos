@@ -2,14 +2,48 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SIMPLE_EMOJIS, TAG_COLORS } from "./crmChatConstants";
 import { formatTime, isOutgoing } from "./crmChatUtils";
 
+const ACCEPTED_ATTACH_VIDEO_MIMES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/3gpp",
+  "video/3gpp2",
+]);
+
+function normalizeAttachMimeType(mimeType) {
+  return String(mimeType || "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+}
+
+function extensionFromAttachFilename(filename = "") {
+  const clean = String(filename || "").trim().toLowerCase();
+  const idx = clean.lastIndexOf(".");
+  return idx >= 0 ? clean.slice(idx + 1) : "";
+}
+
+function isAcceptedAttachFile(file) {
+  const mime = normalizeAttachMimeType(file?.type);
+  if (mime.startsWith("image/")) return true;
+  if (ACCEPTED_ATTACH_VIDEO_MIMES.has(mime)) return true;
+
+  if (!mime) {
+    const ext = extensionFromAttachFilename(file?.name);
+    return ["mp4", "mov", "webm", "3gp", "3g2"].includes(ext);
+  }
+
+  return false;
+}
+
 export function MessageTicks({ status }) {
   const s = String(status || "").toLowerCase();
   if (!s) return null;
-  if (s === "read") return <span className="text-[#53bdeb]">✓✓</span>;
+  if (s === "read") return <span className="text-[var(--crm-info-accent)]">✓✓</span>;
   if (s === "delivered") return <span className="opacity-80">✓✓</span>;
   if (s === "sent") return <span className="opacity-80">✓</span>;
   if (s === "failed" || s === "error") {
-    return <span className="font-semibold text-[#ff7676]">!</span>;
+    return <span className="font-semibold text-[var(--crm-danger-text)]">!</span>;
   }
   if (s === "sending" || s === "pending") {
     return <span className="opacity-60">🕓</span>;
@@ -193,7 +227,7 @@ export function AudioRecorderButton({
   if (busy) {
     return (
       <button
-        className={`inline-flex h-12 items-center gap-2 rounded-full bg-[#00a884] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] ${sharedClass}`}
+        className={`inline-flex h-12 items-center gap-2 rounded-full bg-[var(--crm-accent)] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] ${sharedClass}`}
         type="button"
         disabled
       >
@@ -207,7 +241,7 @@ export function AudioRecorderButton({
     return (
       <div className="flex items-center gap-2">
         <button
-          className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#6d2323] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition hover:brightness-105"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--crm-danger-action)] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition hover:brightness-105"
           onClick={cancel}
           title="Cancelar grabación"
           type="button"
@@ -216,7 +250,7 @@ export function AudioRecorderButton({
         </button>
 
         <button
-          className="inline-flex h-12 items-center gap-2 rounded-full bg-[#00a884] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition hover:brightness-105"
+          className="inline-flex h-12 items-center gap-2 rounded-full bg-[var(--crm-accent)] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition hover:brightness-105"
           onClick={stopAndSend}
           title="Detener y enviar audio"
           type="button"
@@ -232,7 +266,7 @@ export function AudioRecorderButton({
   if (compact) {
     return (
       <button
-        className={`inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#00a884] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition ${sharedClass}`}
+        className={`inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--crm-accent)] text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition ${sharedClass}`}
         onClick={start}
         title="Grabar audio"
         type="button"
@@ -245,7 +279,7 @@ export function AudioRecorderButton({
 
   return (
     <button
-      className={`inline-flex h-12 items-center gap-2 rounded-full bg-[#00a884] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition ${sharedClass}`}
+      className={`inline-flex h-12 items-center gap-2 rounded-full bg-[var(--crm-accent)] px-4 text-sm font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,.25)] transition ${sharedClass}`}
       onClick={start}
       title="Grabar audio"
       type="button"
@@ -689,11 +723,11 @@ function AudioWavePlayer({ src, outgoing }) {
       "inline-flex h-7 min-w-[42px] items-center justify-center rounded-full px-2 text-[11px] font-medium transition",
       speed === value
         ? outgoing
-          ? "bg-[#dcf8c6] text-[#0b141a]"
-          : "bg-[#53bdeb] text-[#0b141a]"
+          ? "bg-[var(--crm-bubble-out)] text-[var(--crm-bubble-out-text)]"
+          : "bg-[var(--crm-info-accent)] text-[var(--crm-bubble-out-text)]"
         : outgoing
-        ? "bg-white/8 text-white/85 hover:bg-white/12"
-        : "bg-white/5 text-[#c7d1d6] hover:bg-white/10",
+        ? "bg-black/10 text-[var(--crm-bubble-out-soft-text)] hover:bg-black/15"
+        : "bg-black/5 text-[var(--crm-soft)] hover:bg-black/10",
     ].join(" ");
 
   return (
@@ -719,7 +753,7 @@ function AudioWavePlayer({ src, outgoing }) {
 
           <div
             className={`mt-1 flex items-center justify-between gap-2 text-[11px] ${
-              outgoing ? "text-[#d9fdd3]" : "text-[#9fb0b8]"
+              outgoing ? "text-[var(--crm-bubble-out-soft-text)]" : "text-[var(--crm-soft)]"
             }`}
           >
             <span className="tabular-nums">{formatAudioClock(current || 0)}</span>
@@ -799,7 +833,7 @@ function MediaCaption({ text }) {
 function MediaErrorNote({ error }) {
   if (!error) return null;
   return (
-    <div className="rounded-xl border border-[#ff7676]/30 bg-[#ff7676]/10 px-2 py-1 text-xs text-[#ffd6d6]">
+    <div className="rounded-xl border border-[var(--crm-danger-border)]/30 bg-[var(--crm-danger-soft)] px-2 py-1 text-xs text-[var(--crm-danger-text)]">
       {error}
     </div>
   );
@@ -874,8 +908,8 @@ function ReplySnippet({ replyMeta, outgoing = false }) {
     <div
       className={`mb-1.5 rounded-lg border-l-[3px] px-2 py-1 text-[11px] ${
         outgoing
-          ? "border-[#86e3c3] bg-black/15 text-[#d9fdd3]"
-          : "border-[#53bdeb] bg-black/10 text-[#d7e6ee]"
+          ? "border-[var(--crm-accent)]/40 bg-black/15 text-[var(--crm-bubble-out-soft-text)]"
+          : "border-[var(--crm-info-accent)] bg-black/10 text-[var(--crm-text)]"
       }`}
     >
       <div className="font-semibold leading-none">
@@ -937,9 +971,9 @@ export function MessageBubble({ m, onReply, onPin, isPinned = false }) {
     "w-fit max-w-[88%] sm:max-w-[72%] xl:max-w-[430px] rounded-2xl px-2.5 py-2 shadow-[0_1px_1px_rgba(0,0,0,0.18)]";
 
   const bubbleOut =
-    "bg-[#005c4b] text-[#e9edef] rounded-br-md border border-[#0b4f41]";
+    "bg-[var(--crm-bubble-out)] text-[var(--crm-bubble-out-text)] rounded-br-md border border-[var(--crm-bubble-out-border)]";
   const bubbleIn =
-    "bg-[#202c33] text-[#e9edef] rounded-bl-md border border-[#24343d]";
+    "bg-[var(--crm-bubble-in)] text-[var(--crm-bubble-in-text)] rounded-bl-md border border-[var(--crm-bubble-in-border)]";
 
   const bubbleBase =
     kind === "audio"
@@ -1030,7 +1064,7 @@ export function MessageBubble({ m, onReply, onPin, isPinned = false }) {
       const link = `https://www.google.com/maps?q=${location.lat},${location.lng}`;
       return (
         <div className="space-y-2">
-          <div className="p-3 border rounded-xl border-white/10 bg-black/10">
+          <div className="p-3 border rounded-xl border-[var(--crm-border-soft)] bg-black/10">
             <div className="font-semibold">📍 Ubicación</div>
             {location.name ? (
               <div className="mt-1 text-sm font-medium">{location.name}</div>
@@ -1114,14 +1148,14 @@ export function MessageBubble({ m, onReply, onPin, isPinned = false }) {
 
               {menuOpen ? (
                 <div
-                  className={`absolute top-7 min-w-[150px] rounded-xl border border-white/10 bg-[#1f2c33] p-1 shadow-2xl ${
+                  className={`absolute top-7 min-w-[150px] rounded-xl border border-[var(--crm-border-soft)] bg-[var(--crm-menu)] p-1 shadow-2xl ${
                     out ? "left-0" : "right-0"
                   }`}
                 >
                   {canReply ? (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#e9edef] transition hover:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--crm-text)] transition hover:bg-[var(--crm-hover)]"
                       onClick={() => {
                         setMenuOpen(false);
                         onReply?.({
@@ -1140,7 +1174,7 @@ export function MessageBubble({ m, onReply, onPin, isPinned = false }) {
                   {canPin ? (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#e9edef] transition hover:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--crm-text)] transition hover:bg-[var(--crm-hover)]"
                       onClick={() => {
                         setMenuOpen(false);
                         onPin?.({
@@ -1164,7 +1198,7 @@ export function MessageBubble({ m, onReply, onPin, isPinned = false }) {
         </div>
 
         {isPinned ? (
-          <div className="mb-1 flex items-center gap-1 pr-6 text-[10px] font-medium text-[#86e3c3]">
+          <div className="mb-1 flex items-center gap-1 pr-6 text-[10px] font-medium text-[var(--crm-accent)]">
             <span>📌</span>
             <span>Fijado</span>
           </div>
@@ -1175,7 +1209,7 @@ export function MessageBubble({ m, onReply, onPin, isPinned = false }) {
 
         <div
           className={`mt-1.5 flex items-center justify-end gap-1 text-[11px] ${
-            out ? "text-[#d9fdd3]/75" : "text-[#9fb0b8]"
+            out ? "text-[var(--crm-bubble-out-soft-text)]/75" : "text-[var(--crm-soft)]"
           }`}
         >
           <span>{formatTime(m.timestamp)}</span>
@@ -1277,12 +1311,17 @@ export function AttachModal({
   }, [open]);
 
   const pendingItems = useMemo(() => {
-    return pendingFiles.map((file, idx) => ({
-      file,
-      url: previewUrls[idx] || "",
-      isImage: String(file?.type || "").startsWith("image/"),
-      isVideo: String(file?.type || "").startsWith("video/"),
-    }));
+    return pendingFiles.map((file, idx) => {
+      const mime = normalizeAttachMimeType(file?.type);
+      const isImage = mime.startsWith("image/");
+
+      return {
+        file,
+        url: previewUrls[idx] || "",
+        isImage,
+        isVideo: !isImage && isAcceptedAttachFile(file),
+      };
+    });
   }, [pendingFiles, previewUrls]);
 
   const closeAndReset = () => {
@@ -1316,12 +1355,11 @@ export function AttachModal({
               type="file"
               className="hidden"
               multiple
-              accept="image/*,video/*"
+              accept="image/*,video/mp4,video/webm,video/quicktime,video/3gpp,video/3gpp2"
               disabled={sending}
               onChange={(e) => {
                 const files = Array.from(e.target.files || []).filter((file) => {
-                  const type = String(file?.type || "");
-                  return type.startsWith("image/") || type.startsWith("video/");
+                  return isAcceptedAttachFile(file);
                 });
                 e.target.value = "";
                 setPendingFiles(files);
@@ -1412,7 +1450,7 @@ export function AttachModal({
             ? busyLabel || "Enviando…"
             : pendingItems.length
             ? "Elegiste archivos, ahora tocá Enviar para mandarlos."
-            : "Primero elegís el archivo y después lo confirmás con el botón Enviar."}
+            : "Primero elegís el archivo y después lo confirmás con el botón Enviar. Videos: MP4, MOV, WEBM o 3GP."}
         </div>
       </div>
     </ModalShell>
@@ -1536,15 +1574,77 @@ export function TemplatesModal({
   );
 }
 
+function triStateToSelectValue(value) {
+  if (value === true) return "true";
+  if (value === false) return "false";
+  return "unset";
+}
+
+function selectValueToTriState(value) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
 export function ProfileDrawer({
   open,
   onClose,
   displayName,
   displayPhone,
   clientDoc,
+  optIn = false,
+  marketingOptIn = null,
+  savingConsent = false,
+  onSaveConsent,
   onOpenClientModal,
 }) {
+  const [localOptIn, setLocalOptIn] = useState(optIn === true);
+  const [localMarketingOptIn, setLocalMarketingOptIn] = useState(
+    triStateToSelectValue(marketingOptIn)
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setLocalOptIn(optIn === true);
+    setLocalMarketingOptIn(triStateToSelectValue(marketingOptIn));
+  }, [open, optIn, marketingOptIn]);
+
+  useEffect(() => {
+    if (!localOptIn && localMarketingOptIn !== "false") {
+      setLocalMarketingOptIn("false");
+    }
+  }, [localOptIn, localMarketingOptIn]);
+
   if (!open) return null;
+
+  const currentMarketingValue =
+    optIn === true ? triStateToSelectValue(marketingOptIn) : "false";
+
+  const draftMarketingValue =
+    localOptIn === true ? localMarketingOptIn : "false";
+
+  const hasConsentChanges =
+    localOptIn !== (optIn === true) ||
+    draftMarketingValue !== currentMarketingValue;
+
+  const generalBadgeClass =
+    optIn === true
+      ? "badge-success"
+      : "badge-ghost";
+
+  const marketingBadgeClass =
+    marketingOptIn === true
+      ? "badge-success"
+      : marketingOptIn === false
+      ? "badge-error"
+      : "badge-warning";
+
+  const marketingBadgeText =
+    marketingOptIn === true
+      ? "Marketing permitido"
+      : marketingOptIn === false
+      ? "Marketing rechazado"
+      : "Marketing sin definir";
 
   return (
     <div className="fixed inset-0 z-[85] flex" onClick={onClose}>
@@ -1570,7 +1670,80 @@ export function ProfileDrawer({
             </div>
           </div>
 
-          <div className="p-3 space-y-2 border rounded-xl border-base-300">
+          <div className="p-3 border rounded-xl border-base-300">
+            <div className="text-xs opacity-70">Consentimiento WhatsApp</div>
+
+            <div className="flex flex-wrap gap-2 mt-2">
+              <span className={`badge ${generalBadgeClass}`}>
+                {optIn === true ? "Opt-in general activo" : "Sin opt-in general"}
+              </span>
+
+              <span className={`badge ${marketingBadgeClass}`}>
+                {marketingBadgeText}
+              </span>
+            </div>
+
+            <div className="mt-3 space-y-3">
+              <label className="flex items-center justify-between gap-3 p-3 border rounded-xl border-base-300">
+                <div>
+                  <div className="font-medium">Opt-in general</div>
+                  <div className="text-xs opacity-70">
+                    Habilita el contacto general por WhatsApp.
+                  </div>
+                </div>
+
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary"
+                  checked={localOptIn}
+                  onChange={(e) => setLocalOptIn(e.target.checked)}
+                  disabled={savingConsent}
+                />
+              </label>
+
+              <label className="block p-3 border rounded-xl border-base-300">
+                <div className="font-medium">Marketing opt-in</div>
+                <div className="mb-2 text-xs opacity-70">
+                  Define si se pueden enviar plantillas MARKETING.
+                </div>
+
+                <select
+                  className="w-full select select-bordered"
+                  value={localOptIn ? localMarketingOptIn : "false"}
+                  disabled={!localOptIn || savingConsent}
+                  onChange={(e) => setLocalMarketingOptIn(e.target.value)}
+                >
+                  <option value="unset">Sin definir</option>
+                  <option value="true">Aceptado</option>
+                  <option value="false">Rechazado</option>
+                </select>
+
+                {!localOptIn ? (
+                  <div className="mt-2 text-xs text-warning">
+                    Con opt-in general desactivado, marketing queda bloqueado.
+                  </div>
+                ) : null}
+              </label>
+
+              <button
+                className="w-full btn btn-primary"
+                disabled={savingConsent || !hasConsentChanges || typeof onSaveConsent !== "function"}
+                onClick={() =>
+                  onSaveConsent?.({
+                    optIn: localOptIn,
+                    marketingOptIn: selectValueToTriState(
+                      localOptIn ? localMarketingOptIn : "false"
+                    ),
+                  })
+                }
+                type="button"
+              >
+                {savingConsent ? "Guardando..." : "Guardar consentimiento"}
+              </button>
+            </div>
+          </div>
+
+          <div className="p-3 border rounded-xl border-base-300">
             <div className="text-xs opacity-70">Datos</div>
             <div className="text-sm">
               <b>Email:</b> {clientDoc?.email || "—"}

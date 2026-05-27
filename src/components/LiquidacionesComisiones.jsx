@@ -1,6 +1,14 @@
 // src/admin/LiquidacionesComisiones.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where, Timestamp, doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  Timestamp,
+  doc,
+  getDoc,
+} from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useProvincia } from "../hooks/useProvincia";
 import AdminNavbar from "../components/AdminNavbar";
@@ -35,10 +43,18 @@ const n = (v) => {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
 };
+
 const f2 = (v) => (Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "0.00");
 const normalizeEmail = (e) => String(e || "").trim().toLowerCase();
 
-// intenta distintos nombres de campo para el importe del pedido
+const normalizarTexto = (s = "") =>
+  String(s)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+
+// intenta distintos nombres de campo para el importe total facturado del pedido
 const montoPedido = (p) => n(p.monto ?? p.total ?? p.precio ?? p.importe ?? p.montoTotal ?? 0);
 
 // chequea entregado con tolerancia de campos
@@ -46,6 +62,68 @@ const estaEntregado = (p) => {
   if (typeof p.entregado === "boolean") return p.entregado;
   if (typeof p.estado === "string") return p.estado.toLowerCase() === "entregado";
   return true;
+};
+
+// detectar ítems de envío/flete que NO deben entrar en comisión
+const esItemEnvio = (item = {}) => {
+  if (item?.esEnvio === true) return true;
+
+  const tipo = normalizarTexto(item.tipo || item.categoria || item.rubro || "");
+  if (["envio", "flete", "delivery", "reparto", "cadeteria", "cadete"].includes(tipo)) {
+    return true;
+  }
+
+  const nombre = normalizarTexto(item.nombre || item.descripcion || item.producto || "");
+  return (
+    nombre.includes("envio") ||
+    nombre.includes("flete") ||
+    nombre.includes("delivery") ||
+    nombre.includes("reparto") ||
+    nombre.includes("cadeteria") ||
+    nombre.includes("cadete")
+  );
+};
+
+const subtotalItem = (item = {}) => {
+  if (Number.isFinite(Number(item.subtotal))) return n(item.subtotal);
+  if (Number.isFinite(Number(item.total))) return n(item.total);
+  return n(item.cantidad) * n(item.precio);
+};
+
+// desglosa total facturado / envío / base comisionable
+const desglosePedido = (p) => {
+  if (Array.isArray(p.productos) && p.productos.length > 0) {
+    let totalProductos = 0;
+    let totalEnvio = 0;
+
+    for (const item of p.productos) {
+      const subtotal = subtotalItem(item);
+      if (esItemEnvio(item)) totalEnvio += subtotal;
+      else totalProductos += subtotal;
+    }
+
+    const totalDesdeItems = totalProductos + totalEnvio;
+    const totalFacturado = montoPedido(p) || totalDesdeItems;
+
+    return {
+      totalFacturado,
+      totalProductos,
+      totalEnvio,
+      baseComisionable: totalProductos,
+    };
+  }
+
+  const totalFacturado = montoPedido(p);
+  const envioDirecto = n(
+    p.envio ?? p.flete ?? p.costoEnvio ?? p.montoEnvio ?? p.delivery ?? 0
+  );
+
+  return {
+    totalFacturado,
+    totalProductos: Math.max(0, totalFacturado - envioDirecto),
+    totalEnvio: envioDirecto,
+    baseComisionable: Math.max(0, totalFacturado - envioDirecto),
+  };
 };
 
 // recordar % por provincia en localStorage (se guarda { defaultPct, porVendedor })
@@ -119,12 +197,14 @@ export default function LiquidacionesComisiones() {
 
   const [loading, setLoading] = useState(true);
 
-  // estados base (sin comisiones derivadas)
+  // estados base
   const [ventasBasePorVendedor, setVentasBasePorVendedor] = useState({});
   const [gastosPorRepartidor, setGastosPorRepartidor] = useState({});
   const [totalesBase, setTotalesBase] = useState({
     totalPedidos: 0,
-    totalVentas: 0,
+    totalVentas: 0, // total facturado
+    totalBaseComisionable: 0,
+    totalEnvios: 0,
   });
 
   // === helpers Firestore ===
@@ -171,7 +251,9 @@ export default function LiquidacionesComisiones() {
       const finStr = format(hasta, "yyyy-MM-dd"); // inclusivo para fechaStr
 
       // listas maestras para asegurar presencia aunque no haya movimiento
-      const { repartidores: repListRaw, vendedores: vendListRaw } = await fetchUsuariosArrays(provinciaId);
+      const { repartidores: repListRaw, vendedores: vendListRaw } = await fetchUsuariosArrays(
+        provinciaId
+      );
       const repList = repListRaw.map(normalizeEmail);
       const vendList = vendListRaw.map(normalizeEmail);
 
@@ -182,20 +264,46 @@ export default function LiquidacionesComisiones() {
       const pedidos = snapPedidos.docs.map((d) => ({ id: d.id, ...d.data() }));
 
       const byVend = {};
-      let totalVentas = 0;
+      let totalVentas = 0; // total facturado
+      let totalBaseComisionable = 0;
+      let totalEnvios = 0;
       let totalPedidos = 0;
+
       for (const p of pedidos) {
         if (soloEntregados && !estaEntregado(p)) continue;
+
         const vend = normalizeEmail(p.vendedorEmail || p.vendedor || "");
-        const m = montoPedido(p);
-        if (!byVend[vend]) byVend[vend] = { pedidos: 0, total: 0 };
+        const desglose = desglosePedido(p);
+
+        if (!byVend[vend]) {
+          byVend[vend] = {
+            pedidos: 0,
+            total: 0, // total facturado
+            baseComisionable: 0,
+            envio: 0,
+          };
+        }
+
         byVend[vend].pedidos += 1;
-        byVend[vend].total += m;
-        totalVentas += m;
+        byVend[vend].total += desglose.totalFacturado;
+        byVend[vend].baseComisionable += desglose.baseComisionable;
+        byVend[vend].envio += desglose.totalEnvio;
+
+        totalVentas += desglose.totalFacturado;
+        totalBaseComisionable += desglose.baseComisionable;
+        totalEnvios += desglose.totalEnvio;
         totalPedidos += 1;
       }
+
       vendList.forEach((v) => {
-        if (v && !byVend[v]) byVend[v] = { pedidos: 0, total: 0 };
+        if (v && !byVend[v]) {
+          byVend[v] = {
+            pedidos: 0,
+            total: 0,
+            baseComisionable: 0,
+            envio: 0,
+          };
+        }
       });
 
       // ---- CIERRES (repartidores: días + paga) ----
@@ -207,10 +315,10 @@ export default function LiquidacionesComisiones() {
         const snap1 = await getDocs(
           query(colCierres, where("fechaStr", ">=", inicioStr), where("fechaStr", "<=", finStr))
         );
-        const docs =
-          snap1.empty
-            ? (await getDocs(query(colCierres, where("fecha", ">=", inicio), where("fecha", "<", fin)))).docs
-            : snap1.docs;
+        const docs = snap1.empty
+          ? (await getDocs(query(colCierres, where("fecha", ">=", inicio), where("fecha", "<", fin))))
+              .docs
+          : snap1.docs;
         cierresAcumulados.push(...docs.map((d) => ({ id: d.id, ...d.data() })));
       } catch (e) {
         console.warn("Lectura colección 'cierres' omitida:", e);
@@ -246,7 +354,7 @@ export default function LiquidacionesComisiones() {
       const byRep = {};
       for (const c of cierresAcumulados) {
         // email repartidor por campo o por ID
-        let rep =
+        const rep =
           normalizeEmail(c.emailRepartidor || c.repartidorEmail || c.repartidor || "") ||
           (() => {
             const m = /^(\d{4}-\d{2}-\d{2})_(.+)$/i.exec(String(c.id || ""));
@@ -274,7 +382,12 @@ export default function LiquidacionesComisiones() {
       if (!alive) return;
       setVentasBasePorVendedor(byVend);
       setGastosPorRepartidor(byRep);
-      setTotalesBase({ totalPedidos, totalVentas });
+      setTotalesBase({
+        totalPedidos,
+        totalVentas,
+        totalBaseComisionable,
+        totalEnvios,
+      });
       setLoading(false);
     }
 
@@ -288,8 +401,12 @@ export default function LiquidacionesComisiones() {
 
   // helper para obtener % efectivo de un vendedor (override o global)
   const getPctForVendor = (emailKey) => {
-    const override = n(pctPorVendedor[emailKey]);
-    if (Number.isFinite(override) && override >= 0) return override;
+    if (
+      Object.prototype.hasOwnProperty.call(pctPorVendedor, emailKey) &&
+      Number.isFinite(Number(pctPorVendedor[emailKey]))
+    ) {
+      return n(pctPorVendedor[emailKey]);
+    }
     return n(pctGlobal);
   };
 
@@ -299,19 +416,22 @@ export default function LiquidacionesComisiones() {
       const pct = getPctForVendor(email);
       const factor = pct / 100;
       const displayName = email ? resolveVendedorNombre(email) : "(sin vendedor)";
+
       return {
         email: email || "",
         displayName,
-        keyEmail: email, // clave interna (normalizada)
-        pedidos: v.pedidos,
-        total: v.total,
+        keyEmail: email,
+        pedidos: n(v.pedidos),
+        total: n(v.total), // facturado
+        envio: n(v.envio),
+        baseComisionable: n(v.baseComisionable),
         pct,
-        comision: v.total * factor,
+        comision: n(v.baseComisionable) * factor,
       };
     });
-    arr.sort((a, b) => b.total - a.total);
+
+    arr.sort((a, b) => b.baseComisionable - a.baseComisionable);
     return arr;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ventasBasePorVendedor, pctGlobal, pctPorVendedor]);
 
   const totalComisiones = useMemo(
@@ -323,6 +443,8 @@ export default function LiquidacionesComisiones() {
     () => ({
       totalPedidos: totalesBase.totalPedidos,
       totalVentas: totalesBase.totalVentas,
+      totalBaseComisionable: totalesBase.totalBaseComisionable,
+      totalEnvios: totalesBase.totalEnvios,
       totalComisiones,
     }),
     [totalesBase, totalComisiones]
@@ -335,12 +457,15 @@ export default function LiquidacionesComisiones() {
       dias: g.dias instanceof Set ? g.dias.size : n(g.dias),
       repartidor: n(g.repartidor),
     }));
-    // ordenar por paga desc
     arr.sort((a, b) => b.repartidor - a.repartidor);
     return arr;
   }, [gastosPorRepartidor]);
 
-  const totalDias = useMemo(() => filasRepartidores.reduce((a, r) => a + n(r.dias), 0), [filasRepartidores]);
+  const totalDias = useMemo(
+    () => filasRepartidores.reduce((a, r) => a + n(r.dias), 0),
+    [filasRepartidores]
+  );
+
   const totalPagaRepartidores = useMemo(
     () => filasRepartidores.reduce((a, r) => a + n(r.repartidor), 0),
     [filasRepartidores]
@@ -356,7 +481,9 @@ export default function LiquidacionesComisiones() {
       [`Liquidaciones — Prov: ${provinciaId} — Rango: ${rango}`],
       [""],
       ["Total pedidos", totales.totalPedidos],
-      ["Total ventas", totales.totalVentas],
+      ["Total facturado", totales.totalVentas],
+      ["Total envío", totales.totalEnvios],
+      ["Base comisionable", totales.totalBaseComisionable],
       ["% Comisión (por defecto)", `${n(pctGlobal)}%`],
       ["Total comisiones", totales.totalComisiones],
       ["Días trabajados (repartidores)", totalDias],
@@ -368,7 +495,15 @@ export default function LiquidacionesComisiones() {
     XLSX.utils.book_append_sheet(wb, wsRes, "Resumen");
 
     // Vendedores
-    const headerVend = ["Vendedor", "Pedidos", "Total ventas", "% Comisión", "Comisión"];
+    const headerVend = [
+      "Vendedor",
+      "Pedidos",
+      "Total facturado",
+      "Envío",
+      "Base comisionable",
+      "% Comisión",
+      "Comisión",
+    ];
     const aoaVend = [
       headerVend,
       ...filasVendedores.map((r) => [
@@ -377,23 +512,31 @@ export default function LiquidacionesComisiones() {
           : r.email || "(sin vendedor)",
         r.pedidos,
         r.total,
+        r.envio,
+        r.baseComisionable,
         `${r.pct}%`,
         r.comision,
       ]),
     ];
     const wsVend = XLSX.utils.aoa_to_sheet(aoaVend);
     wsVend["!autofilter"] = {
-      ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: headerVend.length - 1 } }),
+      ref: XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: 0, c: headerVend.length - 1 },
+      }),
     };
     autoFitColumns(wsVend, aoaVend);
     XLSX.utils.book_append_sheet(wb, wsVend, "Vendedores");
 
-    // Repartidores: solo Días + Paga
+    // Repartidores
     const headerRep = ["Repartidor", "Días trabajados", "Paga (Repartidor)"];
     const aoaRep = [headerRep, ...filasRepartidores.map((r) => [r.email, r.dias, r.repartidor])];
     const wsRep = XLSX.utils.aoa_to_sheet(aoaRep);
     wsRep["!autofilter"] = {
-      ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: headerRep.length - 1 } }),
+      ref: XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: 0, c: headerRep.length - 1 },
+      }),
     };
     autoFitColumns(wsRep, aoaRep);
     XLSX.utils.book_append_sheet(wb, wsRep, "Repartidores");
@@ -403,23 +546,30 @@ export default function LiquidacionesComisiones() {
   };
 
   /* ======= UI ======= */
-
-  // columnas para desktop (solo se aplican en md+)
   const gridVend =
-    "grid-cols-[minmax(220px,1fr)_minmax(90px,auto)_minmax(140px,auto)_minmax(100px,auto)_minmax(150px,auto)] gap-x-4 items-center";
+    "grid-cols-[minmax(220px,1fr)_minmax(90px,auto)_minmax(140px,auto)_minmax(120px,auto)_minmax(160px,auto)_minmax(110px,auto)_minmax(150px,auto)] gap-x-4 items-center";
   const gridRep =
     "grid-cols-[minmax(240px,1fr)_minmax(80px,auto)_minmax(160px,auto)] gap-x-4 items-center";
   const numClass = "text-right font-mono tabular-nums";
 
   const handlePctVendChange = (emailKey, value) => {
-    const v = Number(value);
+    const trimmed = String(value ?? "").trim();
+
     setPctPorVendedor((prev) => {
       const next = { ...prev };
-      if (!Number.isFinite(v) || v < 0) {
+
+      if (trimmed === "") {
         delete next[emailKey]; // vuelve a usar el global
-      } else {
-        next[emailKey] = v;
+        return next;
       }
+
+      const v = Number(trimmed);
+      if (!Number.isFinite(v) || v < 0) {
+        delete next[emailKey];
+        return next;
+      }
+
+      next[emailKey] = v;
       return next;
     });
   };
@@ -441,6 +591,7 @@ export default function LiquidacionesComisiones() {
             className="w-full max-w-[150px] input input-bordered input-sm md:input-md"
           />
         </div>
+
         <div>
           <label className="block mb-1 text-sm font-semibold md:text-base">Hasta</label>
           <DatePicker
@@ -449,6 +600,7 @@ export default function LiquidacionesComisiones() {
             className="w-full max-w-[150px] input input-bordered input-sm md:input-md"
           />
         </div>
+
         <div className="form-control">
           <label className="gap-2 cursor-pointer label">
             <span className="text-sm label-text md:text-base">Solo entregados</span>
@@ -460,6 +612,7 @@ export default function LiquidacionesComisiones() {
             />
           </label>
         </div>
+
         <div>
           <label className="block mb-1 text-sm font-semibold md:text-base">
             % Comisión por defecto
@@ -472,10 +625,11 @@ export default function LiquidacionesComisiones() {
             onChange={(e) => setPctGlobal(Number(e.target.value || 0))}
             className="w-24 text-sm md:text-lg input input-bordered input-sm md:input-md"
           />
-          <p className="mt-1 text-xs opacity-70 max-w-[220px]">
-            Si no se define un % para un vendedor, se usa este valor.
+          <p className="mt-1 text-xs opacity-70 max-w-[240px]">
+            La comisión se calcula sobre la base comisionable, sin contar envío.
           </p>
         </div>
+
         <button
           className="mt-2 md:mt-0 btn btn-outline btn-sm md:btn-md lg:btn-lg"
           onClick={exportarExcel}
@@ -491,12 +645,9 @@ export default function LiquidacionesComisiones() {
         <div className="grid grid-cols-1 gap-8">
           {/* Vendedores */}
           <div className="p-4 border shadow sm:p-6 rounded-2xl bg-base-200 border-base-300">
-            <h3 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">
-              💼 Vendedores
-            </h3>
+            <h3 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">💼 Vendedores</h3>
             <p className="mb-4 text-xs opacity-70 sm:text-sm">
-              Podés ajustar el % de comisión por vendedor. En móvil se muestran como tarjetas; en
-              escritorio, como tabla.
+              Total facturado incluye envío. La comisión se calcula solo sobre la base comisionable.
             </p>
 
             <div className="overflow-x-auto">
@@ -506,10 +657,13 @@ export default function LiquidacionesComisiones() {
               >
                 <div>Vendedor</div>
                 <div className="text-right">Pedidos</div>
-                <div className="text-right">Ventas</div>
+                <div className="text-right">Facturado</div>
+                <div className="text-right">Envío</div>
+                <div className="text-right">Base comisión</div>
                 <div className="text-right">% Comisión</div>
                 <div className="text-right">Comisión</div>
               </div>
+
               <div className="my-3 divider" />
 
               {filasVendedores.length === 0 ? (
@@ -527,23 +681,29 @@ export default function LiquidacionesComisiones() {
                         {/* Vendedor */}
                         <div className="truncate">
                           <div className="font-semibold">{r.displayName}</div>
-                          {r.email && (
-                            <div className="text-xs truncate opacity-60">
-                              {r.email}
-                            </div>
-                          )}
-                          {/* mini resumen para mobile */}
+                          {r.email && <div className="text-xs truncate opacity-60">{r.email}</div>}
+
                           <div className="mt-1 text-xs opacity-70 md:hidden">
-                            Pedidos: <span className="font-mono">{r.pedidos ?? 0}</span> · Ventas:{" "}
+                            Pedidos: <span className="font-mono">{r.pedidos}</span> · Facturado:{" "}
                             <span className="font-mono">{f2(r.total)}</span>
+                          </div>
+                          <div className="text-xs opacity-70 md:hidden">
+                            Envío: <span className="font-mono">{f2(r.envio)}</span> · Base:{" "}
+                            <span className="font-mono">{f2(r.baseComisionable)}</span>
                           </div>
                         </div>
 
                         {/* Pedidos */}
-                        <div className={`hidden md:block ${numClass}`}>{r.pedidos ?? 0}</div>
+                        <div className={`hidden md:block ${numClass}`}>{r.pedidos}</div>
 
-                        {/* Ventas */}
+                        {/* Facturado */}
                         <div className={`hidden md:block ${numClass}`}>{f2(r.total)}</div>
+
+                        {/* Envío */}
+                        <div className={`hidden md:block ${numClass}`}>{f2(r.envio)}</div>
+
+                        {/* Base comisionable */}
+                        <div className={`hidden md:block ${numClass}`}>{f2(r.baseComisionable)}</div>
 
                         {/* % Comisión editable */}
                         <div className="flex items-center justify-between md:justify-end md:space-x-2">
@@ -559,7 +719,7 @@ export default function LiquidacionesComisiones() {
                         </div>
 
                         {/* Comisión */}
-                        <div className={`${numClass}`}>
+                        <div className={numClass}>
                           <span className="mr-1 text-xs opacity-70 md:hidden">Comisión:</span>
                           {f2(r.comision)}
                         </div>
@@ -570,21 +730,31 @@ export default function LiquidacionesComisiones() {
               )}
 
               <div className="my-3 divider" />
+
               <div className={`flex flex-col gap-2 md:grid ${gridVend} text-sm md:text-base font-semibold`}>
-                <div>Total</div>
-                <div className={`hidden md:block ${numClass}`}>
-                  {totales.totalPedidos ?? 0}
+                <div>
+                  Total
+                  <div className="mt-1 text-xs opacity-70 md:hidden">
+                    Pedidos: <span className="font-mono">{totales.totalPedidos}</span> · Facturado:{" "}
+                    <span className="font-mono">{f2(totales.totalVentas)}</span>
+                  </div>
+                  <div className="text-xs opacity-70 md:hidden">
+                    Envío: <span className="font-mono">{f2(totales.totalEnvios)}</span> · Base:{" "}
+                    <span className="font-mono">{f2(totales.totalBaseComisionable)}</span>
+                  </div>
                 </div>
-                <div className={`hidden md:block ${numClass}`}>
-                  {f2(totales.totalVentas)}
-                </div>
+
+                <div className={`hidden md:block ${numClass}`}>{totales.totalPedidos}</div>
+                <div className={`hidden md:block ${numClass}`}>{f2(totales.totalVentas)}</div>
+                <div className={`hidden md:block ${numClass}`}>{f2(totales.totalEnvios)}</div>
+                <div className={`hidden md:block ${numClass}`}>{f2(totales.totalBaseComisionable)}</div>
                 <div className="hidden md:block" />
                 <div className={numClass}>{f2(totales.totalComisiones)}</div>
               </div>
             </div>
           </div>
 
-          {/* Repartidores (solo Días y Paga) */}
+          {/* Repartidores */}
           <div className="p-4 border shadow sm:p-6 rounded-2xl bg-base-200 border-base-300">
             <h3 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">
               🛵 Repartidores (Paga por días)
@@ -594,7 +764,6 @@ export default function LiquidacionesComisiones() {
             </p>
 
             <div className="overflow-x-auto">
-              {/* Header desktop */}
               <div
                 className={`hidden md:grid ${gridRep} text-[11px] md:text-xs font-bold uppercase opacity-70`}
               >
@@ -602,6 +771,7 @@ export default function LiquidacionesComisiones() {
                 <div className="text-right">Días</div>
                 <div className="text-right">Paga</div>
               </div>
+
               <div className="my-3 divider" />
 
               {filasRepartidores.length === 0 ? (
@@ -616,11 +786,12 @@ export default function LiquidacionesComisiones() {
                       <div>
                         <div className="font-semibold truncate">{r.email}</div>
                         <div className="mt-1 text-xs opacity-70 md:hidden">
-                          Días: <span className="font-mono">{r.dias ?? 0}</span> · Paga:{" "}
+                          Días: <span className="font-mono">{r.dias}</span> · Paga:{" "}
                           <span className="font-mono">{f2(r.repartidor)}</span>
                         </div>
                       </div>
-                      <div className={`hidden md:block ${numClass}`}>{r.dias ?? 0}</div>
+
+                      <div className={`hidden md:block ${numClass}`}>{r.dias}</div>
                       <div className={numClass}>{f2(r.repartidor)}</div>
                     </div>
                   </div>
@@ -628,6 +799,7 @@ export default function LiquidacionesComisiones() {
               )}
 
               <div className="my-3 divider" />
+
               <div className={`flex flex-col gap-2 md:grid ${gridRep} text-sm md:text-base font-semibold`}>
                 <div>Total</div>
                 <div className={`hidden md:block ${numClass}`}>{totalDias}</div>

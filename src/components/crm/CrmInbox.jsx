@@ -12,6 +12,7 @@ import {
 import { db } from "../../firebase/firebase";
 import { useAuthState } from "../../hooks/useAuthState";
 import { useProvincia } from "../../hooks/useProvincia";
+import RemarketingInboxModal from "./RemarketingInboxModal";
 
 const PRESET_LABELS = [
   { slug: "nuevo", name: "Nuevo", color: "badge-info" },
@@ -108,7 +109,7 @@ function getFollowUpState(nextFollowUpAt, followUpDoneAt) {
       shortLabel: "Vencido",
       detail: formatFollowUp(nextFollowUpAt),
       sortWeight: 3,
-      className: "bg-[#3b1f23] text-[#ffb3bc] border-[#6e2a35]",
+      className: "bg-[var(--crm-danger-soft)] text-[var(--crm-danger-text)] border-[var(--crm-danger-border)]",
     };
   }
 
@@ -119,7 +120,7 @@ function getFollowUpState(nextFollowUpAt, followUpDoneAt) {
       shortLabel: "Hoy",
       detail: formatFollowUp(nextFollowUpAt),
       sortWeight: 2,
-      className: "bg-[#3a2f13] text-[#ffd86b] border-[#6b571e]",
+      className: "bg-[var(--crm-warning-soft)] text-[var(--crm-warning-text)] border-[var(--crm-warning-border)]",
     };
   }
 
@@ -129,7 +130,7 @@ function getFollowUpState(nextFollowUpAt, followUpDoneAt) {
     shortLabel: "Pendiente",
     detail: formatFollowUp(nextFollowUpAt),
     sortWeight: 1,
-    className: "bg-[#132a35] text-[#9edcff] border-[#21485c]",
+    className: "bg-[var(--crm-info-soft)] text-[var(--crm-info-text)] border-[var(--crm-info-border)]",
   };
 }
 
@@ -165,7 +166,7 @@ function CheckDoubleIcon({ muted = false }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className={`h-4 w-4 ${muted ? "text-[#8696a0]" : "text-[#53bdeb]"}`}
+      className={`h-4 w-4 ${muted ? "text-[var(--crm-muted)]" : "text-[var(--crm-info-accent)]"}`}
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -221,11 +222,11 @@ export default function CrmInbox({
   const [baseConvs, setBaseConvs] = useState([]);
   const [userMetaMap, setUserMetaMap] = useState({});
   const [search, setSearch] = useState("");
-  const [filterLabel, setFilterLabel] = useState("todos");
-  const [view, setView] = useState("inbox");
-  const [customLabels, setCustomLabels] = useState([]);
-  const [toast, setToast] = useState(null);
-
+const [filterLabel, setFilterLabel] = useState("todos");
+const [view, setView] = useState("inbox");
+const [customLabels, setCustomLabels] = useState([]);
+const [toast, setToast] = useState(null);
+const [remarketingOpen, setRemarketingOpen] = useState(false);
   const topRef = useRef(null);
   const metaUnsubsRef = useRef(new Map());
   const metaScopeRef = useRef("");
@@ -704,7 +705,7 @@ export default function CrmInbox({
         </button>
         <ul
           tabIndex={0}
-          className="menu dropdown-content z-[60] mt-2 w-60 rounded-2xl border border-[#2a3942] bg-[#202c33] p-2 text-[#e9edef] shadow-2xl"
+          className="menu dropdown-content z-[60] mt-2 w-60 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-menu)] p-2 text-[var(--crm-text)] shadow-2xl"
         >
           <li>
             <button
@@ -773,8 +774,8 @@ export default function CrmInbox({
           "inline-flex h-9 items-center gap-2 rounded-full px-3 text-[13px] font-medium transition whitespace-nowrap",
           "disabled:cursor-not-allowed disabled:opacity-50",
           activeChip
-            ? "bg-[#103529] text-[#d8fff3]"
-            : "bg-[#202c33] text-[#8696a0] hover:bg-[#26353d] hover:text-[#e9edef]",
+            ? "bg-[var(--crm-success-soft)] text-[var(--crm-success-text)]"
+            : "bg-[var(--crm-elevated)] text-[var(--crm-muted)] hover:bg-[var(--crm-hover)] hover:text-[var(--crm-text)]",
         ].join(" ")}
       >
         <span>{children}</span>
@@ -782,7 +783,7 @@ export default function CrmInbox({
           <span
             className={[
               "inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px]",
-              activeChip ? "bg-[#1f6f59] text-white" : "bg-[#2a3942] text-[#c7d1d6]",
+              activeChip ? "bg-[var(--crm-accent-strong)] text-white" : "bg-[var(--crm-chip)] text-[var(--crm-soft)]",
             ].join(" ")}
           >
             {count}
@@ -815,7 +816,7 @@ export default function CrmInbox({
       <div className="flex flex-wrap min-w-0 gap-1">
         {visibleLabel ? (
           <span
-            className={`badge badge-sm border border-white/10 ${getLabel(visibleLabel).color}`}
+            className={`badge badge-sm border border-[var(--crm-border-soft)] ${getLabel(visibleLabel).color}`}
             title={visibleLabel}
           >
             {getLabel(visibleLabel).name}
@@ -833,7 +834,7 @@ export default function CrmInbox({
 
         {c.__hasInternalNote ? (
           <span
-            className="inline-flex h-6 items-center gap-1 rounded-full border border-[#29414a] bg-[#132028] px-2 text-[11px] text-[#b8c7ce]"
+            className="inline-flex h-6 items-center gap-1 rounded-full border border-[var(--crm-border-soft)] bg-[var(--crm-surface-2)] px-2 text-[11px] text-[var(--crm-soft)]"
             title="Tiene nota interna"
           >
             <NoteIcon />
@@ -842,7 +843,7 @@ export default function CrmInbox({
         ) : null}
 
         {extraLabelCount > 0 ? (
-          <span className="inline-flex h-6 items-center rounded-full bg-[#202c33] px-2 text-[11px] text-[#9fb0b8]">
+          <span className="inline-flex h-6 items-center rounded-full bg-[var(--crm-elevated)] px-2 text-[11px] text-[var(--crm-soft)]">
             +{extraLabelCount}
           </span>
         ) : null}
@@ -863,48 +864,48 @@ export default function CrmInbox({
         key={c.id}
         className={[
           "group relative cursor-pointer transition-colors",
-          isSelected ? "bg-[#202c33]" : "hover:bg-[#182229]",
+          isSelected ? "bg-[var(--crm-elevated)]" : "hover:bg-[var(--crm-hover)]",
         ].join(" ")}
         onClick={() => openConversation(c)}
       >
         <div className="flex items-start gap-3 px-3 py-3 sm:px-4">
-          <div className="relative flex h-[49px] w-[49px] shrink-0 items-center justify-center rounded-full bg-[#233138] text-[15px] font-semibold text-[#dfe6ea]">
+          <div className="relative flex h-[49px] w-[49px] shrink-0 items-center justify-center rounded-full bg-[var(--crm-avatar)] text-[15px] font-semibold text-[var(--crm-avatar-text)]">
             {initial}
             {unread ? (
-              <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-[#111b21] bg-[#00a884]" />
+              <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-[var(--crm-surface)] bg-[var(--crm-accent)]" />
             ) : null}
           </div>
 
-          <div className="min-w-0 flex-1 border-b border-[#1f2c33] pb-3">
+          <div className="min-w-0 flex-1 border-b border-[var(--crm-border-soft)] pb-3">
             <div className="flex items-start min-w-0 gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <div className={`truncate text-[16px] ${unread ? "font-semibold text-[#e9edef]" : "font-medium text-[#e9edef]"}`}>
+                  <div className={`truncate text-[16px] ${unread ? "font-semibold text-[var(--crm-text)]" : "font-medium text-[var(--crm-text)]"}`}>
                     {displayName}
                   </div>
                   {c.__pinned ? (
-                    <span className="shrink-0 text-[#8696a0]">
+                    <span className="shrink-0 text-[var(--crm-muted)]">
                       <PinIcon />
                     </span>
                   ) : null}
                 </div>
 
-                <div className="mt-0.5 truncate text-[13px] text-[#8696a0]">
+                <div className="mt-0.5 truncate text-[13px] text-[var(--crm-muted)]">
                   {phone}
                 </div>
               </div>
 
               <div className="flex flex-col items-end gap-1 pl-2 ml-auto shrink-0">
-                <div className={`text-[11px] ${unread ? "text-[#00a884]" : "text-[#8696a0]"}`}>
+                <div className={`text-[11px] ${unread ? "text-[var(--crm-accent)]" : "text-[var(--crm-muted)]"}`}>
                   {formatLast(c.lastMessageAt)}
                 </div>
 
                 {unread ? (
-                  <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#00a884] px-1.5 py-[2px] text-[11px] font-semibold text-[#081c15]">
+                  <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-[var(--crm-accent)] px-1.5 py-[2px] text-[11px] font-semibold text-[var(--crm-accent-contrast)]">
                     1
                   </span>
                 ) : isFav(c) ? (
-                  <span className="text-[12px] text-[#ffd86b]">★</span>
+                  <span className="text-[12px] text-[var(--crm-warning-text)]">★</span>
                 ) : null}
               </div>
             </div>
@@ -916,7 +917,7 @@ export default function CrmInbox({
                 <span className="w-4 h-4 shrink-0" />
               )}
 
-              <div className={`min-w-0 flex-1 truncate text-[14px] ${unread ? "text-[#d8e0e4]" : "text-[#9fb0b8]"}`}>
+              <div className={`min-w-0 flex-1 truncate text-[14px] ${unread ? "text-[var(--crm-text)]" : "text-[var(--crm-soft)]"}`}>
                 {preview}
               </div>
             </div>
@@ -925,7 +926,7 @@ export default function CrmInbox({
               <div className="flex-1 min-w-0">
                 {renderMetaChips(c)}
                 {c.__followUp?.detail ? (
-                  <div className="mt-1 truncate text-[11px] text-[#8696a0]">
+                  <div className="mt-1 truncate text-[11px] text-[var(--crm-muted)]">
                     {c.__followUp.detail}
                   </div>
                 ) : null}
@@ -965,21 +966,21 @@ export default function CrmInbox({
   }, [view, search, filterLabel]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#111b21] text-[#e9edef]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--crm-surface)] text-[var(--crm-text)]">
       <style>{localCss}</style>
 
-      <div ref={topRef} className="shrink-0 bg-[#111b21] px-3 pb-3 pt-3 sm:px-4">
+      <div ref={topRef} className="shrink-0 bg-[var(--crm-surface)] px-3 pb-3 pt-3 sm:px-4">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-[#8696a0]">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--crm-muted)]">
               CRM · {provincia || provinciaId}
             </div>
-            <div className="mt-1 text-[28px] font-semibold leading-none text-[#e9edef]">
+            <div className="mt-1 text-[28px] font-semibold leading-none text-[var(--crm-text)]">
               {viewTitle}
             </div>
 
             {(unreadCount > 0 || followUpCount > 0 || noteCount > 0) ? (
-              <div className="mt-2 flex flex-wrap gap-2 text-[12px] text-[#9fb0b8]">
+              <div className="mt-2 flex flex-wrap gap-2 text-[12px] text-[var(--crm-soft)]">
                 {unreadCount > 0 ? <span>{unreadCount} no leídos</span> : null}
                 {followUpCount > 0 ? <span>{followUpCount} seguimientos</span> : null}
                 {noteCount > 0 ? <span>{noteCount} con nota</span> : null}
@@ -987,22 +988,34 @@ export default function CrmInbox({
             ) : null}
           </div>
 
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#202c33] text-[#cfd8dc] transition hover:bg-[#26353d]"
-            onClick={handleResetFilters}
-            title="Reiniciar filtros"
-          >
-            <RefreshIcon />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--crm-elevated)] px-3 text-[13px] font-medium text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)] hover:text-[var(--crm-text)]"
+              onClick={() => setRemarketingOpen(true)}
+              title="Abrir campaña por plantilla"
+            >
+              <span>📣</span>
+              <span className="hidden sm:inline">Campaña</span>
+            </button>
+
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--crm-elevated)] text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)]"
+              onClick={handleResetFilters}
+              title="Reiniciar filtros"
+            >
+              <RefreshIcon />
+            </button>
+          </div>
         </div>
 
         <div className="relative">
-          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8696a0]">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--crm-muted)]">
             <SearchIcon />
           </span>
           <input
-            className="h-12 w-full rounded-full border-0 bg-[#202c33] pl-11 pr-4 text-[14px] text-[#e9edef] outline-none placeholder:text-[#8696a0]"
+            className="h-12 w-full rounded-full border-0 bg-[var(--crm-elevated)] pl-11 pr-4 text-[14px] text-[var(--crm-text)] outline-none placeholder:text-[var(--crm-muted)]"
             placeholder="Buscar por nombre, teléfono, mensaje, etiqueta, dirección o nota..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1016,15 +1029,15 @@ export default function CrmInbox({
               setView("archived");
               scrollToTop();
             }}
-            className="mt-3 flex w-full items-center justify-between rounded-2xl px-2 py-2 text-left text-[#c7d1d6] transition hover:bg-[#182229]"
+            className="mt-3 flex w-full items-center justify-between rounded-2xl px-2 py-2 text-left text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)]"
           >
             <div className="flex items-center gap-3">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#202c33] text-[#8696a0]">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--crm-elevated)] text-[var(--crm-muted)]">
                 <ArchiveIcon />
               </span>
               <span className="text-[15px] font-medium">Archivados</span>
             </div>
-            <span className="text-[13px] text-[#8696a0]">{archivedCount}</span>
+            <span className="text-[13px] text-[var(--crm-muted)]">{archivedCount}</span>
           </button>
         ) : null}
 
@@ -1045,7 +1058,7 @@ export default function CrmInbox({
 
         <div className="mt-3">
           <select
-            className="h-11 w-full rounded-2xl border-0 bg-[#202c33] px-3 text-[14px] text-[#e9edef] outline-none"
+            className="h-11 w-full rounded-2xl border-0 bg-[var(--crm-elevated)] px-3 text-[14px] text-[var(--crm-text)] outline-none"
             value={filterLabel}
             onChange={(e) => {
               setFilterLabel(e.target.value);
@@ -1062,7 +1075,7 @@ export default function CrmInbox({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#111b21]">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[var(--crm-surface)]">
         {loading ? (
           <div className="p-4">
             <span className="loading loading-dots loading-md" />
@@ -1070,7 +1083,7 @@ export default function CrmInbox({
         ) : null}
 
         {!loading && itemsByView.length === 0 ? (
-          <div className="px-5 py-6 text-sm text-[#8696a0]">
+          <div className="px-5 py-6 text-sm text-[var(--crm-muted)]">
             {emptyMessage}
           </div>
         ) : null}
@@ -1078,6 +1091,13 @@ export default function CrmInbox({
         {!loading ? <ul>{itemsByView.map((c) => renderRow(c))}</ul> : null}
         <div className="h-3" />
       </div>
+      <RemarketingInboxModal
+        open={remarketingOpen}
+        onClose={() => setRemarketingOpen(false)}
+        provinciaId={provinciaId}
+        myEmail={myEmail}
+        preselectedConvId={selectedConvId}
+      />
 
       {toast ? (
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-[80] -translate-x-1/2 px-4">
@@ -1085,8 +1105,8 @@ export default function CrmInbox({
             className={[
               "rounded-full px-4 py-2 text-sm shadow-xl backdrop-blur",
               toast.type === "success"
-                ? "bg-[#103529]/95 text-[#d8fff3] border border-[#1f6f59]"
-                : "bg-[#3b1f23]/95 text-[#ffd1d7] border border-[#6e2a35]",
+                ? "bg-[var(--crm-success-soft)]/95 text-[var(--crm-success-text)] border border-[var(--crm-accent-strong)]"
+                : "bg-[var(--crm-danger-soft)]/95 text-[var(--crm-danger-text)] border border-[var(--crm-danger-border)]",
             ].join(" ")}
           >
             {toast.message}
@@ -1114,15 +1134,15 @@ const localCss = `
     width: 2rem;
     height: 2rem;
     border-radius: 9999px;
-    color: #8696a0;
+    color: var(--crm-muted);
     background: transparent;
     opacity: .9;
     transition: background-color .15s ease, color .15s ease, opacity .15s ease;
   }
 
   .crm-menu-btn:hover {
-    background: rgba(255,255,255,.06);
-    color: #e9edef;
+    background: var(--crm-hover);
+    color: var(--crm-text);
     opacity: 1;
   }
 

@@ -1,7 +1,7 @@
 // src/views/AdminPedidos.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import ExportarExcel from "../components/ExportarExcel";
-import { db } from "../firebase/firebase";
+import { auth, db } from "../firebase/firebase";
 import {
   collection,
   getDocs,
@@ -11,6 +11,7 @@ import {
   doc,
   deleteDoc,
   updateDoc,
+  deleteField,
   limit,
 } from "firebase/firestore";
 
@@ -24,6 +25,7 @@ import { format } from "date-fns";
 import SeguimientoRepartidoresAdmin from "../components/SeguimientoRepartidoresAdmin";
 import { useProvincia } from "../hooks/useProvincia.js";
 import ConteoPedidosPorDia from "../components/ConteoPedidosPorDiaPorRepartidor.jsx";
+import { normalizeEmail, requireProvinciaAdmin } from "../utils/adminAccess";
 
 // ⬇️ Nuevo: nombres de vendedores con fallback a alias (antes del @)
 import { resolveVendedorNombre } from "../components/vendedoresMap";
@@ -209,11 +211,31 @@ function AdminPedidos() {
     }
   };
 
-  // Solo validar auth al montar. La carga real se hace al tocar "Buscar"
+  // Validar admin real contra la provincia, no solo localStorage
   useEffect(() => {
-    const adminAuth = localStorage.getItem("adminAutenticado");
-    if (!adminAuth) navigate("/admin");
-  }, [navigate]);
+    let cancelled = false;
+
+    const run = async () => {
+      if (!provinciaId) return;
+
+      try {
+        const email = normalizeEmail(auth.currentUser?.email || localStorage.getItem("emailKey"));
+        const access = await requireProvinciaAdmin({ db, provinciaId, email });
+
+        if (!cancelled && !access.ok) {
+          navigate("/admin", { replace: true });
+        }
+      } catch (error) {
+        console.error("Error validando acceso admin en pedidos:", error);
+        if (!cancelled) navigate("/admin", { replace: true });
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, provinciaId]);
 
   // Selección de fecha (no dispara carga)
   const handleFechaChange = (date) => {
@@ -327,19 +349,42 @@ function AdminPedidos() {
       const { id, productos = [], ...resto } = pedidoEditado;
       const resumen = productos.map((p) => `${p.nombre} x${p.cantidad}`).join(" - ");
       const total = productos.reduce((acc, p) => acc + (p.precio || 0) * p.cantidad, 0);
-      const pedidoStr = `${resumen} | TOTAL: $${total}`;
+      const pedidoStr = `${resumen} | TOTAL: $${total.toLocaleString("es-AR")}`;
 
       await updateDoc(doc(db, "provincias", provinciaId, "pedidos", id), {
         ...resto,
         productos,
         pedido: pedidoStr,
+        monto: total,
+
+        // Al editar productos/monto desde admin, cualquier descuento anterior queda inválido.
+        descuentoModo: deleteField(),
+        descuentoPct: deleteField(),
+        montoConDescuento: deleteField(),
+        descuentoMonto: deleteField(),
+        descuentosProductos: deleteField(),
       });
 
       setModalVisible(false);
 
       // actualizar lista visible
       setPedidos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...resto, productos, pedido: pedidoStr } : p))
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                ...resto,
+                productos,
+                pedido: pedidoStr,
+                monto: total,
+                descuentoModo: "",
+                descuentoPct: 0,
+                montoConDescuento: undefined,
+                descuentoMonto: 0,
+                descuentosProductos: undefined,
+              }
+            : p
+        )
       );
 
       // actualizar cache de la fecha actual (si existe)
@@ -351,7 +396,20 @@ function AdminPedidos() {
           copy.set(
             claveCache,
             copy.get(claveCache).map((p) =>
-              p.id === id ? { ...p, ...resto, productos, pedido: pedidoStr } : p
+              p.id === id
+                ? {
+                    ...p,
+                    ...resto,
+                    productos,
+                    pedido: pedidoStr,
+                    monto: total,
+                    descuentoModo: "",
+                    descuentoPct: 0,
+                    montoConDescuento: undefined,
+                    descuentoMonto: 0,
+                    descuentosProductos: undefined,
+                  }
+                : p
             )
           );
         }

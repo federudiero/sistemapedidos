@@ -1,0 +1,43 @@
+export const ADMIN_SECTIONS = {
+  DASHBOARD_ADMIN: "dashboardAdmin",
+  BUSCADOR_GLOBAL: "buscadorGlobal",
+  PEDIDOS: "pedidos",
+  DIVIDIR_PEDIDOS: "dividirPedidos",
+  HOJA_RUTA: "hojaRuta",
+  DEPOSITO: "deposito",
+  STOCK: "stock",
+  PANEL_STOCK: "panelStock",
+  CIERRE_CAJA: "cierreCaja",
+  CONTROL_CIERRES: "controlCierres",
+  RESUMEN_FINANCIERO: "resumenFinanciero",
+  LIQUIDACIONES: "liquidaciones",
+  AUDITORIA_PRODUCTOS: "auditoriaProductos",
+  PRE_CARGA_PRODUCTOS: "preCargaProductos",
+  CRM_PANEL: "crmPanel",
+  CRM_REMARKETING: "crmRemarketing",
+  HISTORIAL_STOCK: "historialStock",
+  CONTROL_REMITOS: "controlRemitos",
+};
+
+export const ADMIN_SECTION_KEYS = Object.values(ADMIN_SECTIONS);
+
+export const ADMIN_SECTION_LABELS = {
+  [ADMIN_SECTIONS.DASHBOARD_ADMIN]: "Dashboard",
+  [ADMIN_SECTIONS.BUSCADOR_GLOBAL]: "Buscador global",
+  [ADMIN_SECTIONS.PEDIDOS]: "Pedidos",
+  [ADMIN_SECTIONS.DIVIDIR_PEDIDOS]: "División de pedidos",
+  [ADMIN_SECTIONS.HOJA_RUTA]: "Hoja de ruta",
+  [ADMIN_SECTIONS.DEPOSITO]: "Depósito",
+  [ADMIN_SECTIONS.STOCK]: "Agregar stock",
+  [ADMIN_SECTIONS.PANEL_STOCK]: "Control de stock",
+  [ADMIN_SECTIONS.CIERRE_CAJA]: "Cierre de caja",
+  [ADMIN_SECTIONS.CONTROL_CIERRES]: "Control de cierres",
+  [ADMIN_SECTIONS.RESUMEN_FINANCIERO]: "Resumen financiero",
+  [ADMIN_SECTIONS.LIQUIDACIONES]: "Liquidaciones",
+  [ADMIN_SECTIONS.AUDITORIA_PRODUCTOS]: "Auditoría de productos",
+  [ADMIN_SECTIONS.PRE_CARGA_PRODUCTOS]: "Precarga de productos",
+  [ADMIN_SECTIONS.CRM_PANEL]: "Admin CRM Panel",
+  [ADMIN_SECTIONS.CRM_REMARKETING]: "CRM Remarketing",
+  [ADMIN_SECTIONS.HISTORIAL_STOCK]: "Historial de stock",
+  [ADMIN_SECTIONS.CONTROL_REMITOS]: "Control de remitos",
+};

@@ -139,6 +139,53 @@ function normalizeMimeType(mimeType) {
     .toLowerCase();
 }
 
+
+const ACCEPTED_OUTBOUND_VIDEO_MIMES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/3gpp",
+  "video/3gpp2",
+]);
+
+function extensionFromFilename(filename = "") {
+  const clean = String(filename || "").trim().toLowerCase();
+  const idx = clean.lastIndexOf(".");
+  return idx >= 0 ? clean.slice(idx + 1) : "";
+}
+
+function resolveOutgoingMediaInfo(file) {
+  const mimeType = normalizeMimeType(file?.type);
+  const fallbackExt = extensionFromFilename(file?.name);
+
+  if (mimeType.startsWith("image/")) {
+    return {
+      kind: "image",
+      mimeType,
+      ext: extensionFromMime(mimeType, fallbackExt || "jpg"),
+    };
+  }
+
+  if (ACCEPTED_OUTBOUND_VIDEO_MIMES.has(mimeType)) {
+    return {
+      kind: "video",
+      mimeType,
+      ext: extensionFromMime(mimeType, fallbackExt || "mp4"),
+    };
+  }
+
+  if (!mimeType && ["mp4", "mov", "webm", "3gp", "3g2"].includes(fallbackExt)) {
+    return {
+      kind: "video",
+      mimeType: fallbackExt === "mov" ? "video/quicktime" : fallbackExt === "webm" ? "video/webm" : fallbackExt === "3gp" ? "video/3gpp" : fallbackExt === "3g2" ? "video/3gpp2" : "video/mp4",
+      ext: fallbackExt,
+    };
+  }
+
+  return null;
+}
+
+
 function extensionFromMime(mimeType, fallback = "bin") {
   const mime = normalizeMimeType(mimeType);
 
@@ -840,20 +887,21 @@ export function useCrmSender({
         const replyTo = normalizeReplyTo(options?.replyTo);
 
         for (const f of files) {
-          const isImg = f.type?.startsWith("image/");
-          const isVid = f.type?.startsWith("video/");
-          if (!isImg && !isVid) continue;
+          const mediaInfo = resolveOutgoingMediaInfo(f);
 
-          const ext =
-            (f.name || "").split(".").pop() ||
-            extensionFromMime(f.type, isImg ? "jpg" : "mp4");
+          if (!mediaInfo) {
+            throw new Error(
+              "Solo se permiten imágenes y videos MP4, MOV, WEBM o 3GP."
+            );
+          }
+
           const msgId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-          const path = `crm/${provinciaId}/${conversationId}/${msgId}.${ext}`;
+          const path = `crm/${provinciaId}/${conversationId}/${msgId}.${mediaInfo.ext}`;
 
           const mediaUrl = await uploadBlob({
             blob: f,
             path,
-            contentType: f.type,
+            contentType: mediaInfo.mimeType || f.type || "application/octet-stream",
           });
 
           await fetchJson(`${apiBase}/crm/sendMedia`, {
@@ -866,9 +914,10 @@ export function useCrmSender({
               provinciaId,
               convId: conversationId,
               mediaUrl,
-              mimeType: f.type || "",
+              mimeType: mediaInfo.mimeType || f.type || "",
+              originalMimeType: mediaInfo.mimeType || f.type || "",
               filename: f.name || "",
-              kind: isImg ? "image" : "video",
+              kind: mediaInfo.kind,
               caption: "",
               ...(replyTo ? { replyTo } : {}),
             }),

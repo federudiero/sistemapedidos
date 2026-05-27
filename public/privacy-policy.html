@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Política de Privacidad — Estilos Pinturas</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 0.9375rem;
+      line-height: 1.7;
+      padding: 2rem 1rem 4rem;
+    }
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid #334155;
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header .brand {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 0.5rem;
+    }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+    header .updated {
+      font-size: 0.8125rem;
+      color: #64748b;
+      margin-top: 0.35rem;
+    }
+    h2 {
+      font-size: 1.0625rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    p { color: #cbd5e1; margin-bottom: 0.75rem; }
+    ul {
+      color: #cbd5e1;
+      padding-left: 1.4rem;
+      margin-bottom: 0.75rem;
+    }
+    ul li { margin-bottom: 0.3rem; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 1rem;
+      padding: 1.25rem 1.5rem;
+      margin-top: 2rem;
+    }
+    .card p { margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">Estilos Pinturas</div>
+      <h1>Política de Privacidad</h1>
+      <div class="updated">Última actualización: mayo de 2026</div>
+    </header>
+
+    <p>
+      Esta Política de Privacidad describe cómo <strong>Estilos Pinturas</strong>
+      recopila, usa y protege la información de quienes utilizan nuestra aplicación
+      de gestión de pedidos y CRM con WhatsApp Business.
+    </p>
+
+    <h2>1. Información que recopilamos</h2>
+    <p>A través de la integración con WhatsApp Business y Meta, podemos recopilar:</p>
+    <ul>
+      <li>Número de teléfono de WhatsApp Business del vendedor.</li>
+      <li>ID de cuenta de WhatsApp Business (WABA ID) y Phone Number ID.</li>
+      <li>Mensajes enviados y recibidos a través del CRM (solo los del número conectado).</li>
+      <li>Nombre de pantalla del número de WhatsApp Business.</li>
+      <li>Correo electrónico del vendedor registrado en la plataforma.</li>
+      <li>Datos de pedidos y clientes ingresados manualmente en la aplicación.</li>
+    </ul>
+
+    <h2>2. Cómo usamos la información</h2>
+    <p>La información recopilada se usa exclusivamente para:</p>
+    <ul>
+      <li>Gestionar y mostrar el historial de conversaciones en el CRM.</li>
+      <li>Enviar y recibir mensajes de WhatsApp Business en nombre del vendedor.</li>
+      <li>Registrar y gestionar pedidos de clientes.</li>
+      <li>Generar reportes internos de ventas y comisiones.</li>
+      <li>Autenticar el acceso a la plataforma mediante Firebase Authentication.</li>
+    </ul>
+
+    <h2>3. Compartición de datos</h2>
+    <p>
+      No vendemos ni compartimos tu información personal con terceros, salvo los
+      proveedores de infraestructura necesarios para operar la plataforma:
+    </p>
+    <ul>
+      <li><strong>Meta (Facebook)</strong> — para el envío y recepción de mensajes via WhatsApp Business API.</li>
+      <li><strong>Google Firebase</strong> — para autenticación, base de datos y hosting de funciones.</li>
+    </ul>
+
+    <h2>4. Retención de datos</h2>
+    <p>
+      Los datos de conversaciones y pedidos se conservan mientras la cuenta del
+      vendedor esté activa en la plataforma. Al solicitar la desconexión o
+      eliminación de cuenta, los tokens de acceso son eliminados de inmediato y los
+      datos pueden ser borrados a solicitud del usuario.
+    </p>
+
+    <h2>5. Seguridad</h2>
+    <p>
+      Los tokens de acceso de WhatsApp Business se almacenan en Firebase Firestore
+      con reglas de seguridad que restringen el acceso únicamente al usuario
+      autenticado y a los administradores de la plataforma. No se almacenan
+      contraseñas en texto plano.
+    </p>
+
+    <h2>6. Derechos del usuario</h2>
+    <p>Podés solicitar en cualquier momento:</p>
+    <ul>
+      <li>Acceso a los datos que tenemos sobre vos.</li>
+      <li>Corrección de datos incorrectos.</li>
+      <li>Eliminación de tus datos (ver nuestra
+        <a href="/data-deletion.html">página de eliminación de datos</a>).</li>
+    </ul>
+
+    <h2>7. Cambios a esta política</h2>
+    <p>
+      Podemos actualizar esta política ocasionalmente. Los cambios se notificarán
+      mediante la actualización de la fecha al inicio de este documento.
+    </p>
+
+    <div class="card">
+      <p>
+        Para consultas sobre privacidad o para ejercer tus derechos, contactanos en:
+        <a href="mailto:info@estilospinturas.com">info@estilospinturas.com</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

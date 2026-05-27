@@ -1,4 +1,3 @@
-// src/admin/SeguimientoRepartidoresAdmin.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { db } from "../firebase/firebase";
@@ -16,13 +15,11 @@ const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
   if (!raw) return "";
   let s = String(raw).trim();
 
-  // Internacional con + o 00
   let intl = "";
   if (s.startsWith("+")) intl = s.slice(1).replace(/\D/g, "");
   else if (s.startsWith("00")) intl = s.slice(2).replace(/\D/g, "");
-  if (intl) return intl; // Ya incluye país
+  if (intl) return intl;
 
-  // Local (sin país)
   let d = s.replace(/\D/g, "");
   if (!d) return "";
 
@@ -46,18 +43,55 @@ const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
     return "54" + d;
   }
 
-  // Si no es AR y vino local sin país, no adivinamos
   return "";
 };
 
-const getPhones = (p) =>
-  [p?.telefono, p?.telefonoAlt].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+const justDigits = (t) => String(t || "").replace(/\D/g, "");
+
+const getPhones = (p) => {
+  const candidatos = [p?.telefono, p?.telefonoAlt].filter(Boolean);
+  const unicos = [];
+  for (const c of candidatos) {
+    const d = justDigits(c);
+    if (d && !unicos.includes(d)) unicos.push(d);
+  }
+  return unicos;
+};
 
 function hoyYYYYMMDD() {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+function formatMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+function getPedidoTexto(p) {
+  if (Array.isArray(p?.productos) && p.productos.length > 0) {
+    return p.productos
+      .map((it) => {
+        const nombre = it?.nombre || it?.descripcion || "Producto";
+        const cantidad = Number(it?.cantidad);
+        return Number.isFinite(cantidad) && cantidad > 0 ? `${cantidad}x ${nombre}` : nombre;
+      })
+      .join(" · ");
+  }
+
+  if (typeof p?.pedido === "string" && p.pedido.trim()) {
+    return p.pedido.trim();
+  }
+
+  return "";
 }
 
 /**
@@ -77,22 +111,18 @@ export default function SeguimientoRepartidoresAdmin({
 }) {
   const { provincia: provCtx, role } = useProvincia();
 
-  // Estado de filtros UI
   const [prov, setProv] = useState(provinciaProp || provCtx);
   const [fechaStr, setFechaStr] = useState(fechaProp || hoyYYYYMMDD());
   const [incluirEntregados, setIncluirEntregados] = useState(true);
 
-  // Datos desde Firestore (si no vienen por props)
   const [pedidosFS, setPedidosFS] = useState([]);
   const usandoFS = !Array.isArray(pedidosProp);
 
-  // Cargar/escuchar pedidos por provincia/fecha
   useEffect(() => {
     if (!usandoFS) return;
     if (!prov || !fechaStr) return;
 
     const col = collection(db, "provincias", prov, "pedidos");
-    // Sólo del día elegido; orden por ordenRuta para UX (también re-ordenamos luego)
     const q = query(col, where("fechaStr", "==", fechaStr), orderBy("ordenRuta"));
 
     const unsub = onSnapshot(
@@ -109,10 +139,8 @@ export default function SeguimientoRepartidoresAdmin({
     return () => unsub();
   }, [usandoFS, prov, fechaStr]);
 
-  // Fuente de datos final
   const pedidos = usandoFS ? pedidosFS : pedidosProp;
 
-  // Agrupar por repartidor y calcular progreso (mantiene tu misma lógica base)
   const grupos = useMemo(() => {
     const normalizados = (pedidos || []).map((p) => {
       const repartidor = Array.isArray(p.asignadoA)
@@ -123,17 +151,14 @@ export default function SeguimientoRepartidoresAdmin({
       return { ...p, repartidor, ordenRuta, entregado };
     });
 
-    // filtrar por entregados si corresponde (sólo para la lista expandida)
     const visibles = incluirEntregados ? normalizados : normalizados.filter((p) => !p.entregado);
 
-    // Agrupo por repartidor
     const map = new Map();
     for (const p of visibles) {
       if (!map.has(p.repartidor)) map.set(p.repartidor, []);
       map.get(p.repartidor).push(p);
     }
 
-    // Resumen por repartidor
     const out = Array.from(map.entries()).map(([repartidor, arr]) => {
       const ordenados = arr.slice().sort((a, b) => a.ordenRuta - b.ordenRuta);
       const entregados = ordenados.filter((p) => p.entregado).length;
@@ -143,7 +168,6 @@ export default function SeguimientoRepartidoresAdmin({
       return { repartidor, total, entregados, progreso, proximo, pedidos: ordenados };
     });
 
-    // Primero quienes todavía tienen pendientes
     out.sort((a, b) => {
       const aPend = a.proximo ? 0 : 1;
       const bPend = b.proximo ? 0 : 1;
@@ -154,6 +178,80 @@ export default function SeguimientoRepartidoresAdmin({
   }, [pedidos, incluirEntregados]);
 
   const puedeElegirProvincia = role === "admin";
+
+  const renderPedidoCard = (p) => {
+    const phones = getPhones(p);
+    const mainPhone = phones[0];
+    const altPhone = phones[1];
+    const pedidoTexto = getPedidoTexto(p);
+    const ordenAdmin = Number.isFinite(p.ordenRuta) && p.ordenRuta !== 999 ? p.ordenRuta + 1 : "—";
+
+    return (
+      <div
+        key={p.id || `${p.repartidor}-${p.ordenRuta}-${p.nombre}`}
+        className="p-3 border rounded-lg bg-base-100 border-base-300"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="badge badge-primary badge-sm">
+              Parada #{ordenAdmin}
+            </span>
+
+            <span
+              className={
+                p.entregado
+                  ? "badge badge-success badge-sm"
+                  : "badge badge-warning badge-sm"
+              }
+            >
+              {p.entregado ? "Entregado" : "Pendiente"}
+            </span>
+          </div>
+
+          <div className="text-xs opacity-70">
+            orden admin: #{ordenAdmin}
+          </div>
+        </div>
+
+        <div className="mt-2 space-y-1 text-sm">
+          <div>
+            <strong>👤 {p.nombre || "Sin nombre"}</strong>
+          </div>
+
+          <div>📍 {p.direccion || "—"}</div>
+
+          {formatMoney(p.monto) ? <div>💵 {formatMoney(p.monto)}</div> : null}
+
+          {mainPhone ? (
+            <div>
+              📱{" "}
+              <a
+                className="link link-accent"
+                href={`https://wa.me/${phoneToWaE164(mainPhone, { defaultCountry: "AR" })}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={altPhone ? `Alt: ${altPhone}` : ""}
+              >
+                {mainPhone}
+              </a>
+              {altPhone ? (
+                <span className="ml-1 text-xs opacity-70">/ Alt: {altPhone}</span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {pedidoTexto ? <div>🧾 {pedidoTexto}</div> : null}
+
+          {p.vendedorNombreManual || p.vendedorEmail ? (
+            <div>🧑‍💼 {p.vendedorNombreManual || p.vendedorEmail}</div>
+          ) : null}
+
+          {p.entreCalles ? <div>↔️ Entre calles: {p.entreCalles}</div> : null}
+          {p.observacion ? <div>📝 {p.observacion}</div> : null}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-6xl px-4 py-6 mx-auto">
@@ -207,74 +305,108 @@ export default function SeguimientoRepartidoresAdmin({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-2">
-          {grupos.map((g) => (
-            <div key={g.repartidor} className="p-4 shadow-inner rounded-xl bg-base-200">
-              <div className="flex items-center justify-between">
-                <h5 className="text-base font-bold">{g.repartidor}</h5>
-                <span className="text-sm opacity-80">
-                  {g.entregados}/{g.total} ({g.progreso}%)
-                </span>
-              </div>
+          {grupos.map((g) => {
+            const proximoOrden = Number.isFinite(g.proximo?.ordenRuta)
+              ? g.proximo.ordenRuta + 1
+              : "—";
 
-              <div className="w-full h-2 mt-2 rounded bg-base-300">
-                <div className="h-2 rounded bg-success" style={{ width: `${g.progreso}%` }} />
-              </div>
+            return (
+              <div key={g.repartidor} className="p-4 shadow-inner rounded-xl bg-base-200">
+                <div className="flex items-center justify-between gap-2">
+                  <h5 className="text-base font-bold break-all">{g.repartidor}</h5>
+                  <span className="text-sm opacity-80 whitespace-nowrap">
+                    {g.entregados}/{g.total} ({g.progreso}%)
+                  </span>
+                </div>
 
-              <div className="mt-3">
-                {g.proximo ? (
-                  <div className="p-3 rounded-lg bg-base-100">
-                    <p className="mb-1 text-sm opacity-70">
-                      {(() => {
-                        const n = Number.isFinite(g.proximo?.ordenRuta) ? g.proximo.ordenRuta + 1 : "—";
-                        return <>Próxima parada (orden #{n})</>;
-                      })()}
-                    </p>
-                    <p><strong>👤 {g.proximo.nombre}</strong></p>
-                    <p>📍 {g.proximo.direccion}</p>
-                    {g.proximo.monto ? <p>💵 ${g.proximo.monto}</p> : null}
+                <div className="w-full h-2 mt-2 rounded bg-base-300">
+                  <div className="h-2 rounded bg-success" style={{ width: `${g.progreso}%` }} />
+                </div>
 
-                    {getPhones(g.proximo).length > 0 && (
-                      <div className="mt-1 space-y-1">
-                        {getPhones(g.proximo).map((ph, i) => (
-                          <div key={i}>
-                            {i === 0 ? "📱 " : "☎️ "}
-                            <a
-                              className="link link-accent"
-                              href={`https://wa.me/${phoneToWaE164(ph, { defaultCountry: "AR" })}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {ph}
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                <div className="mt-3">
+                  {g.proximo ? (
+                    <div className="p-3 rounded-lg bg-base-100">
+                      <p className="mb-1 text-sm opacity-70">
+                        Próxima parada (orden #{proximoOrden})
+                      </p>
+
+                      <p>
+                        <strong>👤 {g.proximo.nombre || "Sin nombre"}</strong>
+                      </p>
+
+                      <p>📍 {g.proximo.direccion || "—"}</p>
+
+                      {formatMoney(g.proximo.monto) ? (
+                        <p>💵 {formatMoney(g.proximo.monto)}</p>
+                      ) : null}
+
+                      {getPhones(g.proximo).length > 0 && (
+                        <div className="mt-1 space-y-1">
+                          {getPhones(g.proximo).map((ph, i) => (
+                            <div key={ph}>
+                              {i === 0 ? "📱 " : "☎️ "}
+                              <a
+                                className="link link-accent"
+                                href={`https://wa.me/${phoneToWaE164(ph, { defaultCountry: "AR" })}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {ph}
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {getPedidoTexto(g.proximo) ? (
+                        <div className="mt-1 text-sm">
+                          🧾 {getPedidoTexto(g.proximo)}
+                        </div>
+                      ) : null}
+
+                      {g.proximo.vendedorNombreManual || g.proximo.vendedorEmail ? (
+                        <div className="mt-1 text-sm">
+                          🧑‍💼 {g.proximo.vendedorNombreManual || g.proximo.vendedorEmail}
+                        </div>
+                      ) : null}
+
+                      {g.proximo.entreCalles ? (
+                        <div className="mt-1 text-sm">
+                          ↔️ Entre calles: {g.proximo.entreCalles}
+                        </div>
+                      ) : null}
+
+                      {g.proximo.observacion ? (
+                        <div className="mt-1 text-sm">
+                          📝 {g.proximo.observacion}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-base-100 text-success">
+                      ✅ ¡Ruta completada!
+                    </div>
+                  )}
+                </div>
+
+                <details className="mt-3 overflow-hidden border rounded-lg group bg-base-100 border-base-300">
+                  <summary className="flex items-center justify-between gap-3 p-3 text-sm font-medium cursor-pointer select-none opacity-90 list-none [&::-webkit-details-marker]:hidden">
+                    <span>Ver detalle de la ruta</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs opacity-70">{g.pedidos.length} pedidos</span>
+                      <span className="inline-flex items-center justify-center text-xs transition-transform rounded-full w-7 h-7 bg-base-200 border-base-300 group-open:rotate-180">
+                        ▼
+                      </span>
+                    </span>
+                  </summary>
+
+                  <div className="grid grid-cols-1 gap-3 p-3 pt-0">
+                    {g.pedidos.map((p) => renderPedidoCard(p))}
                   </div>
-                ) : (
-                  <div className="p-3 rounded-lg bg-base-100 text-success">
-                    ✅ ¡Ruta completada!
-                  </div>
-                )}
+                </details>
               </div>
-
-              <details className="mt-3">
-                <summary className="text-sm cursor-pointer opacity-80">
-                  Ver detalle de la ruta
-                </summary>
-                <ul className="mt-2 text-sm">
-                  {g.pedidos.map((p) => (
-                    <li
-                      key={p.id || `${g.repartidor}-${p.ordenRuta}-${p.nombre}`}
-                      className="py-1 border-b border-base-300"
-                    >
-                      #{Number.isFinite(p.ordenRuta) ? p.ordenRuta + 1 : "—"} — {p.nombre} — {p.entregado ? "✅ Entregado" : "⏳ Pendiente"}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

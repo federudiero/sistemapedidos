@@ -1,20 +1,10 @@
-// src/views/AdminLogin.jsx
 import React, { useEffect, useState } from "react";
 import { auth, db } from "../firebase/firebase";
-import {
-  GoogleAuthProvider,
- 
-  signInWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { useProvincia } from "../hooks/useProvincia";
-import { doc, getDoc } from "firebase/firestore";
-import { isSuperAdmin } from "../constants/superadmins";
-
-// Convierte array u objeto-indexado en array de strings
-const toArray = (v) =>
-  Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : [];
+import { isProvinciaAdmin, normalizeEmail } from "../utils/adminAccess";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -22,6 +12,7 @@ export default function AdminLogin() {
 
   const [emailForm, setEmailForm] = useState("");
   const [passForm, setPassForm] = useState("");
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,39 +22,49 @@ export default function AdminLogin() {
     }
   }, [provinciaId, navigate]);
 
-  const validarAdmin = async (email) => {
-    if (isSuperAdmin(email)) return true;
-    const ref = doc(db, "provincias", provinciaId, "config", "usuarios");
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : {};
-    const admins = toArray(data.admins).map((e) => String(e || "").toLowerCase());
-    return admins.includes(email);
-  };
+  const validarAdmin = async (email) => isProvinciaAdmin(db, provinciaId, email);
 
   const limpiarStorageOtrosRoles = () => {
     localStorage.removeItem("vendedorAutenticado");
     localStorage.removeItem("emailVendedor");
     localStorage.removeItem("repartidorAutenticado");
     localStorage.removeItem("emailRepartidor");
-    localStorage.removeItem("emailKey"); // 🔑 limpiar clave normalizada
+    localStorage.removeItem("emailKey");
   };
 
   const loginEmailPass = async () => {
     if (!provinciaId || loading) return;
+
     setError("");
     setLoading(true);
+
     try {
-      const cred = await signInWithEmailAndPassword(auth, emailForm.trim(), passForm);
-      const email = String(cred.user?.email || "").toLowerCase(); // 🔑 normalizado
+      const cred = await signInWithEmailAndPassword(
+        auth,
+        emailForm.trim(),
+        passForm
+      );
+
+      const email = normalizeEmail(cred.user?.email);
       const ok = await validarAdmin(email);
+
       if (!ok) {
         await signOut(auth);
-        return setError("❌ Este correo no es administrador de esta provincia.");
+        setError("❌ Este correo no es administrador de esta provincia.");
+        return;
       }
+
+      // ✅ guardamos estado local primero
       limpiarStorageOtrosRoles();
       localStorage.setItem("adminAutenticado", "true");
-      localStorage.setItem("emailKey", email); // 🔑 guardar clave normalizada
-      navigate("/admin/pedidos", { replace: true });
+      localStorage.setItem("emailKey", email);
+
+      // ✅ FIX:
+      // Forzamos a que Firebase deje completamente asentada la sesión
+      // antes de navegar al panel protegido.
+      await cred.user.getIdToken();
+
+      navigate("/admin/dashboard", { replace: true });
     } catch (e) {
       console.error(e);
       setError("❌ Usuario/contraseña inválidos.");
@@ -72,7 +73,6 @@ export default function AdminLogin() {
     }
   };
 
-  
   const cambiarProvincia = () => {
     setProvincia("");
     limpiarStorageOtrosRoles();
@@ -82,49 +82,66 @@ export default function AdminLogin() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-base-100 text-base-content">
       <div className="w-full max-w-md p-8 border shadow-lg border-base-300 bg-base-200 rounded-xl">
-       <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
-  <h2 className="text-2xl font-bold">🔐 Acceso Administrador</h2>
+        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-2xl font-bold">🔐 Acceso Administrador</h2>
 
-  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-    <span className="font-mono badge badge-primary">
-      Prov: {provinciaId || "—"}
-    </span>
-    <button
-      className="btn btn-xs btn-outline"
-      onClick={cambiarProvincia}
-    >
-      Cambiar provincia
-    </button>
-  </div>
-</div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span className="font-mono badge badge-primary">
+              Prov: {provinciaId || "—"}
+            </span>
+            <button
+              className="btn btn-xs btn-outline"
+              onClick={cambiarProvincia}
+            >
+              Cambiar provincia
+            </button>
+          </div>
+        </div>
 
         <div className="mb-4 space-y-2">
           <input
             className="w-full input input-bordered"
+            type="email"
+            autoComplete="username"
             placeholder="email@dominio.com"
             value={emailForm}
             onChange={(e) => setEmailForm(e.target.value)}
           />
-          <input
-            className="w-full input input-bordered"
-            type="password"
-            placeholder="Contraseña"
-            value={passForm}
-            onChange={(e) => setPassForm(e.target.value)}
-          />
+
+          <div className="relative">
+            <input
+              className="w-full pr-12 input input-bordered"
+              type={mostrarPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="Contraseña"
+              value={passForm}
+              onChange={(e) => setPassForm(e.target.value)}
+            />
+            <button
+              type="button"
+              className="absolute -translate-y-1/2 btn btn-ghost btn-sm right-1 top-1/2"
+              onClick={() => setMostrarPassword((prev) => !prev)}
+              aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              title={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {mostrarPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
           <button
             className="w-full btn btn-primary"
             onClick={loginEmailPass}
             disabled={loading}
           >
-            Ingresar
+            {loading ? "Ingresando..." : "Ingresar"}
           </button>
         </div>
 
         <div className="divider">o</div>
 
-        
-        <button className="w-full mt-2 btn btn-outline" onClick={() => navigate("/home")}>
+        <button
+          className="w-full mt-2 btn btn-outline"
+          onClick={() => navigate("/home")}
+        >
           ⬅ Volver a Home
         </button>
 

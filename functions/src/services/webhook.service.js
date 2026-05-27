@@ -22,6 +22,7 @@ const {
   markUnreadForAssignedUser,
 } = require("./conversation.service");
 const { getCrmVendorContext } = require("./vendor.service");
+const { mergeCrmVendor } = require("../repositories/vendor.repository");
 const { downloadMetaMedia } = require("./meta.service");
 
 function parseWhatsAppWebhook(body) {
@@ -439,6 +440,13 @@ async function processInboundMessage({ prov, inbound }) {
       clientWaId,
     };
   }
+
+  await mergeCrmVendor(prov, mappedVendorEmail, {
+    connectionStatus: "connected",
+    lastWebhookAt: nowTs(),
+    lastInboundPhoneId: phoneKey,
+    updatedAt: nowTs(),
+  });
 
   if (waMessageId) {
     let existingMsg = await findMessageByWaMessageId(prov, convId, waMessageId);

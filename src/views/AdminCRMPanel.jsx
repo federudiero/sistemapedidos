@@ -576,7 +576,7 @@ export default function AdminCRMPanel() {
   if (!provinciaId) {
     body = (
       <div className="flex items-center justify-center p-6">
-        <div className="max-w-md w-full rounded-2xl border border-[#2a3942] bg-[#111b21] p-5">
+        <div className="w-full max-w-md p-5 border rounded-2xl border-base-300 bg-base-200">
           <div className="text-lg font-semibold">Seleccioná una provincia primero.</div>
           <button className="mt-4 btn btn-outline" onClick={() => navigate("/")}>
             Ir a Provincias
@@ -587,7 +587,7 @@ export default function AdminCRMPanel() {
   } else if (!authReady || checkingRole) {
     body = (
       <div className="flex items-center justify-center p-6">
-        <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-5">
+        <div className="p-5 border rounded-2xl border-base-300 bg-base-200">
           <span className="loading loading-spinner loading-md" />
           <div className="mt-3 opacity-80">Cargando panel admin CRM...</div>
         </div>
@@ -596,7 +596,7 @@ export default function AdminCRMPanel() {
   } else if (!soyAdminProv) {
     body = (
       <div className="flex items-center justify-center p-6">
-        <div className="max-w-xl w-full rounded-2xl border border-[#2a3942] bg-[#111b21] p-5">
+        <div className="w-full max-w-xl p-5 border rounded-2xl border-base-300 bg-base-200">
           <div className="alert alert-error">No tenés permiso de admin en esta provincia.</div>
           <div className="mt-3 text-sm opacity-80">
             Usuario: <span className="font-mono">{emailLo}</span> — Prov:{" "}
@@ -627,7 +627,7 @@ export default function AdminCRMPanel() {
     body = (
       <div className="max-w-6xl mx-auto">
         {/* Topbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 rounded-2xl border border-[#2a3942] bg-[#111b21] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 mb-3 border rounded-2xl border-base-300 bg-base-200">
           <div className="flex flex-col">
             <div className="text-lg font-bold">ADMIN CRM (WhatsApp)</div>
             <div className="text-sm opacity-70">{emailLo}</div>
@@ -638,7 +638,7 @@ export default function AdminCRMPanel() {
         </div>
 
         {/* Filtros */}
-        <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4 mb-3">
+        <div className="p-4 mb-3 border rounded-2xl border-base-300 bg-base-200">
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
               <div className="text-sm opacity-70">Vendedor</div>
@@ -764,23 +764,23 @@ export default function AdminCRMPanel() {
 
         {/* Métricas */}
         <div className="grid gap-3 mb-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4">
+          <div className="p-4 border rounded-2xl border-base-300 bg-base-200">
             <div className="text-sm opacity-70">Números que entraron (nuevas convs)</div>
             <div className="mt-1 text-2xl font-bold">{newConvs}</div>
             <div className="text-xs opacity-60">Período: {range.label}</div>
           </div>
 
-          <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4">
+          <div className="p-4 border rounded-2xl border-base-300 bg-base-200">
             <div className="text-sm opacity-70">Mensajes entrantes</div>
             <div className="mt-1 text-2xl font-bold">{inbound}</div>
           </div>
 
-          <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4">
+          <div className="p-4 border rounded-2xl border-base-300 bg-base-200">
             <div className="text-sm opacity-70">Mensajes salientes</div>
             <div className="mt-1 text-2xl font-bold">{outbound}</div>
           </div>
 
-          <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4">
+          <div className="p-4 border rounded-2xl border-base-300 bg-base-200">
             <div className="text-sm opacity-70">Tiempo de respuesta (promedio)</div>
             <div className="mt-1 text-2xl font-bold">
               {avgResp == null ? "—" : `${Math.round(avgResp)}s`}
@@ -793,7 +793,7 @@ export default function AdminCRMPanel() {
 
         {/* Conversaciones activas / sin etiqueta */}
         <div className="grid gap-3 mb-3 md:grid-cols-2">
-          <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4">
+          <div className="p-4 border rounded-2xl border-base-300 bg-base-200">
             <div className="text-sm opacity-70">Conversaciones activas en el período</div>
             <div className="mt-1 text-2xl font-bold">
               {activeCount == null ? "—" : activeCount}
@@ -803,7 +803,7 @@ export default function AdminCRMPanel() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4">
+          <div className="p-4 border rounded-2xl border-base-300 bg-base-200">
             <div className="text-sm opacity-70">Sin etiquetar en el período</div>
             <div className="mt-1 text-2xl font-bold">
               {unlabeledCount == null ? "—" : unlabeledCount}
@@ -815,7 +815,7 @@ export default function AdminCRMPanel() {
         </div>
 
         {/* Vista de etiquetas */}
-        <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] p-4 mb-3">
+        <div className="p-4 mb-3 border rounded-2xl border-base-300 bg-base-200">
           <div className="flex items-center justify-between">
             <div className="font-semibold">Etiquetas del vendedor</div>
             <div className="text-xs opacity-60">
@@ -841,20 +841,20 @@ export default function AdminCRMPanel() {
 
         {/* Detalle */}
         {showDetails ? (
-          <div className="rounded-2xl border border-[#2a3942] bg-[#111b21] overflow-hidden">
-            <div className="p-4 border-b border-[#2a3942] flex items-center justify-between">
+          <div className="overflow-hidden border rounded-2xl border-base-300 bg-base-200">
+            <div className="flex items-center justify-between p-4 border-b border-base-300">
               <div className="font-semibold">Conversaciones (máx 200) — {range.label}</div>
               {loadingConvs ? <span className="loading loading-spinner loading-sm" /> : null}
             </div>
 
-            <div className="divide-y divide-[#2a3942]">
+            <div className="divide-y divide-base-300">
               {convs.length ? (
                 convs.map((c) => {
                   const labels = Array.isArray(c.labels) ? c.labels : [];
                   const unlabeled = isUnlabeledConv(c);
 
                   return (
-                    <div key={c.id} className="p-4 hover:bg-[#0f1a20]">
+                    <div key={c.id} className="p-4 hover:bg-base-300/40">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="font-mono text-sm">{c.telefonoE164 || `+${c.id}`}</div>
                         <div className="text-xs opacity-70">
@@ -897,7 +897,7 @@ export default function AdminCRMPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b141a] text-[#e9edef]">
+    <div className="min-h-screen bg-base-100 text-base-content">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
         <AdminNavbar />
       </div>

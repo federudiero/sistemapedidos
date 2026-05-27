@@ -10,6 +10,14 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import es from "date-fns/locale/es";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
+import {
+    PRECIO_PRINCIPAL_ID,
+    buildPriceSnapshot,
+    formatARS,
+    getDefaultPriceOption,
+    getPriceOptionById,
+    getProductPriceOptions,
+} from "../../utils/productPrices.js";
 
 registerLocale("es", es);
 
@@ -111,16 +119,38 @@ export default function CreatePedidoFromCrmModal({
         return map;
     }, [productosFirestore]);
 
-    const buildSelectedProduct = (prod, overrides = {}) => ({
-        id: prod?.id ?? overrides?.id ?? overrides?.productoId ?? null,
-        productoId: overrides?.productoId ?? prod?.id ?? null,
-        nombre: overrides?.nombre ?? prod?.nombre ?? "",
-        precio:
-            overrides?.precio === 0 || overrides?.precio
-                ? safeNumber(overrides.precio, 0)
-                : safeNumber(prod?.precio, 0),
-        cantidad: Math.max(1, safeNumber(overrides?.cantidad, 1)),
-    });
+    const buildSelectedProduct = (prod, overrides = {}) => {
+        const optionFromCatalog = overrides?.precioVersionId
+            ? getPriceOptionById(prod, overrides.precioVersionId)
+            : getDefaultPriceOption(prod);
+
+        const priceSnapshot = buildPriceSnapshot(
+            overrides?.precioVersionId
+                ? {
+                    ...optionFromCatalog,
+                    id: overrides.precioVersionId,
+                    nombre: overrides.precioNombre || optionFromCatalog?.nombre,
+                    desde: overrides.precioDesde ?? optionFromCatalog?.desde,
+                    hasta: overrides.precioHasta ?? optionFromCatalog?.hasta,
+                }
+                : optionFromCatalog
+        );
+
+        return {
+            id: prod?.id ?? overrides?.id ?? overrides?.productoId ?? null,
+            productoId: overrides?.productoId ?? prod?.id ?? null,
+            nombre: overrides?.nombre ?? prod?.nombre ?? "",
+            precio:
+                overrides?.precio === 0 || overrides?.precio
+                    ? safeNumber(overrides.precio, 0)
+                    : safeNumber(optionFromCatalog?.precio ?? prod?.precio, 0),
+            cantidad: Math.max(1, safeNumber(overrides?.cantidad, 1)),
+            precioVersionId: priceSnapshot.precioVersionId,
+            precioNombre: priceSnapshot.precioNombre,
+            precioDesde: priceSnapshot.precioDesde,
+            precioHasta: priceSnapshot.precioHasta,
+        };
+    };
 
     const normalizeSelectedProducts = (items = []) => {
         return (Array.isArray(items) ? items : [])
@@ -141,6 +171,10 @@ export default function CreatePedidoFromCrmModal({
                     nombre,
                     precio: safeNumber(item?.precio, 0),
                     cantidad: Math.max(1, safeNumber(item?.cantidad, 1)),
+                    precioVersionId: item?.precioVersionId || PRECIO_PRINCIPAL_ID,
+                    precioNombre: item?.precioNombre || "Precio guardado",
+                    precioDesde: item?.precioDesde || null,
+                    precioHasta: item?.precioHasta || null,
                 };
             })
             .filter(Boolean);
@@ -284,6 +318,23 @@ export default function CreatePedidoFromCrmModal({
         );
     };
 
+    const updatePrecio = (productKey, catalogProd, optionId) => {
+        const option = getPriceOptionById(catalogProd, optionId);
+        const snapshot = buildPriceSnapshot(option);
+
+        setProductosSeleccionados((prev) =>
+            prev.map((p) =>
+                getProductoKey(p) === productKey
+                    ? {
+                        ...p,
+                        precio: safeNumber(option?.precio, 0),
+                        ...snapshot,
+                    }
+                    : p
+            )
+        );
+    };
+
     const total = useMemo(() => {
         return (productosSeleccionados || []).reduce(
             (sum, p) => sum + Number(p.precio || 0) * Number(p.cantidad || 0),
@@ -325,6 +376,10 @@ export default function CreatePedidoFromCrmModal({
                 nombre: p.nombre,
                 cantidad: Number(p.cantidad || 1),
                 precio: Number(p.precio || 0),
+                precioVersionId: p.precioVersionId || PRECIO_PRINCIPAL_ID,
+                precioNombre: p.precioNombre || "Precio principal",
+                precioDesde: p.precioDesde || null,
+                precioHasta: p.precioHasta || null,
             })),
             monto: total,
 
@@ -547,6 +602,8 @@ export default function CreatePedidoFromCrmModal({
                                             const prodKey = getProductoKey(prod);
                                             const seleccionado = productosSeleccionados.find((p) => getProductoKey(p) === prodKey);
                                             const cantidad = seleccionado?.cantidad || 1;
+                                            const opcionesPrecio = getProductPriceOptions(prod);
+                                            const precioElegidoId = seleccionado?.precioVersionId || PRECIO_PRINCIPAL_ID;
 
                                             return (
                                                 <div
@@ -563,37 +620,56 @@ export default function CreatePedidoFromCrmModal({
                                                         <div className="min-w-0">
                                                             <div className="font-semibold truncate">{prod.nombre}</div>
                                                             <div className="text-xs opacity-70">
-                                                                ${(Number(prod.precio || 0)).toLocaleString()}
+                                                                {formatARS(seleccionado?.precio ?? prod.precio)}
                                                             </div>
+                                                            {opcionesPrecio.length > 1 ? (
+                                                                <span className="badge badge-secondary badge-xs">precio programado</span>
+                                                            ) : null}
                                                         </div>
                                                     </div>
 
                                                     {!!seleccionado && (
-                                                        <div className="join shrink-0">
-                                                            <button
-                                                                type="button"
-                                                                className="join-item btn btn-xs btn-outline"
-                                                                onClick={() => cambiarCantidad(prodKey, -1)}
-                                                                disabled={cantidad <= 1}
-                                                            >
-                                                                −
-                                                            </button>
-                                                            <input
-                                                                className="join-item input input-xs text-center w-[62px] [font-size:16px]"
-                                                                value={cantidad}
-                                                                onChange={(e) => {
-                                                                    const v = Math.max(1, parseInt(e.target.value || "1", 10));
-                                                                    updateCantidad(prodKey, v);
-                                                                }}
-                                                                inputMode="numeric"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                className="join-item btn btn-xs btn-outline"
-                                                                onClick={() => cambiarCantidad(prodKey, +1)}
-                                                            >
-                                                                +
-                                                            </button>
+                                                        <div className="flex flex-col items-end gap-2 shrink-0">
+                                                            {opcionesPrecio.length > 1 ? (
+                                                                <select
+                                                                    className="w-40 select select-bordered select-xs"
+                                                                    value={precioElegidoId}
+                                                                    onChange={(e) => updatePrecio(prodKey, prod, e.target.value)}
+                                                                >
+                                                                    {opcionesPrecio.map((op) => (
+                                                                        <option key={op.id} value={op.id}>
+                                                                            {op.nombre} — {formatARS(op.precio)}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : null}
+
+                                                            <div className="join">
+                                                                <button
+                                                                    type="button"
+                                                                    className="join-item btn btn-xs btn-outline"
+                                                                    onClick={() => cambiarCantidad(prodKey, -1)}
+                                                                    disabled={cantidad <= 1}
+                                                                >
+                                                                    −
+                                                                </button>
+                                                                <input
+                                                                    className="join-item input input-xs text-center w-[62px] [font-size:16px]"
+                                                                    value={cantidad}
+                                                                    onChange={(e) => {
+                                                                        const v = Math.max(1, parseInt(e.target.value || "1", 10));
+                                                                        updateCantidad(prodKey, v);
+                                                                    }}
+                                                                    inputMode="numeric"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    className="join-item btn btn-xs btn-outline"
+                                                                    onClick={() => cambiarCantidad(prodKey, +1)}
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>

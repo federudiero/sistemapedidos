@@ -26,6 +26,90 @@ async function handleWebhook(req, res) {
   }
 }
 
+async function getWhatsAppConnectionStatus(req, res) {
+  try {
+    const data = await crmService.getWhatsAppConnectionStatus(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("WHATSAPP CONNECTION STATUS ERROR:", e?.response?.data || e);
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "getWhatsAppConnectionStatus error",
+      details: e?.response?.data || null,
+    });
+  }
+}
+
+async function startWhatsAppConnection(req, res) {
+  try {
+    const data = await crmService.startWhatsAppConnection(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("WHATSAPP CONNECTION START ERROR:", e?.response?.data || e);
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "startWhatsAppConnection error",
+      details: e?.response?.data || null,
+    });
+  }
+}
+
+
+async function completeEmbeddedWhatsAppConnection(req, res) {
+  try {
+    const data = await crmService.completeEmbeddedWhatsAppConnection(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("WHATSAPP CONNECTION COMPLETE EMBEDDED ERROR:", e?.response?.data || e);
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "completeEmbeddedWhatsAppConnection error",
+      details: e?.response?.data || null,
+    });
+  }
+}
+
+async function completeManualWhatsAppConnection(req, res) {
+  try {
+    const data = await crmService.completeManualWhatsAppConnection(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("WHATSAPP CONNECTION COMPLETE MANUAL ERROR:", e?.response?.data || e);
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "completeManualWhatsAppConnection error",
+      details: e?.response?.data || null,
+    });
+  }
+}
+
+async function disconnectWhatsAppConnection(req, res) {
+  try {
+    const data = await crmService.disconnectWhatsAppConnection(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("WHATSAPP CONNECTION DISCONNECT ERROR:", e?.response?.data || e);
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "disconnectWhatsAppConnection error",
+      details: e?.response?.data || null,
+    });
+  }
+}
+async function setConversationOptIn(req, res) {
+  try {
+    const data = await crmService.setConversationOptIn(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("SET CONVERSATION OPTIN ERROR:", e?.response?.data || e);
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "setConversationOptIn error",
+      details: e?.response?.data || null,
+    });
+  }
+}
+
 async function listMetaTemplates(req, res) {
   try {
     const data = await crmService.listMetaTemplates(req);
@@ -157,6 +241,11 @@ module.exports = {
   health,
   verifyWebhook,
   handleWebhook,
+  getWhatsAppConnectionStatus,
+  startWhatsAppConnection,
+  completeEmbeddedWhatsAppConnection,
+  completeManualWhatsAppConnection,
+  disconnectWhatsAppConnection,
   listMetaTemplates,
   canSendText,
   canSendTemplate,
@@ -165,4 +254,5 @@ module.exports = {
   sendText,
   sendMedia,
   sendLocation,
+   setConversationOptIn,
 };

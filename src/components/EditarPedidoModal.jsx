@@ -3,6 +3,14 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useProvincia } from "../hooks/useProvincia.js";
+import {
+  PRECIO_PRINCIPAL_ID,
+  buildPriceSnapshot,
+  formatARS,
+  getDefaultPriceOption,
+  getPriceOptionById,
+  getProductPriceOptions,
+} from "../utils/productPrices.js";
 
 const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
   const { provinciaId } = useProvincia();
@@ -33,12 +41,29 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
     fetchProductos();
   }, [show, provinciaId]);
 
-  // Índice por nombre para lookup rápido de precio
+  // Índices para lookup rápido de precio
   const catalogoByNombre = useMemo(() => {
     const m = new Map();
     for (const p of catalogo) m.set(String(p.nombre || ""), p);
     return m;
   }, [catalogo]);
+
+  const catalogoById = useMemo(() => {
+    const m = new Map();
+    for (const p of catalogo) {
+      if (p?.id) m.set(String(p.id), p);
+    }
+    return m;
+  }, [catalogo]);
+
+  const resolveCatalogProduct = useCallback(
+    (item) => {
+      const byId = item?.productoId ? catalogoById.get(String(item.productoId)) : null;
+      if (byId) return byId;
+      return catalogoByNombre.get(String(item?.nombre || "")) || null;
+    },
+    [catalogoById, catalogoByNombre]
+  );
 
   // Inicializar formulario cuando abre el modal, cambia el pedido o el catálogo
   useEffect(() => {
@@ -48,11 +73,27 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
 
     const productosClonados = Array.isArray(copia.productos)
       ? copia.productos.map((p) => {
-          const encontrado = catalogoByNombre.get(String(p.nombre || ""));
+          const encontrado = resolveCatalogProduct(p);
+          const option = p.precioVersionId
+            ? getPriceOptionById(encontrado, p.precioVersionId)
+            : getDefaultPriceOption(encontrado);
+          const snapshot = buildPriceSnapshot(
+            p.precioVersionId
+              ? {
+                  ...option,
+                  id: p.precioVersionId,
+                  nombre: p.precioNombre || option?.nombre,
+                  desde: p.precioDesde ?? option?.desde,
+                  hasta: p.precioHasta ?? option?.hasta,
+                }
+              : option
+          );
           return {
             ...p,
-            precio: p.precio ?? encontrado?.precio ?? 0,
+            productoId: p.productoId ?? encontrado?.id ?? null,
+            precio: p.precio ?? option?.precio ?? encontrado?.precio ?? 0,
             cantidad: Number.isFinite(Number(p.cantidad)) ? Number(p.cantidad) : 1,
+            ...snapshot,
           };
         })
       : [];
@@ -65,7 +106,7 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
       telefono: (copia.telefono || "").trim(),
       productos: productosClonados,
     });
-  }, [show, pedido, catalogoByNombre]);
+  }, [show, pedido, resolveCatalogProduct]);
 
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -81,7 +122,23 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
         if (campo === "nombre") {
           item.nombre = valor;
           const prod = catalogoByNombre.get(String(valor));
-          item.precio = prod?.precio ?? 0; // mantener lógica: precio viene del catálogo
+          const option = getDefaultPriceOption(prod);
+          const snapshot = buildPriceSnapshot(option);
+          item.productoId = prod?.id ?? null;
+          item.precio = option?.precio ?? prod?.precio ?? 0; // mantener lógica: precio viene del catálogo
+          item.precioVersionId = snapshot.precioVersionId;
+          item.precioNombre = snapshot.precioNombre;
+          item.precioDesde = snapshot.precioDesde;
+          item.precioHasta = snapshot.precioHasta;
+        } else if (campo === "precioVersionId") {
+          const prod = resolveCatalogProduct(item);
+          const option = getPriceOptionById(prod, valor);
+          const snapshot = buildPriceSnapshot(option);
+          item.precio = option?.precio ?? 0;
+          item.precioVersionId = snapshot.precioVersionId;
+          item.precioNombre = snapshot.precioNombre;
+          item.precioDesde = snapshot.precioDesde;
+          item.precioHasta = snapshot.precioHasta;
         } else if (campo === "cantidad") {
           const n = Math.max(0, parseInt(valor, 10) || 0); // sin negativos/NaN
           item.cantidad = n;
@@ -91,13 +148,25 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
         return { ...prev, productos };
       });
     },
-    [catalogoByNombre]
+    [catalogoByNombre, resolveCatalogProduct]
   );
 
   const agregarProducto = useCallback(() => {
     setForm((prev) => ({
       ...prev,
-      productos: [...prev.productos, { nombre: "", cantidad: 1, precio: 0 }],
+      productos: [
+        ...prev.productos,
+        {
+          nombre: "",
+          productoId: null,
+          cantidad: 1,
+          precio: 0,
+          precioVersionId: PRECIO_PRINCIPAL_ID,
+          precioNombre: "Precio principal",
+          precioDesde: null,
+          precioHasta: null,
+        },
+      ],
     }));
   }, []);
 
@@ -184,41 +253,63 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
             <div>
               <h3 className="mt-2 mb-1 font-semibold">🛒 Productos</h3>
 
-              {form.productos.map((prod, i) => (
-                <div key={i} className="grid items-center grid-cols-12 gap-2 mb-2">
-                  <select
-                    className="col-span-6 select select-bordered"
-                    value={prod.nombre}
-                    onChange={(e) => handleProductoChange(i, "nombre", e.target.value)}
-                  >
-                    <option value="">Seleccionar producto</option>
-                    {catalogo.map((p) => (
-                      <option key={p.id} value={p.nombre}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
+              {form.productos.map((prod, i) => {
+                const catalogProduct = resolveCatalogProduct(prod);
+                const opcionesPrecio = catalogProduct ? getProductPriceOptions(catalogProduct) : [];
+                const precioElegidoId = prod.precioVersionId || PRECIO_PRINCIPAL_ID;
 
-                  <input
-                    className="col-span-2 input input-bordered"
-                    type="number"
-                    min={0}
-                    placeholder="Cant."
-                    value={prod.cantidad}
-                    onChange={(e) => handleProductoChange(i, "cantidad", e.target.value)}
-                  />
+                return (
+                  <div key={i} className="grid items-center grid-cols-12 gap-2 mb-2">
+                    <select
+                      className="col-span-12 md:col-span-5 select select-bordered"
+                      value={prod.nombre}
+                      onChange={(e) => handleProductoChange(i, "nombre", e.target.value)}
+                    >
+                      <option value="">Seleccionar producto</option>
+                      {catalogo.map((p) => (
+                        <option key={p.id} value={p.nombre}>
+                          {p.nombre}
+                        </option>
+                      ))}
+                    </select>
 
-                  <div className="col-span-2 text-sm text-right">${prod.precio ?? 0}</div>
+                    <input
+                      className="col-span-3 md:col-span-2 input input-bordered"
+                      type="number"
+                      min={0}
+                      placeholder="Cant."
+                      value={prod.cantidad}
+                      onChange={(e) => handleProductoChange(i, "cantidad", e.target.value)}
+                    />
 
-                  <button
-                    type="button"
-                    className="col-span-2 btn btn-sm btn-error"
-                    onClick={() => eliminarProducto(i)}
-                  >
-                    ❌
-                  </button>
-                </div>
-              ))}
+                    {opcionesPrecio.length > 1 ? (
+                      <select
+                        className="col-span-7 md:col-span-3 select select-bordered"
+                        value={precioElegidoId}
+                        onChange={(e) => handleProductoChange(i, "precioVersionId", e.target.value)}
+                      >
+                        {opcionesPrecio.map((op) => (
+                          <option key={op.id} value={op.id}>
+                            {op.nombre} — {formatARS(op.precio)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="col-span-7 md:col-span-3 text-sm text-right">
+                        {formatARS(prod.precio ?? 0)}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      className="col-span-2 btn btn-sm btn-error"
+                      onClick={() => eliminarProducto(i)}
+                    >
+                      ❌
+                    </button>
+                  </div>
+                );
+              })}
 
               <button
                 type="button"

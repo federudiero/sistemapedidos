@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eliminación de Datos — Estilos Pinturas</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 0.9375rem;
+      line-height: 1.7;
+      padding: 2rem 1rem 4rem;
+    }
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid #334155;
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header .brand {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 0.5rem;
+    }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+    header .updated {
+      font-size: 0.8125rem;
+      color: #64748b;
+      margin-top: 0.35rem;
+    }
+    h2 {
+      font-size: 1.0625rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    p { color: #cbd5e1; margin-bottom: 0.75rem; }
+    ul {
+      color: #cbd5e1;
+      padding-left: 1.4rem;
+      margin-bottom: 0.75rem;
+    }
+    ul li { margin-bottom: 0.3rem; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .steps {
+      counter-reset: steps;
+      list-style: none;
+      padding: 0;
+    }
+    .steps li {
+      counter-increment: steps;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+    .steps li::before {
+      content: counter(steps);
+      background: #1e40af;
+      color: #bfdbfe;
+      font-size: 0.75rem;
+      font-weight: 700;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 1rem;
+      padding: 1.25rem 1.5rem;
+      margin-top: 2rem;
+    }
+    .card p { margin: 0; }
+    .badge {
+      display: inline-block;
+      background: #164e63;
+      color: #67e8f9;
+      border: 1px solid #0e7490;
+      border-radius: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">Estilos Pinturas</div>
+      <h1>Eliminación de Datos</h1>
+      <div class="updated">Última actualización: mayo de 2026</div>
+    </header>
+
+    <p>
+      En cumplimiento con los requisitos de la plataforma Meta, te explicamos
+      cómo podés solicitar la eliminación de los datos asociados a tu cuenta y
+      a la integración con WhatsApp Business.
+    </p>
+
+    <h2>Qué datos podés solicitar eliminar</h2>
+    <ul>
+      <li>Token de acceso de WhatsApp Business almacenado en la plataforma.</li>
+      <li>Phone Number ID y WABA ID asociados a tu cuenta de vendedor.</li>
+      <li>Historial de conversaciones guardado en el CRM.</li>
+      <li>Datos de perfil de usuario (correo electrónico, configuración).</li>
+      <li>Pedidos e historial registrados bajo tu cuenta.</li>
+    </ul>
+
+    <h2>Cómo solicitar la eliminación</h2>
+
+    <div class="badge">Opción 1 — Desde la aplicación</div>
+    <p>
+      Si tenés acceso a tu cuenta, podés desconectar la casilla de WhatsApp
+      desde el panel CRM. Esto elimina de inmediato el token de acceso y
+      desvincula el número de la plataforma.
+    </p>
+
+    <div class="badge">Opción 2 — Por correo electrónico</div>
+    <p>Enviá un correo a <a href="mailto:info@estilospinturas.com">info@estilospinturas.com</a> con:</p>
+    <ul class="steps">
+      <li>Tu nombre completo y correo electrónico registrado en la plataforma.</li>
+      <li>El número de WhatsApp Business que querés desvincular (si aplica).</li>
+      <li>Indicación de si querés eliminar solo la integración de WhatsApp o la cuenta completa.</li>
+    </ul>
+
+    <h2>Tiempos de respuesta</h2>
+    <ul>
+      <li><strong>Desconexión de WhatsApp:</strong> inmediata desde la app, o dentro de las 48 hs si es por correo.</li>
+      <li><strong>Eliminación completa de datos:</strong> dentro de los 30 días de recibida la solicitud.</li>
+    </ul>
+
+    <h2>Datos de Meta / Facebook</h2>
+    <p>
+      Si querés revocar los permisos otorgados a la aplicación directamente
+      desde tu cuenta de Facebook o Meta Business, podés hacerlo desde:
+    </p>
+    <ul>
+      <li>
+        <a href="https://www.facebook.com/settings?tab=applications" target="_blank" rel="noopener noreferrer">
+          Configuración de Facebook → Aplicaciones y sitios web
+        </a>
+      </li>
+      <li>
+        <a href="https://business.facebook.com/" target="_blank" rel="noopener noreferrer">
+          Meta Business Suite → Configuración → Integraciones
+        </a>
+      </li>
+    </ul>
+    <p>
+      Revocar el acceso desde Meta elimina los permisos de la app pero no
+      necesariamente los datos almacenados en nuestra plataforma. Para eso,
+      seguí el proceso de eliminación indicado arriba.
+    </p>
+
+    <div class="card">
+      <p>
+        Consultas sobre eliminación de datos:
+        <a href="mailto:info@estilospinturas.com">info@estilospinturas.com</a>
+        &nbsp;·&nbsp;
+        <a href="/privacy-policy.html">Política de Privacidad</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

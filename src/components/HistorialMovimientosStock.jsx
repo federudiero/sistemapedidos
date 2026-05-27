@@ -1,19 +1,18 @@
-// src/admin/HistorialMovimientosStock.jsx
+// src/components/HistorialMovimientosStock.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  getDocs,
-  query,
-  orderBy,
-} from "firebase/firestore";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia.js";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { parseISO, format } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 const PAGE_SIZE = 10;
+const TODOS = "TODOS";
+
+const safeText = (value) => String(value || "").trim();
+const safeId = (value) => String(value || "").trim();
 
 function HistorialMovimientosStock() {
   const { provinciaId } = useProvincia();
@@ -23,7 +22,10 @@ function HistorialMovimientosStock() {
   const [anulaciones, setAnulaciones] = useState([]);
   const [remitos, setRemitos] = useState([]);
 
-  const [productoSeleccionado, setProductoSeleccionado] = useState("TODOS");
+  // Guarda "TODOS" o el ID real del producto.
+  // Antes se guardaba el nombre y eso rompía cuando había productos repetidos
+  // como "VENDA 10X25".
+  const [productoSeleccionado, setProductoSeleccionado] = useState(TODOS);
   const [fechaDesde, setFechaDesde] = useState(() => {
     const hoy = new Date();
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -33,7 +35,6 @@ function HistorialMovimientosStock() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // Paginación
   const [paginaResumen, setPaginaResumen] = useState(1);
   const [paginaDetalle, setPaginaDetalle] = useState(1);
   const [paginaRemitos, setPaginaRemitos] = useState(1);
@@ -42,12 +43,13 @@ function HistorialMovimientosStock() {
 
   const cargarProductos = async () => {
     if (!provinciaId) return;
+
     try {
       const snap = await getDocs(
         collection(db, "provincias", provinciaId, "productos")
       );
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => (a?.nombre || "").localeCompare(b?.nombre || ""));
+      data.sort((a, b) => safeText(a?.nombre).localeCompare(safeText(b?.nombre)));
       setProductos(data);
     } catch (e) {
       console.error(e);
@@ -56,50 +58,31 @@ function HistorialMovimientosStock() {
 
   const cargarHistorial = async () => {
     if (!provinciaId) return;
+
     setLoading(true);
     setErr("");
 
     try {
-      const colResumen = collection(
-        db,
-        "provincias",
-        provinciaId,
-        "resumenVentas"
+      const snapResumen = await getDocs(
+        collection(db, "provincias", provinciaId, "resumenVentas")
       );
-      const snapResumen = await getDocs(colResumen);
-      const dataResumen = snapResumen.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      setResumenVentas(dataResumen);
+      setResumenVentas(
+        snapResumen.docs.map((d) => ({ id: d.id, ...d.data() }))
+      );
 
-      const colAnul = collection(
-        db,
-        "provincias",
-        provinciaId,
-        "anulacionesCierre"
+      const qAnul = query(
+        collection(db, "provincias", provinciaId, "anulacionesCierre"),
+        orderBy("timestamp", "desc")
       );
-      const qAnul = query(colAnul, orderBy("timestamp", "desc"));
       const snapAnul = await getDocs(qAnul);
-      const dataAnul = snapAnul.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      setAnulaciones(dataAnul);
+      setAnulaciones(snapAnul.docs.map((d) => ({ id: d.id, ...d.data() })));
 
-      const colRemitos = collection(
-        db,
-        "provincias",
-        provinciaId,
-        "remitosStock"
+      const qRem = query(
+        collection(db, "provincias", provinciaId, "remitosStock"),
+        orderBy("createdAt", "desc")
       );
-      const qRem = query(colRemitos, orderBy("createdAt", "desc"));
       const snapRem = await getDocs(qRem);
-      const dataRem = snapRem.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      setRemitos(dataRem);
+      setRemitos(snapRem.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
       setErr("No se pudo cargar el historial de movimientos.");
@@ -124,62 +107,79 @@ function HistorialMovimientosStock() {
 
   const idToNombre = useMemo(() => {
     const map = {};
+    for (const p of productos) map[p.id] = safeText(p.nombre);
+    return map;
+  }, [productos]);
+
+  const productoActual = useMemo(() => {
+    if (productoSeleccionado === TODOS) return null;
+    return productos.find((p) => p.id === productoSeleccionado) || null;
+  }, [productos, productoSeleccionado]);
+
+  const productoActualNombre = safeText(productoActual?.nombre);
+
+  const nombreProductoCount = useMemo(() => {
+    const map = new Map();
     for (const p of productos) {
-      map[p.id] = p.nombre || "";
+      const nombre = safeText(p.nombre) || "(sin nombre)";
+      map.set(nombre, (map.get(nombre) || 0) + 1);
     }
     return map;
   }, [productos]);
 
   const opcionesProducto = useMemo(() => {
-    const base = [{ value: "TODOS", label: "Todos los productos" }];
-    const otros = productos.map((p) => ({
-      value: p.nombre || "",
-      label: p.nombre || "(sin nombre)",
-    }));
+    const base = [{ value: TODOS, label: "Todos los productos" }];
+
+    const otros = productos.map((p) => {
+      const nombre = safeText(p.nombre) || "(sin nombre)";
+      const repetido = (nombreProductoCount.get(nombre) || 0) > 1;
+      const idCorto = safeId(p.id).slice(0, 6);
+
+      return {
+        value: p.id,
+        label: repetido ? `${nombre} · ID ${idCorto}` : nombre,
+      };
+    });
+
     return [...base, ...otros];
-  }, [productos]);
+  }, [productos, nombreProductoCount]);
 
   const movimientosCrudos = useMemo(() => {
     if (!provinciaId) return [];
 
     const desdeStr = toFechaStr(fechaDesde);
     const hastaStr = toFechaStr(fechaHasta);
+    const hayFiltroProducto = productoSeleccionado !== TODOS;
 
-    const dentroRango = (fechaStr) =>
-      fechaStr >= desdeStr && fechaStr <= hastaStr;
-
+    const dentroRango = (fechaStr) => fechaStr >= desdeStr && fechaStr <= hastaStr;
     const listado = [];
 
     // 1) INGRESOS POR REMITO
     for (const rem of remitos) {
-      const fechaStr = String(rem.fechaStr || "").slice(0, 10);
+      const fechaStr = safeText(rem.fechaStr).slice(0, 10);
       if (!fechaStr || !dentroRango(fechaStr)) continue;
 
       const items = Array.isArray(rem.items) ? rem.items : [];
       for (const it of items) {
+        const productId = safeId(it.productId);
+        if (hayFiltroProducto && productId !== productoSeleccionado) continue;
+
         const nombreSnapshot =
-          String(it.nombreSnapshot || "").trim() ||
-          String(idToNombre[it.productId] || "").trim() ||
+          safeText(it.nombreSnapshot) ||
+          safeText(idToNombre[productId]) ||
           "(sin nombre)";
 
-        if (
-          productoSeleccionado !== "TODOS" &&
-          productoSeleccionado !== nombreSnapshot
-        ) {
-          continue;
-        }
-
         listado.push({
+          id: `${rem.id}-${productId}-${nombreSnapshot}`,
           tipo: "remito_ingreso",
           fechaStr,
-          timestamp: rem.createdAt?.toDate
-            ? rem.createdAt.toDate()
-            : parseISO(fechaStr),
+          timestamp: rem.createdAt?.toDate ? rem.createdAt.toDate() : parseISO(fechaStr),
+          productoId: productId,
           productoNombre: nombreSnapshot,
           cantidad: Number(it.cantidad) || 0,
-          detalle: `Remito ${
-            rem.nroRemito || "s/n"
-          }${rem.proveedor ? ` — ${rem.proveedor}` : ""}`,
+          detalle: `Remito ${rem.nroRemito || "s/n"}${
+            rem.proveedor ? ` — ${rem.proveedor}` : ""
+          }`,
           direction: "IN",
           usuario: rem.createdBy || "sin usuario",
           remitoId: rem.id,
@@ -188,8 +188,11 @@ function HistorialMovimientosStock() {
     }
 
     // 2) VENTAS POR CIERRE
+    // resumenVentas actualmente viene discriminado por nombre de producto, no por ID.
+    // Por eso, si hay productos con el mismo nombre, las ventas se filtran por nombre
+    // y no se pueden separar por ID hasta que el cierre guarde productId.
     for (const rv of resumenVentas) {
-      const fechaStr = String(rv.fechaStr || rv.id || "").slice(0, 10);
+      const fechaStr = safeText(rv.fechaStr || rv.id).slice(0, 10);
       if (!fechaStr || !dentroRango(fechaStr)) continue;
 
       const totalPorProducto = rv.totalPorProducto || {};
@@ -197,20 +200,15 @@ function HistorialMovimientosStock() {
       Object.entries(totalPorProducto).forEach(([nombre, cant]) => {
         if (!cant) return;
 
-        const nombreProd = String(nombre || "");
-        if (
-          productoSeleccionado !== "TODOS" &&
-          productoSeleccionado !== nombreProd
-        ) {
-          return;
-        }
+        const nombreProd = safeText(nombre);
+        if (hayFiltroProducto && nombreProd !== productoActualNombre) return;
 
         listado.push({
+          id: `${rv.id}-${nombreProd}`,
           tipo: "venta_cierre",
           fechaStr,
-          timestamp: rv.timestamp?.toDate
-            ? rv.timestamp.toDate()
-            : parseISO(fechaStr),
+          timestamp: rv.timestamp?.toDate ? rv.timestamp.toDate() : parseISO(fechaStr),
+          productoId: null,
           productoNombre: nombreProd,
           cantidad: Number(cant) || 0,
           detalle: "Cierre global (resumenVentas)",
@@ -222,22 +220,20 @@ function HistorialMovimientosStock() {
 
     // 3) ANULACIONES
     for (const an of anulaciones) {
-      const fechaStr = String(an.fechaStr || "").slice(0, 10);
+      const fechaStr = safeText(an.fechaStr).slice(0, 10);
       if (!fechaStr || !dentroRango(fechaStr)) continue;
+
+      if (hayFiltroProducto) continue;
 
       const tipo = an.tipo || "desconocido";
       const restauracion = !!an.restauracionDeStock;
 
-      // Como la anulación no siempre viene discriminada por producto,
-      // la mostramos solo cuando no hay filtro puntual.
-      if (productoSeleccionado !== "TODOS") continue;
-
       listado.push({
+        id: an.id,
         tipo: `anulacion_${tipo}`,
         fechaStr,
-        timestamp: an.timestamp?.toDate
-          ? an.timestamp.toDate()
-          : parseISO(fechaStr),
+        timestamp: an.timestamp?.toDate ? an.timestamp.toDate() : parseISO(fechaStr),
+        productoId: null,
         productoNombre: "(todos los productos del cierre)",
         cantidad: null,
         detalle: restauracion
@@ -251,7 +247,7 @@ function HistorialMovimientosStock() {
     listado.sort((a, b) => {
       const ta = a.timestamp?.getTime?.() || 0;
       const tb = b.timestamp?.getTime?.() || 0;
-      if (ta === tb) return (a.tipo || "").localeCompare(b.tipo || "");
+      if (ta === tb) return safeText(a.tipo).localeCompare(safeText(b.tipo));
       return ta - tb;
     });
 
@@ -264,11 +260,12 @@ function HistorialMovimientosStock() {
     fechaDesde,
     fechaHasta,
     productoSeleccionado,
+    productoActualNombre,
     idToNombre,
   ]);
 
   const resumenPorProducto = useMemo(() => {
-    if (productoSeleccionado !== "TODOS") return [];
+    if (productoSeleccionado !== TODOS) return [];
 
     const map = new Map();
 
@@ -284,18 +281,8 @@ function HistorialMovimientosStock() {
       };
 
       const cantidad = Number(mov.cantidad || 0);
-
-      const primera = prev.primeraFecha
-        ? prev.primeraFecha <= mov.fechaStr
-          ? prev.primeraFecha
-          : mov.fechaStr
-        : mov.fechaStr;
-
-      const ultima = prev.ultimaFecha
-        ? prev.ultimaFecha >= mov.fechaStr
-          ? prev.ultimaFecha
-          : mov.fechaStr
-        : mov.fechaStr;
+      const primera = prev.primeraFecha && prev.primeraFecha <= mov.fechaStr ? prev.primeraFecha : mov.fechaStr;
+      const ultima = prev.ultimaFecha && prev.ultimaFecha >= mov.fechaStr ? prev.ultimaFecha : mov.fechaStr;
 
       let ingresadoTotal = prev.ingresadoTotal;
       let vendidoTotal = prev.vendidoTotal;
@@ -314,14 +301,12 @@ function HistorialMovimientosStock() {
     }
 
     const arr = Array.from(map.values());
-    arr.sort((a, b) =>
-      (a.productoNombre || "").localeCompare(b.productoNombre || "")
-    );
+    arr.sort((a, b) => safeText(a.productoNombre).localeCompare(safeText(b.productoNombre)));
     return arr;
   }, [movimientosCrudos, productoSeleccionado]);
 
   const movimientosDetalle = useMemo(() => {
-    if (productoSeleccionado === "TODOS") return [];
+    if (productoSeleccionado === TODOS) return [];
     return movimientosCrudos;
   }, [movimientosCrudos, productoSeleccionado]);
 
@@ -330,26 +315,18 @@ function HistorialMovimientosStock() {
 
     const desdeStr = toFechaStr(fechaDesde);
     const hastaStr = toFechaStr(fechaHasta);
-
-    const dentroRango = (fechaStr) =>
-      fechaStr >= desdeStr && fechaStr <= hastaStr;
-
+    const hayFiltroProducto = productoSeleccionado !== TODOS;
+    const dentroRango = (fechaStr) => fechaStr >= desdeStr && fechaStr <= hastaStr;
     const list = [];
 
     for (const rem of remitos) {
-      const fechaStr = String(rem.fechaStr || "").slice(0, 10);
+      const fechaStr = safeText(rem.fechaStr).slice(0, 10);
       if (!fechaStr || !dentroRango(fechaStr)) continue;
 
       const items = Array.isArray(rem.items) ? rem.items : [];
-      const itemsFiltrados =
-        productoSeleccionado === "TODOS"
-          ? items
-          : items.filter((it) => {
-              const nombreSnapshot =
-                String(it.nombreSnapshot || "").trim() ||
-                String(idToNombre[it.productId] || "").trim();
-              return nombreSnapshot === productoSeleccionado;
-            });
+      const itemsFiltrados = hayFiltroProducto
+        ? items.filter((it) => safeId(it.productId) === productoSeleccionado)
+        : items;
 
       if (!itemsFiltrados.length) continue;
 
@@ -361,20 +338,11 @@ function HistorialMovimientosStock() {
     }
 
     return list;
-  }, [provinciaId, remitos, fechaDesde, fechaHasta, productoSeleccionado, idToNombre]);
+  }, [provinciaId, remitos, fechaDesde, fechaHasta, productoSeleccionado]);
 
-  const totalPaginasResumen = Math.max(
-    1,
-    Math.ceil(resumenPorProducto.length / PAGE_SIZE)
-  );
-  const totalPaginasDetalle = Math.max(
-    1,
-    Math.ceil(movimientosDetalle.length / PAGE_SIZE)
-  );
-  const totalPaginasRemitos = Math.max(
-    1,
-    Math.ceil(remitosFiltrados.length / PAGE_SIZE)
-  );
+  const totalPaginasResumen = Math.max(1, Math.ceil(resumenPorProducto.length / PAGE_SIZE));
+  const totalPaginasDetalle = Math.max(1, Math.ceil(movimientosDetalle.length / PAGE_SIZE));
+  const totalPaginasRemitos = Math.max(1, Math.ceil(remitosFiltrados.length / PAGE_SIZE));
 
   const resumenPaginado = useMemo(() => {
     const start = (paginaResumen - 1) * PAGE_SIZE;
@@ -400,11 +368,7 @@ function HistorialMovimientosStock() {
         Página <span className="font-semibold">{page}</span> de{" "}
         <span className="font-semibold">{totalPages}</span>
       </span>
-      <button
-        className="btn btn-xs"
-        onClick={onNext}
-        disabled={page >= totalPages}
-      >
+      <button className="btn btn-xs" onClick={onNext} disabled={page >= totalPages}>
         Siguiente »
       </button>
     </div>
@@ -419,12 +383,8 @@ function HistorialMovimientosStock() {
 
       <div className="max-w-6xl px-4 py-6 mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <h2 className="text-2xl font-bold">
-            📊 Historial de Movimientos de Stock
-          </h2>
-          <span className="font-mono badge badge-primary">
-            Prov: {provinciaId || "—"}
-          </span>
+          <h2 className="text-2xl font-bold">📊 Historial de Movimientos de Stock</h2>
+          <span className="font-mono badge badge-primary">Prov: {provinciaId || "—"}</span>
         </div>
 
         {!provinciaId && (
@@ -473,31 +433,19 @@ function HistorialMovimientosStock() {
             </div>
 
             <div className="flex items-center justify-between mb-4">
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={cargarHistorial}
-                disabled={loading}
-              >
+              <button className="btn btn-outline btn-sm" onClick={cargarHistorial} disabled={loading}>
                 ↻ Recargar
               </button>
 
               <div className="text-sm opacity-70">
-                Remitos encontrados:{" "}
-                <span className="font-semibold">{remitosFiltrados.length}</span>
+                Remitos encontrados: <span className="font-semibold">{remitosFiltrados.length}</span>
               </div>
             </div>
 
-            {loading && (
-              <div className="p-4 mb-4 rounded-xl bg-base-200">
-                Cargando historial…
-              </div>
-            )}
+            {loading && <div className="p-4 mb-4 rounded-xl bg-base-200">Cargando historial…</div>}
+            {err && !loading && <div className="mb-4 alert alert-error">{err}</div>}
 
-            {err && !loading && (
-              <div className="mb-4 alert alert-error">{err}</div>
-            )}
-
-            {!loading && !err && productoSeleccionado === "TODOS" && (
+            {!loading && !err && productoSeleccionado === TODOS && (
               <>
                 {resumenPorProducto.length === 0 ? (
                   <div className="p-4 mb-4 rounded-xl bg-base-200">
@@ -521,14 +469,12 @@ function HistorialMovimientosStock() {
                           </tr>
                         </thead>
                         <tbody>
-                          {resumenPaginado.map((row, idx) => (
-                            <tr key={idx}>
+                          {resumenPaginado.map((row) => (
+                            <tr key={`${row.productoNombre}-${row.primeraFecha}-${row.ultimaFecha}`}>
                               <td>{row.productoNombre}</td>
                               <td className="text-right">{row.ingresadoTotal}</td>
                               <td className="text-right">{row.vendidoTotal}</td>
-                              <td className="font-semibold text-right">
-                                {row.neto}
-                              </td>
+                              <td className="font-semibold text-right">{row.neto}</td>
                               <td>{row.primeraFecha}</td>
                               <td>{row.ultimaFecha}</td>
                             </tr>
@@ -541,14 +487,8 @@ function HistorialMovimientosStock() {
                       <Pagination
                         page={paginaResumen}
                         totalPages={totalPaginasResumen}
-                        onPrev={() =>
-                          setPaginaResumen((p) => Math.max(1, p - 1))
-                        }
-                        onNext={() =>
-                          setPaginaResumen((p) =>
-                            Math.min(totalPaginasResumen, p + 1)
-                          )
-                        }
+                        onPrev={() => setPaginaResumen((p) => Math.max(1, p - 1))}
+                        onNext={() => setPaginaResumen((p) => Math.min(totalPaginasResumen, p + 1))}
                       />
                     )}
                   </>
@@ -556,76 +496,59 @@ function HistorialMovimientosStock() {
               </>
             )}
 
-            {!loading &&
-              !err &&
-              productoSeleccionado !== "TODOS" &&
-              movimientosDetalle.length === 0 && (
-                <div className="p-4 mb-4 rounded-xl bg-base-200">
-                  No se encontraron movimientos para este producto en este rango.
+            {!loading && !err && productoSeleccionado !== TODOS && movimientosDetalle.length === 0 && (
+              <div className="p-4 mb-4 rounded-xl bg-base-200">
+                No se encontraron movimientos para este producto en este rango.
+              </div>
+            )}
+
+            {!loading && !err && productoSeleccionado !== TODOS && movimientosDetalle.length > 0 && (
+              <>
+                <div className="mb-2 text-sm opacity-70">
+                  Detalle de movimientos para: <span className="font-semibold">{productoActualNombre || productoSeleccionado}</span>
                 </div>
-              )}
 
-            {!loading &&
-              !err &&
-              productoSeleccionado !== "TODOS" &&
-              movimientosDetalle.length > 0 && (
-                <>
-                  <div className="mb-2 text-sm opacity-70">
-                    Detalle de movimientos para:{" "}
-                    <span className="font-semibold">
-                      {productoSeleccionado}
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto border rounded-xl border-base-300">
-                    <table className="table table-zebra table-sm">
-                      <thead>
-                        <tr>
-                          <th>Fecha</th>
-                          <th>Producto</th>
-                          <th>Tipo</th>
-                          <th className="text-right">Cantidad</th>
-                          <th>Usuario</th>
-                          <th>Detalle</th>
+                <div className="overflow-x-auto border rounded-xl border-base-300">
+                  <table className="table table-zebra table-sm">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th>Tipo</th>
+                        <th className="text-right">Cantidad</th>
+                        <th>Usuario</th>
+                        <th>Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {movimientosPaginados.map((m) => (
+                        <tr key={m.id}>
+                          <td className="whitespace-nowrap">{m.fechaStr}</td>
+                          <td>{m.productoNombre}</td>
+                          <td>
+                            {m.direction === "OUT" && "📤 Venta (cierre)"}
+                            {m.direction === "IN" && "📥 Ingreso por remito"}
+                            {m.direction === "NEUTRO" && "ℹ Evento"}
+                          </td>
+                          <td className="text-right">{m.cantidad != null ? m.cantidad : "—"}</td>
+                          <td>{m.usuario || "—"}</td>
+                          <td className="text-xs">{m.detalle}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {movimientosPaginados.map((m, idx) => (
-                          <tr key={idx}>
-                            <td className="whitespace-nowrap">{m.fechaStr}</td>
-                            <td>{m.productoNombre}</td>
-                            <td>
-                              {m.direction === "OUT" && "📤 Venta (cierre)"}
-                              {m.direction === "IN" && "📥 Ingreso por remito"}
-                              {m.direction === "NEUTRO" && "ℹ Evento"}
-                            </td>
-                            <td className="text-right">
-                              {m.cantidad != null ? m.cantidad : "—"}
-                            </td>
-                            <td>{m.usuario || "—"}</td>
-                            <td className="text-xs">{m.detalle}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-                  {totalPaginasDetalle > 1 && (
-                    <Pagination
-                      page={paginaDetalle}
-                      totalPages={totalPaginasDetalle}
-                      onPrev={() =>
-                        setPaginaDetalle((p) => Math.max(1, p - 1))
-                      }
-                      onNext={() =>
-                        setPaginaDetalle((p) =>
-                          Math.min(totalPaginasDetalle, p + 1)
-                        )
-                      }
-                    />
-                  )}
-                </>
-              )}
+                {totalPaginasDetalle > 1 && (
+                  <Pagination
+                    page={paginaDetalle}
+                    totalPages={totalPaginasDetalle}
+                    onPrev={() => setPaginaDetalle((p) => Math.max(1, p - 1))}
+                    onNext={() => setPaginaDetalle((p) => Math.min(totalPaginasDetalle, p + 1))}
+                  />
+                )}
+              </>
+            )}
 
             {!loading && !err && (
               <div className="mt-8">
@@ -644,18 +567,11 @@ function HistorialMovimientosStock() {
                   <>
                     <div className="grid gap-3">
                       {remitosPaginados.map((r) => {
-                        const createdAt = r?.createdAt?.toDate
-                          ? r.createdAt.toDate()
-                          : null;
-                        const createdAtStr = createdAt
-                          ? createdAt.toLocaleString()
-                          : "—";
+                        const createdAt = r?.createdAt?.toDate ? r.createdAt.toDate() : null;
+                        const createdAtStr = createdAt ? createdAt.toLocaleString() : "—";
 
                         return (
-                          <div
-                            key={r.id}
-                            className="p-4 border rounded-xl border-base-300 bg-base-100"
-                          >
+                          <div key={r.id} className="p-4 border rounded-xl border-base-300 bg-base-100">
                             <div className="grid gap-2 md:grid-cols-2">
                               <div>
                                 <div className="font-semibold">
@@ -664,71 +580,55 @@ function HistorialMovimientosStock() {
                                     {r.nroRemito ? `— Remito ${r.nroRemito}` : "— Remito s/n"}
                                   </span>
                                 </div>
+                                <div className="text-sm opacity-80">Proveedor: {r.proveedor || "—"}</div>
                                 <div className="text-sm opacity-80">
-                                  Proveedor: {r.proveedor || "—"}
-                                </div>
-                                <div className="text-sm opacity-80">
-                                  Total unidades:{" "}
-                                  <span className="font-semibold">
-                                    {Number(r.totalUnidades) || 0}
-                                  </span>
+                                  Total unidades: <span className="font-semibold">{Number(r.totalUnidades) || 0}</span>
                                 </div>
                               </div>
 
                               <div>
                                 <div className="text-sm">
-                                  <span className="font-semibold">Cargado por:</span>{" "}
-                                  {r.createdBy || "sin usuario"}
+                                  <span className="font-semibold">Cargado por:</span> {r.createdBy || "sin usuario"}
                                 </div>
                                 <div className="text-sm">
-                                  <span className="font-semibold">Fecha carga:</span>{" "}
-                                  {createdAtStr}
+                                  <span className="font-semibold">Fecha carga:</span> {createdAtStr}
                                 </div>
                                 <div className="text-sm">
-                                  <span className="font-semibold">ID:</span>{" "}
-                                  <span className="font-mono">{r.id.slice(0, 10)}...</span>
+                                  <span className="font-semibold">ID:</span> <span className="font-mono">{r.id.slice(0, 10)}...</span>
                                 </div>
                               </div>
                             </div>
 
                             {!!r.observaciones && (
                               <div className="mt-2 text-sm">
-                                <span className="font-semibold">Obs:</span>{" "}
-                                {r.observaciones}
+                                <span className="font-semibold">Obs:</span> {r.observaciones}
                               </div>
                             )}
 
-                            {Array.isArray(r.itemsFiltrados) &&
-                              r.itemsFiltrados.length > 0 && (
-                                <div className="mt-3 overflow-x-auto">
-                                  <table className="table table-xs">
-                                    <thead>
-                                      <tr>
-                                        <th>Producto</th>
-                                        <th className="text-right">Cantidad</th>
-                                        <th className="text-right">Stock antes</th>
-                                        <th className="text-right">Stock después</th>
+                            {Array.isArray(r.itemsFiltrados) && r.itemsFiltrados.length > 0 && (
+                              <div className="mt-3 overflow-x-auto">
+                                <table className="table table-xs">
+                                  <thead>
+                                    <tr>
+                                      <th>Producto</th>
+                                      <th className="text-right">Cantidad</th>
+                                      <th className="text-right">Stock antes</th>
+                                      <th className="text-right">Stock después</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {r.itemsFiltrados.map((it, i) => (
+                                      <tr key={`${r.id}-${safeId(it.productId) || i}`}>
+                                        <td>{it.nombreSnapshot || idToNombre[it.productId] || it.productId || "—"}</td>
+                                        <td className="text-right">+{Number(it.cantidad) || 0}</td>
+                                        <td className="text-right">{it.stockAntesEst ?? "—"}</td>
+                                        <td className="text-right">{it.stockDespuesEst ?? "—"}</td>
                                       </tr>
-                                    </thead>
-                                    <tbody>
-                                      {r.itemsFiltrados.map((it, i) => (
-                                        <tr key={`${r.id}-${i}`}>
-                                          <td>{it.nombreSnapshot || it.productId || "—"}</td>
-                                          <td className="text-right">
-                                            +{Number(it.cantidad) || 0}
-                                          </td>
-                                          <td className="text-right">
-                                            {it.stockAntesEst ?? "—"}
-                                          </td>
-                                          <td className="text-right">
-                                            {it.stockDespuesEst ?? "—"}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -738,14 +638,8 @@ function HistorialMovimientosStock() {
                       <Pagination
                         page={paginaRemitos}
                         totalPages={totalPaginasRemitos}
-                        onPrev={() =>
-                          setPaginaRemitos((p) => Math.max(1, p - 1))
-                        }
-                        onNext={() =>
-                          setPaginaRemitos((p) =>
-                            Math.min(totalPaginasRemitos, p + 1)
-                          )
-                        }
+                        onPrev={() => setPaginaRemitos((p) => Math.max(1, p - 1))}
+                        onNext={() => setPaginaRemitos((p) => Math.min(totalPaginasRemitos, p + 1))}
                       />
                     )}
                   </>
