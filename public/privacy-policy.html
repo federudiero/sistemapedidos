@@ -1,154 +1,239 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Política de Privacidad — Estilos Pinturas</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Política de privacidad | Sistema CRM Pedidos</title>
+  <meta
+    name="description"
+    content="Política de privacidad de Sistema CRM Pedidos para el tratamiento de datos del CRM y de la integración con WhatsApp Business Platform."
+  />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --accent: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      background: #0f172a;
-      color: #e2e8f0;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 0.9375rem;
-      line-height: 1.7;
-      padding: 2rem 1rem 4rem;
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.65;
+      background: var(--bg);
+      color: var(--text);
     }
-    .container {
-      max-width: 760px;
-      margin: 0 auto;
+
+    main {
+      width: min(980px, calc(100% - 32px));
+      margin: 32px auto;
+      padding: 32px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
     }
-    header {
-      border-bottom: 1px solid #334155;
-      padding-bottom: 1.5rem;
-      margin-bottom: 2rem;
+
+    h1, h2, h3 {
+      line-height: 1.25;
+      margin-top: 0;
     }
-    header .brand {
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 0.5rem;
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
     }
-    header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #f1f5f9;
-    }
-    header .updated {
-      font-size: 0.8125rem;
-      color: #64748b;
-      margin-top: 0.35rem;
-    }
+
     h2 {
-      font-size: 1.0625rem;
-      font-weight: 700;
-      color: #f1f5f9;
-      margin-top: 2rem;
-      margin-bottom: 0.5rem;
+      font-size: 1.25rem;
+      margin-top: 32px;
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
     }
-    p { color: #cbd5e1; margin-bottom: 0.75rem; }
+
+    p, li {
+      color: var(--muted);
+    }
+
+    strong {
+      color: var(--text);
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .meta {
+      margin-bottom: 24px;
+      color: var(--muted);
+    }
+
+    .notice {
+      padding: 16px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      color: #1e3a8a;
+    }
+
     ul {
-      color: #cbd5e1;
-      padding-left: 1.4rem;
-      margin-bottom: 0.75rem;
+      padding-left: 22px;
     }
-    ul li { margin-bottom: 0.3rem; }
-    a { color: #38bdf8; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 1rem;
-      padding: 1.25rem 1.5rem;
-      margin-top: 2rem;
+
+    footer {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.95rem;
     }
-    .card p { margin: 0; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div class="brand">Estilos Pinturas</div>
-      <h1>Política de Privacidad</h1>
-      <div class="updated">Última actualización: mayo de 2026</div>
-    </header>
-
-    <p>
-      Esta Política de Privacidad describe cómo <strong>Estilos Pinturas</strong>
-      recopila, usa y protege la información de quienes utilizan nuestra aplicación
-      de gestión de pedidos y CRM con WhatsApp Business.
+  <main>
+    <h1>Política de privacidad</h1>
+    <p class="meta">
+      <strong>Sistema CRM Pedidos</strong><br />
+      Última actualización: 5 de junio de 2026
     </p>
 
-    <h2>1. Información que recopilamos</h2>
-    <p>A través de la integración con WhatsApp Business y Meta, podemos recopilar:</p>
+    <p class="notice">
+      Esta política explica cómo Sistema CRM Pedidos recopila, utiliza, almacena y protege información
+      relacionada con usuarios del CRM, clientes comerciales, conversaciones y la integración con
+      WhatsApp Business Platform.
+    </p>
+
+    <h2>1. Responsable del tratamiento</h2>
+    <p>
+      Sistema CRM Pedidos es una plataforma web de gestión comercial y mensajería diseñada para que
+      empresas puedan administrar conversaciones, clientes, pedidos, seguimiento comercial y comunicaciones
+      mediante WhatsApp Business Platform.
+    </p>
+    <p>
+      Para consultas sobre privacidad, uso de datos o eliminación de información, podés escribir a:
+      <a href="mailto:federudiero@gmail.com">federudiero@gmail.com</a>.
+    </p>
+
+    <h2>2. Datos que podemos recopilar</h2>
+    <p>Según el uso de la plataforma, podemos tratar las siguientes categorías de datos:</p>
     <ul>
-      <li>Número de teléfono de WhatsApp Business del vendedor.</li>
-      <li>ID de cuenta de WhatsApp Business (WABA ID) y Phone Number ID.</li>
-      <li>Mensajes enviados y recibidos a través del CRM (solo los del número conectado).</li>
-      <li>Nombre de pantalla del número de WhatsApp Business.</li>
-      <li>Correo electrónico del vendedor registrado en la plataforma.</li>
-      <li>Datos de pedidos y clientes ingresados manualmente en la aplicación.</li>
+      <li>Datos de usuarios del CRM: nombre, correo electrónico, rol, permisos internos y estado de acceso.</li>
+      <li>Datos de clientes comerciales: nombre, teléfono, dirección, notas, etiquetas, historial de atención y seguimiento.</li>
+      <li>Datos de conversaciones: mensajes enviados y recibidos, fecha, hora, estado del mensaje, archivos adjuntos, imágenes, documentos, audios y ubicación cuando corresponda.</li>
+      <li>Datos operativos: pedidos, productos, vendedores, repartidores, estados de entrega, agenda, recordatorios y reportes comerciales.</li>
+      <li>Datos técnicos de integración con WhatsApp Business Platform: WhatsApp Business Account ID, Phone Number ID, identificadores de mensaje, estado de conexión, eventos de webhook y credenciales técnicas necesarias para operar la integración autorizada.</li>
+      <li>Datos de uso y seguridad: registros de acceso, acciones administrativas, errores técnicos y eventos necesarios para proteger la plataforma.</li>
     </ul>
 
-    <h2>2. Cómo usamos la información</h2>
-    <p>La información recopilada se usa exclusivamente para:</p>
+    <h2>3. Finalidad del uso de los datos</h2>
+    <p>Utilizamos los datos para las siguientes finalidades:</p>
     <ul>
-      <li>Gestionar y mostrar el historial de conversaciones en el CRM.</li>
-      <li>Enviar y recibir mensajes de WhatsApp Business en nombre del vendedor.</li>
-      <li>Registrar y gestionar pedidos de clientes.</li>
-      <li>Generar reportes internos de ventas y comisiones.</li>
-      <li>Autenticar el acceso a la plataforma mediante Firebase Authentication.</li>
+      <li>Permitir el acceso seguro al CRM.</li>
+      <li>Gestionar conversaciones comerciales de WhatsApp desde una bandeja centralizada.</li>
+      <li>Enviar y recibir mensajes autorizados mediante WhatsApp Business Platform.</li>
+      <li>Consultar y utilizar plantillas de mensajes aprobadas por Meta/WhatsApp.</li>
+      <li>Registrar historial comercial, pedidos, estados, etiquetas y seguimiento de clientes.</li>
+      <li>Administrar usuarios, roles, permisos y configuración interna de cada empresa.</li>
+      <li>Mejorar la seguridad, estabilidad y funcionamiento técnico de la plataforma.</li>
+      <li>Cumplir obligaciones legales, contractuales y políticas aplicables de Meta y WhatsApp.</li>
     </ul>
 
-    <h2>3. Compartición de datos</h2>
+    <h2>4. Integración con WhatsApp Business Platform</h2>
     <p>
-      No vendemos ni compartimos tu información personal con terceros, salvo los
-      proveedores de infraestructura necesarios para operar la plataforma:
+      La plataforma puede integrarse con WhatsApp Business Platform para que una empresa autorizada pueda
+      gestionar sus comunicaciones desde el CRM. Esta integración puede requerir acceso a identificadores
+      técnicos del número conectado, la cuenta de WhatsApp Business, plantillas de mensajes, webhooks y
+      eventos de mensajería.
     </p>
+    <p>
+      El uso de WhatsApp está sujeto también a las condiciones y políticas de Meta y WhatsApp. Las empresas
+      usuarias son responsables de contar con autorización válida para contactar a sus clientes y de respetar
+      las reglas aplicables, incluyendo la ventana de atención de 24 horas, el uso de plantillas aprobadas y
+      las restricciones contra spam o comunicaciones no solicitadas.
+    </p>
+
+    <h2>5. Base legal o autorización para el tratamiento</h2>
+    <p>
+      Tratamos datos cuando existe una relación contractual o precontractual con la empresa usuaria, cuando
+      el tratamiento es necesario para prestar el servicio solicitado, cuando el usuario autoriza la integración
+      con servicios externos o cuando existe una obligación legal o necesidad legítima de seguridad y auditoría.
+    </p>
+
+    <h2>6. Almacenamiento y seguridad</h2>
+    <p>
+      Los datos pueden almacenarse en servicios de infraestructura en la nube, incluyendo Firebase, Firestore,
+      Firebase Authentication, Cloud Functions y otros servicios técnicos necesarios para operar el CRM.
+      Aplicamos controles de acceso, autenticación, reglas de permisos, registros operativos y medidas técnicas
+      orientadas a proteger la información.
+    </p>
+    <p>
+      Ningún sistema es absolutamente invulnerable. Por eso recomendamos a las empresas usuarias proteger sus
+      credenciales, asignar roles correctamente y limitar el acceso solo a personal autorizado.
+    </p>
+
+    <h2>7. Compartición de datos</h2>
+    <p>
+      No vendemos datos personales. Podemos compartir o procesar información únicamente cuando sea necesario
+      para prestar el servicio, operar integraciones autorizadas o cumplir obligaciones legales.
+    </p>
+    <p>Los datos pueden ser procesados por proveedores técnicos como:</p>
     <ul>
-      <li><strong>Meta (Facebook)</strong> — para el envío y recepción de mensajes via WhatsApp Business API.</li>
-      <li><strong>Google Firebase</strong> — para autenticación, base de datos y hosting de funciones.</li>
+      <li>Meta / WhatsApp, para operar WhatsApp Business Platform.</li>
+      <li>Google Firebase / Google Cloud, para autenticación, base de datos, funciones backend y hosting.</li>
+      <li>Proveedores de infraestructura, seguridad, monitoreo o soporte técnico necesarios para el funcionamiento del servicio.</li>
     </ul>
 
-    <h2>4. Retención de datos</h2>
+    <h2>8. Conservación de datos</h2>
     <p>
-      Los datos de conversaciones y pedidos se conservan mientras la cuenta del
-      vendedor esté activa en la plataforma. Al solicitar la desconexión o
-      eliminación de cuenta, los tokens de acceso son eliminados de inmediato y los
-      datos pueden ser borrados a solicitud del usuario.
+      Conservamos los datos mientras la cuenta de la empresa usuaria permanezca activa o mientras sea necesario
+      para prestar el servicio, cumplir obligaciones legales, resolver incidencias, mantener registros operativos
+      o proteger la seguridad del sistema.
+    </p>
+    <p>
+      La empresa usuaria puede solicitar la eliminación o desconexión de sus datos conforme a la sección de
+      eliminación indicada en esta política.
     </p>
 
-    <h2>5. Seguridad</h2>
+    <h2>9. Derechos y solicitudes de eliminación</h2>
     <p>
-      Los tokens de acceso de WhatsApp Business se almacenan en Firebase Firestore
-      con reglas de seguridad que restringen el acceso únicamente al usuario
-      autenticado y a los administradores de la plataforma. No se almacenan
-      contraseñas en texto plano.
+      Las empresas usuarias o personas autorizadas pueden solicitar acceso, corrección, desconexión o eliminación
+      de datos escribiendo a <a href="mailto:federudiero@gmail.com">federudiero@gmail.com</a>.
+    </p>
+    <p>
+      También contamos con instrucciones específicas para eliminación de datos en:
+      <a href="/data-deletion.html">/data-deletion.html</a>.
     </p>
 
-    <h2>6. Derechos del usuario</h2>
-    <p>Podés solicitar en cualquier momento:</p>
-    <ul>
-      <li>Acceso a los datos que tenemos sobre vos.</li>
-      <li>Corrección de datos incorrectos.</li>
-      <li>Eliminación de tus datos (ver nuestra
-        <a href="/data-deletion.html">página de eliminación de datos</a>).</li>
-    </ul>
-
-    <h2>7. Cambios a esta política</h2>
+    <h2>10. Datos de menores</h2>
     <p>
-      Podemos actualizar esta política ocasionalmente. Los cambios se notificarán
-      mediante la actualización de la fecha al inicio de este documento.
+      La plataforma está dirigida a empresas y usuarios comerciales autorizados. No está diseñada para ser usada
+      por menores de edad.
     </p>
 
-    <div class="card">
+    <h2>11. Cambios en esta política</h2>
+    <p>
+      Podemos actualizar esta política para reflejar cambios operativos, legales o técnicos. La versión vigente
+      estará disponible en esta misma URL.
+    </p>
+
+    <footer>
       <p>
-        Para consultas sobre privacidad o para ejercer tus derechos, contactanos en:
-        <a href="mailto:info@estilospinturas.com">info@estilospinturas.com</a>
+        Contacto: <a href="mailto:federudiero@gmail.com">federudiero@gmail.com</a><br />
+        Sitio web: <a href="https://estilospinturaspedidos.com/">https://estilospinturaspedidos.com/</a>
       </p>
-    </div>
-  </div>
+    </footer>
+  </main>
 </body>
 </html>

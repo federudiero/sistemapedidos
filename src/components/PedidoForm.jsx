@@ -114,6 +114,41 @@ const parseMapsLinkLocation = (raw) => {
   return null;
 };
 
+const getAddressComponentText = (component) =>
+  String(
+    component?.longText ||
+      component?.long_name ||
+      component?.shortText ||
+      component?.short_name ||
+      ""
+  ).trim();
+
+const getAddressComponentByType = (components, type) => {
+  if (!Array.isArray(components)) return null;
+  return components.find((component) =>
+    Array.isArray(component?.types) && component.types.includes(type)
+  );
+};
+
+const pickAddressComponentText = (components, types) => {
+  for (const type of types) {
+    const value = getAddressComponentText(getAddressComponentByType(components, type));
+    if (value) return value;
+  }
+  return "";
+};
+
+const extractPartidoFromAddressComponents = (components) =>
+  pickAddressComponentText(components, [
+    "locality",
+    "administrative_area_level_2",
+    "postal_town",
+    "administrative_area_level_3",
+    "sublocality_level_1",
+    "sublocality",
+    "neighborhood",
+  ]);
+
 const buildGoogleMapsLink = ({
   linkUbicacion,
   placeId,
@@ -736,10 +771,14 @@ const PedidoForm = ({
       try {
         const place = ev.placePrediction.toPlace();
         await place.fetchFields({
-          fields: ["formattedAddress", "location", "displayName", "id"],
+          fields: ["formattedAddress", "location", "addressComponents", "id"],
         });
 
-        const dir = place.formattedAddress || place.displayName?.text || "";
+        const dir =
+          place.formattedAddress ||
+          ev?.placePrediction?.text?.text ||
+          ev?.placePrediction?.mainText?.text ||
+          "";
         const nextPlaceId = place.id || ev?.placePrediction?.placeId || null;
 
         let nextCoords = null;
@@ -751,9 +790,12 @@ const PedidoForm = ({
           setCoordenadas(null);
         }
 
+        const partidoDetectado = extractPartidoFromAddressComponents(place.addressComponents);
+
         setDireccion(dir);
         setPacValue(dir);
         setPlaceId(nextPlaceId);
+        if (partidoDetectado) setPartido(partidoDetectado);
         setUbicacionFuente(nextPlaceId ? "autocomplete" : nextCoords ? "coordenadas" : "direccion");
 
         const autoLink = buildGoogleMapsLink({

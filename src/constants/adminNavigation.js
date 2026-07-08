@@ -16,6 +16,13 @@ export const ADMIN_NAV_ITEMS = [
     icon: "buscadorGlobal",
   },
   {
+    section: ADMIN_SECTIONS.BACKUP_DATOS,
+    label: ADMIN_SECTION_LABELS[ADMIN_SECTIONS.BACKUP_DATOS],
+    shortLabel: "Backup",
+    to: "/admin/backup-datos",
+    icon: "backupDatos",
+  },
+  {
     section: ADMIN_SECTIONS.PEDIDOS,
     label: ADMIN_SECTION_LABELS[ADMIN_SECTIONS.PEDIDOS],
     shortLabel: "Pedidos",
@@ -50,6 +57,14 @@ export const ADMIN_NAV_ITEMS = [
     label: ADMIN_SECTION_LABELS[ADMIN_SECTIONS.RESUMEN_FINANCIERO],
     shortLabel: "Estadísticas",
     to: "/admin/resumen-financiero",
+  },
+  {
+    section: "ventasPorVendedor",
+    label: "Ventas por vendedor",
+    shortLabel: "Ventas vendedores",
+    to: "/admin/ventas-vendedores",
+    icon: "ventasPorVendedor",
+    allowWithoutSectionPermission: true,
   },
   {
     section: ADMIN_SECTIONS.LIQUIDACIONES,

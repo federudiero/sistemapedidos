@@ -7,6 +7,7 @@ import {
   Boxes,
   ChevronDown,
   ClipboardList,
+  DatabaseBackup,
   FileSpreadsheet,
   FolderKanban,
   Home,
@@ -35,6 +36,7 @@ const SECTION_ICON_MAP = {
   dashboard: LayoutDashboard,
   dashboardAdmin: LayoutDashboard,
   buscadorGlobal: Search,
+  backupDatos: DatabaseBackup,
   inicio: Home,
   pedidos: ShoppingCart,
   adminPedidos: ShoppingCart,
@@ -54,6 +56,7 @@ const SECTION_ICON_MAP = {
   resumenFinanciero: BarChart3,
   liquidaciones: FileSpreadsheet,
   estadisticas: BarChart3,
+  ventasPorVendedor: BarChart3,
   reportes: FileSpreadsheet,
   historialStock: Archive,
   controlRemitos: Truck,
@@ -76,7 +79,11 @@ const NAV_GROUPS = [
     label: "Principal",
     description: "Inicio y búsqueda",
     icon: LayoutDashboard,
-    sections: [ADMIN_SECTIONS.DASHBOARD_ADMIN, ADMIN_SECTIONS.BUSCADOR_GLOBAL],
+    sections: [
+      ADMIN_SECTIONS.DASHBOARD_ADMIN,
+      ADMIN_SECTIONS.BUSCADOR_GLOBAL,
+      ADMIN_SECTIONS.BACKUP_DATOS,
+    ],
   },
   {
     id: "pedidos-reparto",
@@ -113,6 +120,7 @@ const NAV_GROUPS = [
       ADMIN_SECTIONS.CIERRE_CAJA,
       ADMIN_SECTIONS.CONTROL_CIERRES,
       ADMIN_SECTIONS.RESUMEN_FINANCIERO,
+      "ventasPorVendedor",
       ADMIN_SECTIONS.LIQUIDACIONES,
     ],
   },
@@ -153,6 +161,7 @@ const AdminNavbar = () => {
 
     return ADMIN_NAV_ITEMS.filter((item) => {
       if (item.hideFromNavbar) return false;
+      if (item.allowWithoutSectionPermission) return true;
       return isAdminFull || can(item.section);
     });
   }, [loading, can, isAdminFull]);

@@ -18,7 +18,13 @@ export const PROVINCIAS = [
   { id: "NEU", nombre: "Neuquén", base: "Neuquén Capital, Neuquén" },
   { id: "RN", nombre: "Río Negro", base: "Alem 3489, Córdoba Capital" },
   { id: "SAL", nombre: "Salta", base: "Salta, Salta" },
-  { id: "SJ", nombre: "San Juan", base: "San Juan, San Juan" },
+  { 
+  id: "SJ", 
+  nombre: "San Juan", 
+  base: "369W+XM Rodeo de la Cruz, Mendoza", 
+  baseName: "Base San Juan", 
+  baseLink: "https://www.google.com/maps/search/?api=1&query=369W%2BXM%20Rodeo%20de%20la%20Cruz%2C%20Mendoza" 
+},
   { id: "SL", nombre: "San Luis", base: "San Luis, San Luis" },
   { id: "SC", nombre: "Santa Cruz", base: "Río Gallegos, Santa Cruz" },
   { id: "SF", nombre: "Santa Fe", base: "Alsina 2380, S2000 Rosario, Santa Fe" },

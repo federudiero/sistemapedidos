@@ -387,6 +387,31 @@ function VendedorView() {
         };
       }
 
+      if (editables.ubicacionRuta && typeof editables.ubicacionRuta === "object") {
+        const ur = editables.ubicacionRuta;
+        editables.ubicacionRuta = {
+          fuente: typeof ur.fuente === "string" ? ur.fuente : editables.ubicacionFuente || "",
+          direccion: typeof ur.direccion === "string" ? ur.direccion : editables.direccion || "",
+          linkUbicacion:
+            typeof ur.linkUbicacion === "string" && ur.linkUbicacion.trim()
+              ? ur.linkUbicacion.trim()
+              : null,
+          placeId:
+            typeof ur.placeId === "string" && ur.placeId.trim()
+              ? ur.placeId.trim()
+              : null,
+          coordenadas:
+            ur.coordenadas &&
+            Number.isFinite(Number(ur.coordenadas.lat)) &&
+            Number.isFinite(Number(ur.coordenadas.lng))
+              ? {
+                  lat: Number(ur.coordenadas.lat),
+                  lng: Number(ur.coordenadas.lng),
+                }
+              : null,
+        };
+      }
+
       if (editables.telefonoAlt === "") {
         editables.telefonoAlt = null;
       }
@@ -407,6 +432,9 @@ function VendedorView() {
         "direccion",
         "entreCalles",
         "linkUbicacion",
+        "placeId",
+        "ubicacionFuente",
+        "ubicacionRuta",
         "vendedorNombreManual",
         "vendedorReferenciaEmail",
         "coordenadas",

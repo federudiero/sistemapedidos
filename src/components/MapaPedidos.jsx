@@ -1,25 +1,34 @@
 // src/components/MapaPedidos.jsx
-// Mantiene tu lógica original; agrega lectura de "nombres" para mostrar en el modal.
+// Mapa de pedidos sin asignar.
+// Usa la misma fuente de ubicación que Hoja de Ruta para evitar que cada pantalla geocodifique distinto.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { baseDireccion } from "../constants/provincias";
 import { db } from "../firebase/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { getPedidoLocationIntent } from "../utils/pedidoLocation.js";
 
 // ====== Cache en memoria (por sesión) ======
 const geoCache = new Map();
 
 // ====== Persistencia en localStorage (por provincia) ======
-const LS_KEY = (prov) => `gm_geocache:v1:${prov}`;
+// v2: el cache anterior guardaba por dirección cruda y podía conservar geocodificaciones ambiguas.
+const LS_KEY = (prov) => `gm_geocache:v2:${prov}`;
 const loadProvCache = (prov) => {
   try {
     const raw = localStorage.getItem(LS_KEY(prov));
     return raw ? JSON.parse(raw) : { center: null, addrs: {} };
-  } catch { return { center: null, addrs: {} }; }
+  } catch {
+    return { center: null, addrs: {} };
+  }
 };
 const saveProvCache = (prov, cache) => {
-  try { localStorage.setItem(LS_KEY(prov), JSON.stringify(cache)); } catch (e){console.error(e)}
+  try {
+    localStorage.setItem(LS_KEY(prov), JSON.stringify(cache));
+  } catch (e) {
+    console.error(e);
+  }
 };
 
 // ====== Google Maps loader ======
@@ -28,24 +37,62 @@ const GOOGLE_MAPS_LOADER_ID = "google-map-script"; // usar el mismo en toda la a
 
 function toLatLng(obj) {
   if (!obj) return null;
-  // Soporta {lat,lng} o {latitude,longitude} o {_latitude,_longitude}
   const lat =
-    typeof obj.lat === "number" ? obj.lat :
-    typeof obj.latitude === "number" ? obj.latitude :
-    typeof obj._latitude === "number" ? obj._latitude : null;
+    typeof obj.lat === "number"
+      ? obj.lat
+      : typeof obj.latitude === "number"
+      ? obj.latitude
+      : typeof obj._latitude === "number"
+      ? obj._latitude
+      : null;
   const lng =
-    typeof obj.lng === "number" ? obj.lng :
-    typeof obj.longitude === "number" ? obj.longitude :
-    typeof obj._longitude === "number" ? obj._longitude : null;
-  return (typeof lat === "number" && typeof lng === "number") ? { lat, lng } : null;
+    typeof obj.lng === "number"
+      ? obj.lng
+      : typeof obj.longitude === "number"
+      ? obj.longitude
+      : typeof obj._longitude === "number"
+      ? obj._longitude
+      : null;
+  return typeof lat === "number" && typeof lng === "number" ? { lat, lng } : null;
 }
+
+const intentCacheKey = (provinciaId, pedido, intent) => {
+  if (!intent) return `empty:${provinciaId}:${pedido?.id || ""}`;
+  if (intent.type === "latlng") return `latlng:${intent.lat},${intent.lng}`;
+  if (intent.type === "placeId") return `place:${intent.placeId}`;
+  return `addr:${provinciaId}:${intent.address}`;
+};
+
+const geocodeByIntent = (geocoder, intent) =>
+  new Promise((resolve) => {
+    if (!intent) return resolve(null);
+
+    if (intent.type === "latlng") {
+      return resolve({ lat: intent.lat, lng: intent.lng });
+    }
+
+    const request =
+      intent.type === "placeId"
+        ? { placeId: intent.placeId, region: "AR" }
+        : { address: intent.address, region: "AR" };
+
+    geocoder.geocode(request, (res, status) => {
+      if (status === "OK" && res?.[0]?.geometry?.location) {
+        const loc = res[0].geometry.location;
+        return resolve({ lat: loc.lat(), lng: loc.lng() });
+      }
+
+      console.warn("No se pudo geocodificar:", request, status);
+      resolve(null);
+    });
+  });
 
 const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
   const { provinciaId } = useProvincia();
 
   // ===== Repartidores: 1 lectura por provincia =====
-  const [repartidores, setRepartidores] = useState([]);    // array de emails (como tenías)
-  const [nombresMap, setNombresMap] = useState({});        // email(lower) -> Nombre
+  const [repartidores, setRepartidores] = useState([]); // array de emails
+  const [nombresMap, setNombresMap] = useState({}); // email(lower) -> Nombre
   const [loadingReps, setLoadingReps] = useState(true);
 
   useEffect(() => {
@@ -60,7 +107,6 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
         const toArr = (v) => (Array.isArray(v) ? v : v ? Object.keys(v) : []);
         const reps = toArr(data.repartidores).map((e) => String(e || "").toLowerCase());
 
-        // 🔤 nombres desde Firestore (claves en minúscula)
         const nmRaw = data.nombres || {};
         const nm = Object.fromEntries(
           Object.entries(nmRaw).map(([k, v]) => [String(k || "").toLowerCase(), String(v || "")])
@@ -75,7 +121,9 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
       }
     }
     cargarReps();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [provinciaId]);
 
   const [centro, setCentro] = useState({ lat: -34.6037, lng: -58.3816 }); // fallback CABA
@@ -86,14 +134,12 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
   const geocoderRef = useRef(null);
   const provCacheRef = useRef({ center: null, addrs: {} });
 
-  // Carga de Google Maps
   const { isLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_LOADER_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
-  // Cargar cache persistido cuando cambia la provincia
   useEffect(() => {
     if (!provinciaId) return;
     provCacheRef.current = loadProvCache(provinciaId);
@@ -109,21 +155,18 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
 
     const cacheKey = `__centro__:${provinciaId}`;
 
-    // 1) cache en memoria
     if (geoCache.has(cacheKey)) {
       setCentro(geoCache.get(cacheKey));
       return;
     }
 
-    // 2) cache persistido
     if (provCacheRef.current.center) {
       setCentro(provCacheRef.current.center);
       geoCache.set(cacheKey, provCacheRef.current.center);
       return;
     }
 
-    // 3) geocode una vez y guarda en caches
-    geocoderRef.current.geocode({ address: base }, (res, status) => {
+    geocoderRef.current.geocode({ address: base, region: "AR" }, (res, status) => {
       if (status === "OK" && res[0]) {
         const loc = {
           lat: res[0].geometry.location.lat(),
@@ -137,55 +180,48 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
     });
   }, [isLoaded, provinciaId]);
 
-  // Pines de pedidos (usa coords si están; si no, geocodifica y cachea por provincia+dirección)
+  // Pines de pedidos: usa la misma prioridad de ubicación que Hoja de Ruta.
+  // Prioridad centralizada: coordenadas / placeId / link parseable / dirección + partido + provincia.
   useEffect(() => {
     if (!isLoaded) return;
-    if (!Array.isArray(pedidos) || pedidos.length === 0) { setPines([]); return; }
+    if (!Array.isArray(pedidos) || pedidos.length === 0) {
+      setPines([]);
+      return;
+    }
     if (!geocoderRef.current) geocoderRef.current = new window.google.maps.Geocoder();
 
+    const base = baseDireccion(provinciaId);
+
     const geocodificarPendientes = async () => {
-      const tareas = pedidos.map(
-        (p) =>
-          new Promise((resolve) => {
-            const fromCoords = toLatLng(p.coordenadas);
-            if (fromCoords) {
-              return resolve({ id: p.id, nombre: p.nombre, direccion: p.direccion, pos: fromCoords });
-            }
+      const tareas = pedidos.map(async (p) => {
+        const fromCoords = toLatLng(p.coordenadas);
+        if (fromCoords) {
+          return { id: p.id, nombre: p.nombre, direccion: p.direccion, pos: fromCoords };
+        }
 
-            const addr = String(p.direccion || "").trim();
-            if (!addr) return resolve(null);
-            const key = `addr:${provinciaId}:${addr}`; // ← incluye provincia
+        const intent = getPedidoLocationIntent(p, base);
+        if (!intent) return null;
 
-            // 1) cache memoria
-            if (geoCache.has(key)) {
-              return resolve({ id: p.id, nombre: p.nombre, direccion: p.direccion, pos: geoCache.get(key) });
-            }
+        const key = intentCacheKey(provinciaId, p, intent);
 
-            // 2) cache persistido
-            const cached = provCacheRef.current.addrs[addr];
-            if (cached) {
-              geoCache.set(key, cached);
-              return resolve({ id: p.id, nombre: p.nombre, direccion: p.direccion, pos: cached });
-            }
+        if (geoCache.has(key)) {
+          return { id: p.id, nombre: p.nombre, direccion: p.direccion, pos: geoCache.get(key) };
+        }
 
-            // 3) geocode
-            geocoderRef.current.geocode({ address: addr }, (res, status) => {
-              if (status === "OK" && res[0]) {
-                const pos = {
-                  lat: res[0].geometry.location.lat(),
-                  lng: res[0].geometry.location.lng(),
-                };
-                geoCache.set(key, pos);
-                provCacheRef.current.addrs[addr] = pos;
-                saveProvCache(provinciaId, provCacheRef.current);
-                resolve({ id: p.id, nombre: p.nombre, direccion: p.direccion, pos });
-              } else {
-                console.warn("No se pudo geocodificar:", addr, status);
-                resolve(null);
-              }
-            });
-          })
-      );
+        const cached = provCacheRef.current.addrs[key];
+        if (cached) {
+          geoCache.set(key, cached);
+          return { id: p.id, nombre: p.nombre, direccion: p.direccion, pos: cached };
+        }
+
+        const pos = await geocodeByIntent(geocoderRef.current, intent);
+        if (!pos) return null;
+
+        geoCache.set(key, pos);
+        provCacheRef.current.addrs[key] = pos;
+        saveProvCache(provinciaId, provCacheRef.current);
+        return { id: p.id, nombre: p.nombre, direccion: p.direccion, pos };
+      });
 
       const resultados = await Promise.all(tareas);
       setPines(resultados.filter(Boolean));
@@ -194,19 +230,18 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
     geocodificarPendientes();
   }, [isLoaded, pedidos, provinciaId]);
 
-  // Botones de repartidores dinámicos (ahora con nombres)
   const opcionesReps = useMemo(
-    () => (repartidores || []).map((email, i) => {
-      const em = String(email || "").toLowerCase();
-      const label = nombresMap[em] || em.split("@")[0] || `R${i + 1}`;
-      return { email: em, label };
-    }),
+    () =>
+      (repartidores || []).map((email, i) => {
+        const em = String(email || "").toLowerCase();
+        const label = nombresMap[em] || em.split("@")[0] || `R${i + 1}`;
+        return { email: em, label };
+      }),
     [repartidores, nombresMap]
   );
 
   return (
     <div className="my-4 overflow-hidden border border-base-300 rounded-xl" style={{ height: "500px" }}>
-      {/* Encabezado mini con provincia */}
       <div className="flex items-center justify-between px-3 py-2 text-sm bg-base-200">
         <span className="font-semibold">🗺️ Mapa de pedidos</span>
         <span className="font-mono badge badge-primary">Prov: {provinciaId || "—"}</span>
@@ -226,7 +261,6 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
         </GoogleMap>
       )}
 
-      {/* Modal para asignar repartidor */}
       {pedidoSeleccionado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-sm p-6 shadow-xl bg-base-100 rounded-xl text-base-content">
@@ -252,7 +286,7 @@ const MapaPedidos = ({ pedidos = [], onAsignarRepartidor }) => {
                     disabled={asignando}
                     onClick={async () => {
                       try {
-                        setAsignando(true); // anti doble-click ⇒ evita duplicar escrituras aguas arriba
+                        setAsignando(true);
                         await Promise.resolve(onAsignarRepartidor?.(pedidoSeleccionado.id, r.email, true));
                         setPedidoSeleccionado(null);
                       } finally {

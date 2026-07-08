@@ -236,6 +236,55 @@ function loadFacebookSdk({ appId, graphVersion }) {
 
     if (existing) {
       debugWarn("SDK_SCRIPT_ALREADY_EXISTS_WAITING", { id: existing.id, src: existing.src });
+
+      const startedAt = Date.now();
+      let settled = false;
+      let timer = null;
+
+      const cleanup = () => {
+        existing.removeEventListener("load", onReady);
+        existing.removeEventListener("error", onError);
+        if (timer) window.clearInterval(timer);
+      };
+
+      const onReady = () => {
+        if (settled || !window.FB) return;
+        settled = true;
+        cleanup();
+        window.FB.init({
+          appId: cleanAppId,
+          cookie: true,
+          xfbml: true,
+          version,
+        });
+        debugLog("SDK_EXISTING_SCRIPT_READY", { hasFB: Boolean(window.FB) });
+        resolve(window.FB);
+      };
+
+      const onError = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        facebookSdkPromise = null;
+        debugError("SDK_EXISTING_SCRIPT_ERROR", { error, browser: getBrowserDebugInfo() });
+        reject(new Error("No se pudo cargar Facebook SDK. Revisá conexión, dominio permitido y bloqueadores del navegador."));
+      };
+
+      existing.addEventListener("load", onReady, { once: true });
+      existing.addEventListener("error", onError, { once: true });
+
+      timer = window.setInterval(() => {
+        if (window.FB) {
+          onReady();
+          return;
+        }
+
+        if (Date.now() - startedAt > 15000) {
+          onError(new Error("Timeout esperando Facebook SDK existente."));
+        }
+      }, 250);
+
+      onReady();
       return;
     }
 
@@ -266,24 +315,46 @@ function loadFacebookSdk({ appId, graphVersion }) {
   return facebookSdkPromise;
 }
 
-async function launchEmbeddedSignupWithSdk({
+function launchEmbeddedSignupWithSdk({
   appId,
   graphVersion,
   configId,
   featureType,
   solutionId,
 }) {
-  const FB = await loadFacebookSdk({ appId, graphVersion });
+  const cleanAppId = clean(appId);
+  const version = clean(graphVersion) || "v20.0";
   const cleanConfigId = clean(configId);
 
+  // Importante para iPhone/Safari:
+  // FB.login tiene que ejecutarse de forma sincrónica dentro del click real.
+  // Por eso el SDK se precarga antes y acá NO hacemos await antes de abrir Meta.
+  const FB = typeof window !== "undefined" ? window.FB : null;
+
   debugLog("FB_LOGIN_PREPARE", {
-    appId: clean(appId),
-    graphVersion: clean(graphVersion) || "v20.0",
+    appId: cleanAppId,
+    graphVersion: version,
     configId: cleanConfigId,
     featureType: clean(featureType) || DEFAULT_FEATURE_TYPE,
     hasSolutionId: Boolean(clean(solutionId)),
+    hasFB: Boolean(FB),
     browser: getBrowserDebugInfo(),
   });
+
+  if (!FB) {
+    throw new Error(
+      "Meta todavía se está preparando. Tocá nuevamente Iniciar conexión oficial."
+    );
+  }
+
+  if (cleanAppId) {
+    FB.init({
+      appId: cleanAppId,
+      cookie: true,
+      xfbml: true,
+      version,
+    });
+  }
 
   if (!cleanConfigId) {
     throw new Error("Falta configId de Meta Embedded Signup.");
@@ -362,6 +433,7 @@ export default function ConnectWhatsAppBusinessButton({
 
   const signupEventRef = useRef(null);
   const signupWaitersRef = useRef([]);
+  const autoPrepareKeyRef = useRef("");
 
   const currentStatus = connection?.connectionStatus || "pending";
   const connected = Boolean(connection?.connected);
@@ -579,9 +651,59 @@ export default function ConnectWhatsAppBusinessButton({
     }
   }, [connected, provinciaId]);
 
+  useEffect(() => {
+    if (!provinciaId || connected || embeddedConfig?.state) return;
+
+    const key = `${provinciaId}:${email || ""}`;
+    if (autoPrepareKeyRef.current === key) return;
+    autoPrepareKeyRef.current = key;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const result = await prepareOfficialConnection();
+        if (cancelled || !result?.embeddedSignupConfigured) return;
+
+        setPreparing(true);
+        await loadFacebookSdk({
+          appId: result.appId,
+          graphVersion: result.graphVersion,
+        });
+
+        if (cancelled) return;
+
+        debugLog("AUTO_PREPARE_READY", {
+          provinciaId,
+          hasState: Boolean(result?.state),
+          hasFB: Boolean(window.FB),
+        });
+      } catch (err) {
+        autoPrepareKeyRef.current = "";
+        debugWarn("AUTO_PREPARE_FAILED", err);
+      } finally {
+        if (!cancelled) setPreparing(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, email, embeddedConfig?.state, prepareOfficialConnection, provinciaId]);
+
   const handleStart = async () => {
+    const preparedConfig =
+      embeddedConfig?.embeddedSignupConfigured && embeddedConfig?.state
+        ? embeddedConfig
+        : null;
+
     setBusy(true);
-    setNotice({ kind: "info", message: "Abriendo conexión oficial de Meta..." });
+    setNotice({
+      kind: "info",
+      message: preparedConfig
+        ? "Abriendo conexión oficial de Meta..."
+        : "Preparando Meta para abrir la conexión oficial...",
+    });
     signupEventRef.current = null;
     signupWaitersRef.current = [];
     window.__CRM_META_WA_LAST_EVENT__ = null;
@@ -592,14 +714,29 @@ export default function ConnectWhatsAppBusinessButton({
       email,
       currentStatus,
       connected,
+      hasPreparedConfig: Boolean(preparedConfig),
       browser: getBrowserDebugInfo(),
     });
 
     try {
-      const result = await prepareOfficialConnection();
+      const result = preparedConfig || (await prepareOfficialConnection());
 
       if (!result?.embeddedSignupConfigured) {
         setShowManual(true);
+        return;
+      }
+
+      if (!preparedConfig) {
+        await loadFacebookSdk({
+          appId: result.appId,
+          graphVersion: result.graphVersion,
+        });
+
+        setNotice({
+          kind: "info",
+          message:
+            "Conexión oficial preparada. Tocá nuevamente Iniciar conexión oficial para abrir Meta.",
+        });
         return;
       }
 
@@ -812,6 +949,21 @@ export default function ConnectWhatsAppBusinessButton({
     }
   };
 
+  const hasPreparedConnection = Boolean(
+    embeddedConfig?.embeddedSignupConfigured && embeddedConfig?.state
+  );
+
+  const primaryButtonDisabled =
+    busy || connected || (preparing && !hasPreparedConnection);
+
+  const primaryButtonLabel = busy
+    ? "Procesando..."
+    : hasPreparedConnection
+      ? "Abrir conexión oficial"
+      : preparing
+        ? "Preparando Meta..."
+        : "Iniciar conexión oficial";
+
   return (
     <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-4">
       <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
@@ -881,14 +1033,10 @@ export default function ConnectWhatsAppBusinessButton({
             <button
               type="button"
               onClick={handleStart}
-              disabled={busy || preparing || connected}
+              disabled={primaryButtonDisabled}
               className="rounded-2xl bg-[var(--crm-accent)] px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {busy
-                ? "Procesando..."
-                : preparing
-                  ? "Preparando Meta..."
-                  : "Iniciar conexión oficial"}
+              {primaryButtonLabel}
             </button>
 
             <button

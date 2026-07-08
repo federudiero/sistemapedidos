@@ -27,6 +27,32 @@ import Swal from "sweetalert2";
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia.js";
 
+const PAYMENT_METHOD_TARJETA_CREDITO = "tarjetaCredito";
+const PAYMENT_METHODS_CON_RECARGO_10 = new Set([
+  "transferencia10",
+  PAYMENT_METHOD_TARJETA_CREDITO,
+]);
+
+const tieneRecargo10PorMetodo = (metodoPago) =>
+  PAYMENT_METHODS_CON_RECARGO_10.has(String(metodoPago || ""));
+
+const formatMetodoPagoLabel = (metodoPago) => {
+  switch (metodoPago) {
+    case "efectivo":
+      return "Efectivo";
+    case "transferencia":
+      return "Transferencia";
+    case "transferencia10":
+      return "Transferencia (+10%)";
+    case PAYMENT_METHOD_TARJETA_CREDITO:
+      return "Tarjeta de crédito (+10%)";
+    case "mixto":
+      return "Mixto";
+    default:
+      return metodoPago || "Efectivo";
+  }
+};
+
 // ---------- Utils seguros para serializar datos a logs/auditoría ----------
 function limpiarFirestoreData(value) {
   if (
@@ -304,7 +330,7 @@ const getCobradoSegunMetodo = (p) => {
   const base = roundMoney(getMontoCobrar(p));
   const metodo = p?.metodoPago || "efectivo";
 
-  if (metodo === "transferencia10") {
+  if (tieneRecargo10PorMetodo(metodo)) {
     const cobrado = round2(base * 1.1);
     return { base, metodo, cobrado, extra10: round2(cobrado - base) };
   }
@@ -599,7 +625,8 @@ export default function CierreCaja() {
   const calcularTotales = (pedidosRepartidor) => {
     let efectivo = 0,
       transferencia = 0,
-      transferencia10 = 0;
+      transferencia10 = 0,
+      tarjetaCredito = 0;
 
     let totalDescuento = 0;
     let totalOriginal = 0;
@@ -619,6 +646,8 @@ export default function CierreCaja() {
       else if (metodo === "transferencia") transferencia += base;
       else if (metodo === "transferencia10") {
         transferencia10 += round2(base * 1.1);
+      } else if (metodo === PAYMENT_METHOD_TARJETA_CREDITO) {
+        tarjetaCredito += round2(base * 1.1);
       } else if (metodo === "mixto") {
         const ef = Number(p.pagoMixtoEfectivo || 0);
         const tr = Number(p.pagoMixtoTransferencia || 0);
@@ -629,7 +658,14 @@ export default function CierreCaja() {
       }
     });
 
-    return { efectivo, transferencia, transferencia10, totalDescuento, totalOriginal };
+    return {
+      efectivo,
+      transferencia,
+      transferencia10,
+      tarjetaCredito,
+      totalDescuento,
+      totalOriginal,
+    };
   };
 
   const calcularCajaNeta = (tot, g) => {
@@ -638,7 +674,17 @@ export default function CierreCaja() {
       (g?.acompanante || 0) +
       (g?.combustible || 0) +
       (g?.extra || 0);
-    return Math.round((tot.efectivo + tot.transferencia + tot.transferencia10 - gastos) * 100) / 100;
+    return (
+      Math.round(
+        (
+          Number(tot.efectivo || 0) +
+          Number(tot.transferencia || 0) +
+          Number(tot.transferencia10 || 0) +
+          Number(tot.tarjetaCredito || 0) -
+          gastos
+        ) * 100
+      ) / 100
+    );
   };
 
   const handleGastoChange = (email, tipo, valor) => {
@@ -661,6 +707,7 @@ export default function CierreCaja() {
     let totalEfectivo = 0;
     let totalTransferencia = 0;
     let totalTransferencia10 = 0;
+    let totalTarjetaCredito = 0;
     let totalDescuentos = 0;
     let totalOriginal = 0;
     let totalGastosIndividuales = 0;
@@ -672,6 +719,7 @@ export default function CierreCaja() {
       totalEfectivo += Number(t.efectivo || 0);
       totalTransferencia += Number(t.transferencia || 0);
       totalTransferencia10 += Number(t.transferencia10 || 0);
+      totalTarjetaCredito += Number(t.tarjetaCredito || 0);
       totalDescuentos += Number(t.totalDescuento || 0);
       totalOriginal += Number(t.totalOriginal || 0);
 
@@ -688,7 +736,7 @@ export default function CierreCaja() {
       gastoGlobalExtra?.tipo === "ingreso" ? "ingreso" : "egreso";
 
     const totalBruto =
-      totalEfectivo + totalTransferencia + totalTransferencia10;
+      totalEfectivo + totalTransferencia + totalTransferencia10 + totalTarjetaCredito;
 
     const totalGastos =
       totalGastosIndividuales +
@@ -703,6 +751,7 @@ export default function CierreCaja() {
       totalEfectivo,
       totalTransferencia,
       totalTransferencia10,
+      totalTarjetaCredito,
       totalDescuentos,
       totalOriginal,
       totalGastosIndividuales,
@@ -722,6 +771,7 @@ export default function CierreCaja() {
     efectivo: totales.efectivo,
     transferencia: totales.transferencia,
     transferencia10: totales.transferencia10,
+    tarjetaCredito: totales.tarjetaCredito,
     gastos: g,
     totalDescuentos: totales.totalDescuento || 0,
     totalOriginal: totales.totalOriginal || 0,
@@ -1138,7 +1188,8 @@ export default function CierreCaja() {
 
       let totalEfectivo = 0,
         totalTransferencia = 0,
-        totalTransferencia10 = 0;
+        totalTransferencia10 = 0,
+        totalTarjetaCredito = 0;
 
       let totalDescuentos = 0;
       let totalOriginal = 0;
@@ -1161,6 +1212,7 @@ export default function CierreCaja() {
           if (metodo === "efectivo") totalEfectivo += base;
           else if (metodo === "transferencia") totalTransferencia += base;
           else if (metodo === "transferencia10") totalTransferencia10 += round2(base * 1.1);
+          else if (metodo === PAYMENT_METHOD_TARJETA_CREDITO) totalTarjetaCredito += round2(base * 1.1);
           else if (metodo === "mixto") {
             const ef = Number(p?.pagoMixtoEfectivo || 0);
             const tr = Number(p?.pagoMixtoTransferencia || 0);
@@ -1284,6 +1336,7 @@ export default function CierreCaja() {
                 <li>Efectivo: <b>$${totalEfectivo.toFixed(0)}</b></li>
                 <li>Transferencia: <b>$${totalTransferencia.toFixed(0)}</b></li>
                 <li>Transferencia (10%): <b>$${totalTransferencia10.toFixed(0)}</b></li>
+                <li>Tarjeta de crédito (10%): <b>$${totalTarjetaCredito.toFixed(0)}</b></li>
                 <li>🎯 Descuentos aplicados: <b>$${totalDescuentos.toFixed(
                   0
                 )}</b> (sobre original $${totalOriginal.toFixed(0)})</li>
@@ -1343,7 +1396,8 @@ export default function CierreCaja() {
       }
 
       if (ops.length === 0) {
-        const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
+        const totalBruto =
+          totalEfectivo + totalTransferencia + totalTransferencia10 + totalTarjetaCredito;
         const totalNeto =
           totalBruto -
           totalGastos +
@@ -1355,6 +1409,7 @@ export default function CierreCaja() {
           totalEfectivo,
           totalTransferencia,
           totalTransferencia10,
+          totalTarjetaCredito,
           totalGastos,
           totalNeto,
           totalDescuentos,
@@ -1488,7 +1543,8 @@ export default function CierreCaja() {
         }
       })();
 
-      const totalBruto = totalEfectivo + totalTransferencia + totalTransferencia10;
+      const totalBruto =
+        totalEfectivo + totalTransferencia + totalTransferencia10 + totalTarjetaCredito;
       const totalNeto =
         totalBruto -
         totalGastos +
@@ -1500,6 +1556,7 @@ export default function CierreCaja() {
         totalEfectivo,
         totalTransferencia,
         totalTransferencia10,
+        totalTarjetaCredito,
         totalGastos,
         totalNeto,
         totalDescuentos,
@@ -1589,6 +1646,7 @@ export default function CierreCaja() {
         Efectivo: cierre.efectivo || 0,
         Transferencia: cierre.transferencia || 0,
         Transferencia10: cierre.transferencia10 || 0,
+        Tarjeta_Credito: t?.tarjetaCredito ?? cierre.tarjetaCredito ?? 0,
 
         Subtotal_Original: t?.totalOriginal ?? cierre.totalOriginal ?? 0,
         Total_Descuentos: t?.totalDescuento ?? cierre.totalDescuentos ?? 0,
@@ -1801,6 +1859,7 @@ export default function CierreCaja() {
                   totalEfectivo: resumenSnap.data().totalEfectivo || 0,
                   totalTransferencia: resumenSnap.data().totalTransferencia || 0,
                   totalTransferencia10: resumenSnap.data().totalTransferencia10 || 0,
+                  totalTarjetaCredito: resumenSnap.data().totalTarjetaCredito || 0,
                   totalPorProducto: resumenSnap.data().totalPorProducto || {},
                   gastoGlobalExtra: resumenSnap.data().gastoGlobalExtra || null,
                 }
@@ -1922,7 +1981,7 @@ export default function CierreCaja() {
                             <span>{p.nombre}</span>
                             <span className="text-sm opacity-70">
                               — ${Number(info.cobrado || 0).toFixed(0)}{" "}
-                              <span className="opacity-70">({metodo})</span>
+                              <span className="opacity-70">({formatMetodoPagoLabel(metodo)})</span>
                             </span>
 
                             {desc > 0 && (
@@ -1939,7 +1998,7 @@ export default function CierreCaja() {
                                 (orig: ${roundMoney(p.monto || 0).toFixed(0)})
                               </>
                             ) : null}
-                            {metodo === "transferencia10" ? (
+                            {tieneRecargo10PorMetodo(metodo) ? (
                               <>
                                 {" "}
                                 — +10%: <b>${Number(info.extra10 || 0).toFixed(0)}</b>
@@ -1992,6 +2051,7 @@ export default function CierreCaja() {
               <p>💵 Efectivo: ${totales.efectivo.toFixed(0)}</p>
               <p>💳 Transferencia: ${totales.transferencia.toFixed(0)}</p>
               <p>💳 Transferencia (+10%): ${totales.transferencia10.toFixed(0)}</p>
+              <p>💳 Tarjeta de crédito (+10%): ${Number(totales.tarjetaCredito || 0).toFixed(0)}</p>
 
               <div className="mt-2 text-sm">
                 <div className="opacity-80">
@@ -2170,6 +2230,7 @@ export default function CierreCaja() {
             <p>💵 Efectivo: ${Number(resumenGlobalPreview.totalEfectivo || 0).toFixed(0)}</p>
             <p>💳 Transferencia: ${Number(resumenGlobalPreview.totalTransferencia || 0).toFixed(0)}</p>
             <p>💳 Transferencia (+10%): ${Number(resumenGlobalPreview.totalTransferencia10 || 0).toFixed(0)}</p>
+            <p>💳 Tarjeta de crédito (+10%): ${Number(resumenGlobalPreview.totalTarjetaCredito || 0).toFixed(0)}</p>
 
             <div className="pt-2 mt-2 text-sm border-t border-base-300">
               <div>
@@ -2281,6 +2342,7 @@ export default function CierreCaja() {
               <p>💵 Efectivo: {resumenGlobal.totalEfectivo || 0}</p>
               <p>💳 Transferencia: {resumenGlobal.totalTransferencia || 0}</p>
               <p>💳 Transferencia (10%): {resumenGlobal.totalTransferencia10 || 0}</p>
+              <p>💳 Tarjeta de crédito (10%): {resumenGlobal.totalTarjetaCredito || 0}</p>
 
               <div className="pt-2 mt-2 text-sm border-t border-base-300">
                 <div>
@@ -2323,7 +2385,8 @@ export default function CierreCaja() {
                   const bruto =
                     (resumenGlobal.totalEfectivo || 0) +
                     (resumenGlobal.totalTransferencia || 0) +
-                    (resumenGlobal.totalTransferencia10 || 0);
+                    (resumenGlobal.totalTransferencia10 || 0) +
+                    (resumenGlobal.totalTarjetaCredito || 0);
                   const neto =
                     typeof resumenGlobal.totalNeto === "number"
                       ? resumenGlobal.totalNeto

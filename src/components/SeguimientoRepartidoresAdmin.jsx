@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { PROVINCIAS } from "../constants/provincias";
 import AdminNavbar from "../components/AdminNavbar";
+
+const MAX_PARADAS_POR_TRAMO = 25;
 
 /**
  * Helper universal para WhatsApp:
@@ -94,6 +96,135 @@ function getPedidoTexto(p) {
   return "";
 }
 
+function normalizarOrdenRuta(value) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) return null;
+
+  return n;
+}
+
+function getRepartidorPedido(p) {
+  if (Array.isArray(p?.asignadoA)) {
+    const first = p.asignadoA.find((item) => String(item || "").trim());
+    if (first) return String(first).trim();
+  }
+
+  const candidatos = [
+    p?.asignadoA,
+    p?.repartidor,
+    p?.repartidorEmail,
+    p?.repartidorNombre,
+  ];
+
+  for (const c of candidatos) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+
+  return "SIN_REPARTIDOR";
+}
+
+function compararPedidosPorOrdenRuta(a, b) {
+  const ao = normalizarOrdenRuta(a?.ordenRuta);
+  const bo = normalizarOrdenRuta(b?.ordenRuta);
+
+  if (ao === null && bo === null) {
+    return String(a?.nombre || a?.direccion || a?.id || "").localeCompare(
+      String(b?.nombre || b?.direccion || b?.id || "")
+    );
+  }
+
+  if (ao === null) return 1;
+  if (bo === null) return -1;
+
+  return ao - bo;
+}
+
+function dividirEnTramos(items = [], size = MAX_PARADAS_POR_TRAMO) {
+  const arr = Array.isArray(items) ? items.filter(Boolean) : [];
+  const out = [];
+
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+
+  return out;
+}
+
+function formatPedidoParaCopiar(p, absoluteIndex) {
+  const ordenRuta = normalizarOrdenRuta(p?.ordenRuta);
+  const parada = ordenRuta !== null ? ordenRuta + 1 : absoluteIndex + 1;
+  const phones = getPhones(p);
+  const monto = formatMoney(p?.monto);
+  const pedidoTexto = getPedidoTexto(p);
+
+  const lineas = [
+    `${parada}) ${p?.nombre || "Sin nombre"}`,
+    `   Estado: ${p?.entregado ? "Entregado" : "Pendiente"}`,
+    `   Tel: ${phones.length ? phones.join(" / ") : "—"}`,
+    `   Dir: ${p?.direccion || "—"}`,
+  ];
+
+  if (p?.entreCalles) lineas.push(`   Entre calles: ${p.entreCalles}`);
+  if (monto) lineas.push(`   Monto: ${monto}`);
+  if (p?.vendedorNombreManual || p?.vendedorEmail) {
+    lineas.push(`   Vendedor: ${p.vendedorNombreManual || p.vendedorEmail}`);
+  }
+  if (pedidoTexto) lineas.push(`   Pedido: ${pedidoTexto}`);
+  if (p?.observacion) lineas.push(`   Obs: ${p.observacion}`);
+  if (p?.linkUbicacion) lineas.push(`   Mapa: ${p.linkUbicacion}`);
+
+  return lineas.join("\n");
+}
+
+function construirTextoRuta(grupo, { fechaStr, prov, tramoIndex = null } = {}) {
+  const pedidos = Array.isArray(grupo?.pedidos) ? grupo.pedidos.filter(Boolean) : [];
+  const tramos = dividirEnTramos(pedidos);
+  const tramosElegidos = tramoIndex === null ? tramos : [tramos[tramoIndex] || []];
+  const totalTramos = tramos.length || 1;
+
+  const header = [
+    `RUTA - ${grupo?.repartidor || "Sin repartidor"}`,
+    `Fecha: ${fechaStr || "—"}`,
+    `Provincia: ${prov || "—"}`,
+    `Total visible: ${pedidos.length} pedidos | Entregados: ${grupo?.entregados || 0}/${grupo?.total || pedidos.length}`,
+  ];
+
+  const bloques = tramosElegidos.map((tramo, idx) => {
+    const realTramoIndex = tramoIndex === null ? idx : tramoIndex;
+    const startIndex = realTramoIndex * MAX_PARADAS_POR_TRAMO;
+
+    const titulo = [
+      "",
+      `TRAMO ${realTramoIndex + 1}/${totalTramos} (${tramo.length} paradas)`,
+      "----------------------------------------",
+    ];
+
+    const detalle = tramo.map((p, i) => formatPedidoParaCopiar(p, startIndex + i));
+    return [...titulo, ...detalle].join("\n");
+  });
+
+  return [...header, ...bloques].join("\n").trim();
+}
+
+async function copiarTexto(texto) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(texto);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = texto;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
 /**
  * Componente Admin de seguimiento de repartidores por provincia.
  * - Si recibe `pedidos` => MODO PRESENTACIONAL (no lee Firestore).
@@ -114,6 +245,7 @@ export default function SeguimientoRepartidoresAdmin({
   const [prov, setProv] = useState(provinciaProp || provCtx);
   const [fechaStr, setFechaStr] = useState(fechaProp || hoyYYYYMMDD());
   const [incluirEntregados, setIncluirEntregados] = useState(true);
+  const [copiadoKey, setCopiadoKey] = useState("");
 
   const [pedidosFS, setPedidosFS] = useState([]);
   const usandoFS = !Array.isArray(pedidosProp);
@@ -123,13 +255,13 @@ export default function SeguimientoRepartidoresAdmin({
     if (!prov || !fechaStr) return;
 
     const col = collection(db, "provincias", prov, "pedidos");
-    const q = query(col, where("fechaStr", "==", fechaStr), orderBy("ordenRuta"));
+    const q = query(col, where("fechaStr", "==", fechaStr));
 
     const unsub = onSnapshot(
       q,
       (snap) => {
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setPedidosFS(rows);
+        setPedidosFS(rows.filter(Boolean));
       },
       (err) => {
         console.error("SeguimientoRepartidoresAdmin onSnapshot:", err);
@@ -142,16 +274,20 @@ export default function SeguimientoRepartidoresAdmin({
   const pedidos = usandoFS ? pedidosFS : pedidosProp;
 
   const grupos = useMemo(() => {
-    const normalizados = (pedidos || []).map((p) => {
-      const repartidor = Array.isArray(p.asignadoA)
-        ? (p.asignadoA[0] || "SIN_REPARTIDOR")
-        : (p.repartidor || "SIN_REPARTIDOR");
-      const ordenRuta = Number.isFinite(Number(p.ordenRuta)) ? Number(p.ordenRuta) : 999;
-      const entregado = !!p.entregado;
+    const pedidosBase = Array.isArray(pedidos)
+      ? pedidos.filter((p) => p && typeof p === "object")
+      : [];
+
+    const normalizados = pedidosBase.map((p) => {
+      const repartidor = getRepartidorPedido(p);
+      const ordenRuta = normalizarOrdenRuta(p?.ordenRuta);
+      const entregado = !!p?.entregado;
       return { ...p, repartidor, ordenRuta, entregado };
     });
 
-    const visibles = incluirEntregados ? normalizados : normalizados.filter((p) => !p.entregado);
+    const visibles = incluirEntregados
+      ? normalizados
+      : normalizados.filter((p) => !p.entregado);
 
     const map = new Map();
     for (const p of visibles) {
@@ -160,10 +296,10 @@ export default function SeguimientoRepartidoresAdmin({
     }
 
     const out = Array.from(map.entries()).map(([repartidor, arr]) => {
-      const ordenados = arr.slice().sort((a, b) => a.ordenRuta - b.ordenRuta);
-      const entregados = ordenados.filter((p) => p.entregado).length;
+      const ordenados = arr.filter(Boolean).slice().sort(compararPedidosPorOrdenRuta);
+      const entregados = ordenados.filter((p) => p?.entregado).length;
       const total = ordenados.length;
-      const proximo = ordenados.find((p) => !p.entregado) || null;
+      const proximo = ordenados.find((p) => p && !p.entregado) || null;
       const progreso = total ? Math.round((entregados / total) * 100) : 0;
       return { repartidor, total, entregados, progreso, proximo, pedidos: ordenados };
     });
@@ -171,7 +307,7 @@ export default function SeguimientoRepartidoresAdmin({
     out.sort((a, b) => {
       const aPend = a.proximo ? 0 : 1;
       const bPend = b.proximo ? 0 : 1;
-      return aPend - bPend || a.repartidor.localeCompare(b.repartidor);
+      return aPend - bPend || String(a.repartidor).localeCompare(String(b.repartidor));
     });
 
     return out;
@@ -179,16 +315,35 @@ export default function SeguimientoRepartidoresAdmin({
 
   const puedeElegirProvincia = role === "admin";
 
+  const handleCopiarRuta = async (grupo, tramoIndex = null) => {
+    const key = `${grupo?.repartidor || "SIN_REPARTIDOR"}-${tramoIndex === null ? "all" : tramoIndex}`;
+    const texto = construirTextoRuta(grupo, { fechaStr, prov, tramoIndex });
+
+    try {
+      await copiarTexto(texto);
+      setCopiadoKey(key);
+      window.setTimeout(() => {
+        setCopiadoKey((current) => (current === key ? "" : current));
+      }, 1800);
+    } catch (error) {
+      console.error("No se pudo copiar la ruta:", error);
+      alert("No se pudo copiar la ruta. Probá nuevamente.");
+    }
+  };
+
   const renderPedidoCard = (p) => {
+    if (!p || typeof p !== "object") return null;
+
     const phones = getPhones(p);
     const mainPhone = phones[0];
     const altPhone = phones[1];
     const pedidoTexto = getPedidoTexto(p);
-    const ordenAdmin = Number.isFinite(p.ordenRuta) && p.ordenRuta !== 999 ? p.ordenRuta + 1 : "—";
+    const ordenRuta = normalizarOrdenRuta(p?.ordenRuta);
+    const ordenAdmin = ordenRuta !== null ? ordenRuta + 1 : "—";
 
     return (
       <div
-        key={p.id || `${p.repartidor}-${p.ordenRuta}-${p.nombre}`}
+        key={p.id || `${p.repartidor || "SIN_REPARTIDOR"}-${ordenAdmin}-${p.nombre || p.direccion || Math.random()}`}
         className="p-3 border rounded-lg bg-base-100 border-base-300"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -306,9 +461,12 @@ export default function SeguimientoRepartidoresAdmin({
       ) : (
         <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-2">
           {grupos.map((g) => {
-            const proximoOrden = Number.isFinite(g.proximo?.ordenRuta)
-              ? g.proximo.ordenRuta + 1
+            const proximoOrdenRuta = normalizarOrdenRuta(g?.proximo?.ordenRuta);
+            const proximoOrden = g?.proximo && proximoOrdenRuta !== null
+              ? proximoOrdenRuta + 1
               : "—";
+            const tramos = dividirEnTramos(g?.pedidos || []);
+            const fullCopyKey = `${g?.repartidor || "SIN_REPARTIDOR"}-all`;
 
             return (
               <div key={g.repartidor} className="p-4 shadow-inner rounded-xl bg-base-200">
@@ -321,6 +479,35 @@ export default function SeguimientoRepartidoresAdmin({
 
                 <div className="w-full h-2 mt-2 rounded bg-base-300">
                   <div className="h-2 rounded bg-success" style={{ width: `${g.progreso}%` }} />
+                </div>
+
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => handleCopiarRuta(g)}
+                    disabled={!g.pedidos.length}
+                  >
+                    {copiadoKey === fullCopyKey ? "Copiado" : "Copiar ruta"}
+                  </button>
+
+                  {tramos.length > 1
+                    ? tramos.map((tramo, idx) => {
+                        const tramoKey = `${g?.repartidor || "SIN_REPARTIDOR"}-${idx}`;
+                        return (
+                          <button
+                            key={tramoKey}
+                            type="button"
+                            className="btn btn-sm btn-outline"
+                            onClick={() => handleCopiarRuta(g, idx)}
+                            disabled={!tramo.length}
+                            title={`Copiar tramo ${idx + 1}`}
+                          >
+                            {copiadoKey === tramoKey ? "Copiado" : `Tramo ${idx + 1}`}
+                          </button>
+                        );
+                      })
+                    : null}
                 </div>
 
                 <div className="mt-3">
@@ -401,7 +588,11 @@ export default function SeguimientoRepartidoresAdmin({
                   </summary>
 
                   <div className="grid grid-cols-1 gap-3 p-3 pt-0">
-                    {g.pedidos.map((p) => renderPedidoCard(p))}
+                    {g.pedidos.map((p, idx) => (
+                      <React.Fragment key={p?.id || `${g.repartidor}-${idx}`}>
+                        {renderPedidoCard(p)}
+                      </React.Fragment>
+                    ))}
                   </div>
                 </details>
               </div>

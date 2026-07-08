@@ -6,6 +6,8 @@ import AdminLogin from "./views/AdminLogin";
 import AdminPedidos from "./views/AdminPedidos";
 import AdminDashboard from "./views/AdminDashboard";
 import AdminBuscadorGlobal from "./views/AdminBuscadorGlobal";
+import AdminBackupDatos from "./views/AdminBackupDatos";
+import AdminVentasPorVendedor from "./views/AdminVentasPorVendedor";
 import LoginVendedor from "./views/LoginVendedor";
 import Home from "./views/Home";
 import LoginRepartidor from "./views/LoginRepartidor";
@@ -69,6 +71,20 @@ function App() {
                   <AdminBuscadorGlobal />
                 </RequireAdminSection>
               }
+            />
+
+            <Route
+              path="/admin/backup-datos"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.BACKUP_DATOS}>
+                  <AdminBackupDatos />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/ventas-vendedores"
+              element={<AdminVentasPorVendedor />}
             />
 
             <Route

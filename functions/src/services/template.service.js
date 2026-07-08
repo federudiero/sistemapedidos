@@ -2,7 +2,6 @@ const { DEFAULT_PROV } = require("../config/env");
 const {
   normProv,
   normalizeEmail,
-  normalizeWaId,
   normalizeMetaRecipient,
   safeStr,
   uniqueStrings,
@@ -37,7 +36,12 @@ const {
 const {
   evaluateTemplateSendPolicy,
   normalizeTemplateCategory,
-} = require("./policy.service");
+} = require("./message-policy.service");
+
+function displayPhoneFromConvId(convId) {
+  const recipient = normalizeMetaRecipient(convId);
+  return recipient ? toDisplayE164(recipient) : null;
+}
 
 async function listMetaTemplatesForSender({
   assignedEmail,
@@ -197,6 +201,10 @@ async function sendTemplateMessageToConversation({
 }) {
   const to = normalizeMetaRecipient(convId);
 
+  if (!to) {
+    throw new Error("No se pudo resolver el destinatario de WhatsApp.");
+  }
+
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -275,13 +283,29 @@ async function sendTemplateBatch(req) {
   const actorEmailLo = normalizeEmail(actorEmail);
   const adminMode = await isAdminProv({ prov, email: actorEmailLo });
 
+  /*
+    IMPORTANTE:
+    No usar normalizeWaId() acá.
+
+    Hay conversaciones nuevas con ID scoped:
+      phoneNumberId__clientWaId
+      1066431589893946__54351158120950
+
+    Si se usa normalizeWaId(), ese ID se transforma en:
+      106643158989394654351158120950
+
+    y Firestore no encuentra el documento. Por eso aparecía:
+      "Conversación inexistente"
+  */
   const convIds = uniqueStrings(req.body?.convIds || [])
-    .map(normalizeWaId)
+    .map((value) => safeStr(value))
     .filter(Boolean);
+
   const templateName = safeStr(req.body?.templateName);
   const languageCode = safeStr(req.body?.languageCode);
   const templatePreviewText = safeStr(req.body?.templatePreviewText || "");
   const templateCategory = normalizeTemplateCategory(req.body?.templateCategory);
+
   const rawComponents = Array.isArray(req.body?.rawComponents)
     ? req.body.rawComponents
     : null;
@@ -414,7 +438,7 @@ async function sendTemplateBatch(req) {
         ok: false,
         convId,
         telefonoE164:
-          prepared?.convData?.telefonoE164 || toDisplayE164(convId),
+          prepared?.convData?.telefonoE164 || displayPhoneFromConvId(convId),
         nombre: prepared?.convData?.nombre || null,
         assignedToEmail:
           normalizeEmail(prepared?.convData?.assignedToEmail) || null,
@@ -458,7 +482,7 @@ async function sendTemplateBatch(req) {
       sentResults.set(convId, {
         ok: true,
         convId,
-        telefonoE164: convData?.telefonoE164 || toDisplayE164(convId),
+        telefonoE164: convData?.telefonoE164 || displayPhoneFromConvId(convId),
         nombre: convData?.nombre || null,
         assignedToEmail: sent.assignedToEmail,
         waMsgId: sent.waMsgId,
@@ -470,7 +494,7 @@ async function sendTemplateBatch(req) {
       sentResults.set(convId, {
         ok: false,
         convId,
-        telefonoE164: convData?.telefonoE164 || toDisplayE164(convId),
+        telefonoE164: convData?.telefonoE164 || displayPhoneFromConvId(convId),
         nombre: convData?.nombre || null,
         assignedToEmail: normalizeEmail(convData?.assignedToEmail) || null,
         phoneNumberId: phoneNumberId || null,
@@ -511,6 +535,7 @@ async function sendTemplateBatch(req) {
     results,
   };
 }
+
 module.exports = {
   listMetaTemplates,
   sendTemplateBatch,

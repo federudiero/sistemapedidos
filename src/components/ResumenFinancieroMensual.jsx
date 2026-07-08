@@ -115,6 +115,7 @@ function ResumenFinancieroMensual() {
     efectivo: 0,
     transferencia: 0,
     transferencia10: 0,
+    tarjetaCredito: 0,
     totalGastos: 0,
     totalNeto: 0,
   });
@@ -150,6 +151,7 @@ function ResumenFinancieroMensual() {
           efectivo: 0,
           transferencia: 0,
           transferencia10: 0,
+          tarjetaCredito: 0,
           totalGastos: 0,
           totalNeto: 0,
         });
@@ -221,6 +223,7 @@ function ResumenFinancieroMensual() {
           let totalEfectivoMes = 0;
           let totalTransferenciaMes = 0;
           let totalTransferencia10Mes = 0;
+          let totalTarjetaCreditoMes = 0;
           let totalGastosMes = 0;
           let totalNetoMes = 0;
 
@@ -228,9 +231,10 @@ function ResumenFinancieroMensual() {
             const efectivo = Number(r.totalEfectivo || 0);
             const transferencia = Number(r.totalTransferencia || 0);
             const transferencia10 = Number(r.totalTransferencia10 || 0);
+            const tarjetaCredito = Number(r.totalTarjetaCredito || 0);
             const gastos = Number(r.totalGastos || 0);
 
-            const bruto = efectivo + transferencia + transferencia10;
+            const bruto = efectivo + transferencia + transferencia10 + tarjetaCredito;
             const neto =
               r.totalNeto !== undefined && r.totalNeto !== null
                 ? Number(r.totalNeto)
@@ -239,6 +243,7 @@ function ResumenFinancieroMensual() {
             totalEfectivoMes += efectivo;
             totalTransferenciaMes += transferencia;
             totalTransferencia10Mes += transferencia10;
+            totalTarjetaCreditoMes += tarjetaCredito;
             totalGastosMes += gastos;
             totalNetoMes += neto;
 
@@ -247,6 +252,7 @@ function ResumenFinancieroMensual() {
               efectivo,
               transferencia,
               transferencia10,
+              tarjetaCredito,
               bruto,
               gastos,
               neto,
@@ -260,6 +266,7 @@ function ResumenFinancieroMensual() {
               efectivo: totalEfectivoMes,
               transferencia: totalTransferenciaMes,
               transferencia10: totalTransferencia10Mes,
+              tarjetaCredito: totalTarjetaCreditoMes,
               totalGastos: totalGastosMes,
               totalNeto: totalNetoMes,
             },
@@ -702,12 +709,14 @@ function ResumenFinancieroMensual() {
   const totalBruto =
     Number(totales.efectivo || 0) +
     Number(totales.transferencia || 0) +
-    Number(totales.transferencia10 || 0);
+    Number(totales.transferencia10 || 0) +
+    Number(totales.tarjetaCredito || 0);
 
   const pieData = [
     { name: "Efectivo", value: Number(totales.efectivo || 0) },
     { name: "Transferencia", value: Number(totales.transferencia || 0) },
     { name: "Transferencia (10%)", value: Number(totales.transferencia10 || 0) },
+    { name: "Tarjeta de crédito (10%)", value: Number(totales.tarjetaCredito || 0) },
   ];
 
   // ✅ Márgenes (%)
@@ -775,6 +784,7 @@ function ResumenFinancieroMensual() {
       Efectivo: r.efectivo,
       Transferencia: r.transferencia,
       Transferencia10: r.transferencia10,
+      TarjetaCredito: r.tarjetaCredito,
       BrutoCobrado: r.bruto,
       Gastos: r.gastos,
       NetoDespuesDeGastos: r.neto,
@@ -989,6 +999,13 @@ function ResumenFinancieroMensual() {
                   maximumFractionDigits: 2,
                 })}
               </p>
+              <p>
+                💳 Tarjeta de crédito (10%):{" "}
+                ${Number(totales.tarjetaCredito || 0).toLocaleString("es-AR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </p>
               <hr className="my-2" />
               <p className="font-semibold">
                 🧾 Total Bruto: ${Number(totalBruto || 0).toLocaleString("es-AR")}
@@ -1107,6 +1124,7 @@ function ResumenFinancieroMensual() {
                     <th>Efectivo</th>
                     <th>Transf</th>
                     <th>Transf10</th>
+                    <th>Tarjeta</th>
                     <th>Bruto</th>
                     <th>Gastos</th>
                     <th>Neto</th>
@@ -1120,6 +1138,12 @@ function ResumenFinancieroMensual() {
                       <td>${r.transferencia.toLocaleString("es-AR")}</td>
                       <td>
                         ${r.transferencia10.toLocaleString("es-AR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td>
+                        ${Number(r.tarjetaCredito || 0).toLocaleString("es-AR", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}

@@ -1,5 +1,5 @@
 // src/components/MapaRutaRepartidor.jsx — números en pines + editor en InfoWindow
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   GoogleMap,
   useJsApiLoader,
@@ -28,14 +28,51 @@ const sanitizeDireccion = (s) => {
   x = x.replace(/[ÁÉÍÓÚÜÑáéíóúüñ]/g, (ch) => to[from.indexOf(ch)] || ch);
   return x;
 };
-const ensureARContext = (addr, base) => {
-  const s = String(addr || "");
-  if (/argentina/i.test(s)) return s;
-  const parts = String(base || "")
+const stripPostalPrefix = (s) =>
+  String(s || "")
+    .trim()
+    .replace(/^[A-Z]?\d{3,5}\s+/i, "")
+    .trim();
+
+const splitDireccionParts = (s) =>
+  String(s || "")
     .split(",")
-    .map((t) => t.trim());
-  const ctx = parts.slice(-3).join(", "); // "Ciudad, Provincia, Argentina"
-  return `${s}, ${ctx}`;
+    .map((t) => stripPostalPrefix(t))
+    .filter(Boolean);
+
+const looksLikeStreetOrAddress = (s) => {
+  const value = String(s || "").trim();
+  return /\d/.test(value) || /^(av\.?|avenida|calle|ruta|rn|rp|boulevard|bulevar|diag\.?|diagonal)\b/i.test(value);
+};
+
+const buildBaseContextFromDireccion = (base) => {
+  const parts = splitDireccionParts(base).filter((p) => !/argentina/i.test(p));
+  if (!parts.length) return "Argentina";
+
+  const provincia = parts[parts.length - 1];
+  let localidad = "";
+
+  if (parts.length >= 3) {
+    localidad = parts[parts.length - 2];
+  } else if (parts.length === 2 && !looksLikeStreetOrAddress(parts[0])) {
+    localidad = parts[0];
+  }
+
+  return [localidad, provincia, "Argentina"].filter(Boolean).join(", ");
+};
+
+const ensureARContext = (addr, base) => {
+  const s = String(addr || "").trim();
+  if (!s) return "";
+  if (/argentina/i.test(s)) return s;
+
+  const ctx = buildBaseContextFromDireccion(base);
+  const normalized = sanitizeDireccion(s).toLowerCase();
+  const missing = splitDireccionParts(ctx).filter(
+    (part) => !normalized.includes(sanitizeDireccion(part).toLowerCase())
+  );
+
+  return missing.length ? `${s}, ${missing.join(", ")}` : `${s}, Argentina`;
 };
 
 const resolvePedidoLocation = (p, baseContext) => {
@@ -205,21 +242,27 @@ export default function MapaRutaRepartidor({
   pedidos = [],
   onReindex,
   readOnly = false, // 👈 modo solo lectura
+  onLoadingChange,
 }) {
   const { provinciaId } = useProvincia();
   const BASE_DIRECCION = baseDireccion(provinciaId);
 
-  // Base context: "Ciudad, Provincia, Argentina"
-  const baseContext = useMemo(() => {
-    const parts = String(BASE_DIRECCION || "").split(",").map((t) => t.trim());
-    return parts.slice(-3).join(", ");
-  }, [BASE_DIRECCION]);
+  // Base context: "Ciudad/Localidad, Provincia, Argentina"
+  const baseContext = useMemo(
+    () => buildBaseContextFromDireccion(BASE_DIRECCION),
+    [BASE_DIRECCION]
+  );
 
   const [center, setCenter] = useState(null);
   const [segments, setSegments] = useState([]);
-  const [chunkPedidos, setChunkPedidos] = useState([]);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [routeLoading, setRouteLoading] = useState(false);
+  const onLoadingChangeRef = useRef(onLoadingChange);
+
+  useEffect(() => {
+    onLoadingChangeRef.current = onLoadingChange;
+  }, [onLoadingChange]);
 
   // ✅ mensaje corto para feedback de copiado
   const [copyMsg, setCopyMsg] = useState("");
@@ -244,11 +287,46 @@ export default function MapaRutaRepartidor({
     }, []);
   }, [pedidos, baseContext]);
 
-  // Orden actual
+  // Orden actual para el mapa: solo pedidos con ubicación resoluble.
   const pedidosValidos = useMemo(
     () => pedidosConUbicacion.map(({ pedido }) => pedido),
     [pedidosConUbicacion]
   );
+
+  // Orden completo para listado y copiado: no debe perder pedidos aunque
+  // Google Maps no pueda resolver una ubicación o falte ordenRuta.
+  const pedidosParaListado = useMemo(
+    () => (pedidos || []).filter(Boolean),
+    [pedidos]
+  );
+
+  const pedidosSinUbicacionCount = Math.max(
+    0,
+    pedidosParaListado.length - pedidosValidos.length
+  );
+
+  const routeSignature = useMemo(() => {
+    return pedidosConUbicacion
+      .map(({ pedido, resolved }, index) => {
+        const loc = resolved?.location;
+        let locKey = "";
+
+        if (typeof loc === "string") {
+          locKey = loc;
+        } else if (loc?.placeId) {
+          locKey = `place:${loc.placeId}`;
+        } else if (loc && typeof loc.lat === "number" && typeof loc.lng === "number") {
+          locKey = `latlng:${loc.lat},${loc.lng}`;
+        }
+
+        return [
+          pedido?.id || index,
+          pedido?.ordenRuta ?? "",
+          locKey,
+        ].join("|");
+      })
+      .join("||");
+  }, [pedidosConUbicacion]);
 
   // Normalizamos cada "location" para Directions
   const locations = useMemo(() => {
@@ -257,6 +335,11 @@ export default function MapaRutaRepartidor({
       stopover: true,
     }));
   }, [pedidosConUbicacion]);
+
+  const chunkPedidos = useMemo(
+    () => chunkArray(pedidosParaListado, MAX_WAYPOINTS),
+    [pedidosParaListado]
+  );
 
   // Geocodifica la base para centrar el mapa
   useEffect(() => {
@@ -274,31 +357,33 @@ export default function MapaRutaRepartidor({
 
   // Calcula N rutas si hay más de 25 paradas y arma listado por tramo
   useEffect(() => {
-    if (!isLoaded || !center || !BASE_DIRECCION) return;
+    if (!isLoaded || !center || !BASE_DIRECCION) return undefined;
 
     if (locations.length === 0) {
       setSegments([]);
-      setChunkPedidos([]);
       setMsg("");
       setError("");
-      return;
+      setRouteLoading(false);
+      return undefined;
     }
 
+    let cancelled = false;
     const service = new window.google.maps.DirectionsService();
 
     (async () => {
       try {
+        setRouteLoading(true);
         setError("");
         setSegments([]);
 
-        const pedidosChunks = chunkArray(pedidosValidos, MAX_WAYPOINTS);
         const locChunks = chunkArray(locations, MAX_WAYPOINTS);
-        setChunkPedidos(pedidosChunks);
 
         const results = [];
         let previousLastLoc = null;
 
         for (let i = 0; i < locChunks.length; i++) {
+          if (cancelled) return;
+
           const chunkLocs = locChunks[i];
           const isFirst = i === 0;
           const isLast = i === locChunks.length - 1;
@@ -339,6 +424,8 @@ export default function MapaRutaRepartidor({
           previousLastLoc = lastOfChunk;
         }
 
+        if (cancelled) return;
+
         let totalLegs = 0;
         results.forEach((r) => (totalLegs += r?.routes?.[0]?.legs?.length || 0));
         const nStops = locations.length;
@@ -346,18 +433,36 @@ export default function MapaRutaRepartidor({
           locChunks.length > 1
             ? `Ruta dividida en ${locChunks.length} tramos por superar ${MAX_WAYPOINTS} paradas. `
             : "";
+        const sinUbicacionMsg = pedidosSinUbicacionCount
+          ? ` ${pedidosSinUbicacionCount} pedido(s) sin ubicación válida no se dibujaron en el mapa, pero figuran en el listado/copiado.`
+          : "";
+
         setMsg(
           `${header}Procesados ${nStops} destinos en ${results.length} tramo(s). ` +
-            `Legs totales: ${totalLegs} (≈ ${nStops}).`
+            `Legs totales: ${totalLegs} (≈ ${nStops}).${sinUbicacionMsg}`
         );
 
         setSegments(results);
       } catch (e) {
+        if (cancelled) return;
         console.error(e);
         setError("No se pudo calcular la ruta. Verificá que las direcciones sean válidas.");
+      } finally {
+        if (!cancelled) setRouteLoading(false);
       }
     })();
-  }, [isLoaded, center, BASE_DIRECCION, locations, baseContext, pedidosValidos]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isLoaded,
+    center,
+    BASE_DIRECCION,
+    baseContext,
+    routeSignature,
+    pedidosSinUbicacionCount,
+  ]);
 
   // === Marcadores NUMÉRICOS desde legs de cada tramo ===
   const numberedMarkers = useMemo(() => {
@@ -449,11 +554,47 @@ export default function MapaRutaRepartidor({
     copiarTramo._t = window.setTimeout(() => setCopyMsg(""), 2500);
   };
 
-  if (!isLoaded) return <p>Cargando mapa…</p>;
-  if (!center) return <p>Localizando depósito…</p>;
+  const activeLoadingMessage = !isLoaded
+    ? "Cargando Google Maps..."
+    : !center && !error
+      ? "Localizando depósito..."
+      : routeLoading
+        ? "Calculando ruta y paradas..."
+        : "";
+
+  useEffect(() => {
+    if (typeof onLoadingChangeRef.current !== "function") return;
+    onLoadingChangeRef.current({
+      loading: Boolean(activeLoadingMessage),
+      message: activeLoadingMessage,
+    });
+  }, [activeLoadingMessage]);
+
+  const LoadingBox = ({ message }) => (
+    <div className="flex items-center gap-3 p-4 mt-4 border rounded-xl bg-base-200 border-base-300">
+      <span className="loading loading-spinner loading-md" />
+      <div>
+        <div className="font-semibold">{message}</div>
+        <div className="text-xs opacity-70">
+          Esto puede demorar unos segundos si la ruta tiene muchas paradas.
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!isLoaded) return <LoadingBox message="Cargando Google Maps..." />;
+  if (!center && error) {
+    return (
+      <div className="p-4 mt-4 border rounded-xl bg-error/10 border-error text-error">
+        {error}
+      </div>
+    );
+  }
+  if (!center) return <LoadingBox message="Localizando depósito..." />;
 
   return (
     <div className="mt-4">
+      {routeLoading && <LoadingBox message="Calculando ruta y paradas..." />}
       {msg && <div className="mb-2 text-sm badge badge-outline">{msg}</div>}
       {copyMsg && <div className="mb-2 text-sm badge badge-success">{copyMsg}</div>}
       {error && <div className="mb-2 text-error">{error}</div>}

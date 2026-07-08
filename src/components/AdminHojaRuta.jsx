@@ -200,14 +200,51 @@ const sanitizeDireccion = (s) => {
   return x;
 };
 
-const ensureARContext = (addr, base) => {
-  const s = String(addr || "");
-  if (/argentina/i.test(s)) return s;
-  const parts = String(base || "")
+const stripPostalPrefix = (s) =>
+  String(s || "")
+    .trim()
+    .replace(/^[A-Z]?\d{3,5}\s+/i, "")
+    .trim();
+
+const splitDireccionParts = (s) =>
+  String(s || "")
     .split(",")
-    .map((t) => t.trim());
-  const ctx = parts.slice(-3).join(", ");
-  return `${s}, ${ctx}`;
+    .map((t) => stripPostalPrefix(t))
+    .filter(Boolean);
+
+const looksLikeStreetOrAddress = (s) => {
+  const value = String(s || "").trim();
+  return /\d/.test(value) || /^(av\.?|avenida|calle|ruta|rn|rp|boulevard|bulevar|diag\.?|diagonal)\b/i.test(value);
+};
+
+const buildBaseContextFromDireccion = (base) => {
+  const parts = splitDireccionParts(base).filter((p) => !/argentina/i.test(p));
+  if (!parts.length) return "Argentina";
+
+  const provincia = parts[parts.length - 1];
+  let localidad = "";
+
+  if (parts.length >= 3) {
+    localidad = parts[parts.length - 2];
+  } else if (parts.length === 2 && !looksLikeStreetOrAddress(parts[0])) {
+    localidad = parts[0];
+  }
+
+  return [localidad, provincia, "Argentina"].filter(Boolean).join(", ");
+};
+
+const ensureARContext = (addr, base) => {
+  const s = String(addr || "").trim();
+  if (!s) return "";
+  if (/argentina/i.test(s)) return s;
+
+  const ctx = buildBaseContextFromDireccion(base);
+  const normalized = sanitizeDireccion(s).toLowerCase();
+  const missing = splitDireccionParts(ctx).filter(
+    (part) => !normalized.includes(sanitizeDireccion(part).toLowerCase())
+  );
+
+  return missing.length ? `${s}, ${missing.join(", ")}` : `${s}, Argentina`;
 };
 
 const makeBoundsAround = (latLng, delta = 0.15) => {
@@ -398,6 +435,39 @@ export default function AdminHojaRuta() {
   // NUEVO: métricas por ruta
   const [metricasRuta, setMetricasRuta] = useState({});
   const [combustiblePorRepartidor, setCombustiblePorRepartidor] = useState({});
+  const [mapaAbiertoEmail, setMapaAbiertoEmail] = useState("");
+  const [mapaRutaLoadingByEmail, setMapaRutaLoadingByEmail] = useState({});
+
+  const setMapaRutaLoading = useCallback((email, status) => {
+    const nextStatus = {
+      loading: Boolean(status?.loading),
+      message: status?.message || "",
+    };
+
+    setMapaRutaLoadingByEmail((prev) => {
+      const current = prev[email] || {};
+      if (
+        current.loading === nextStatus.loading &&
+        current.message === nextStatus.message
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [email]: nextStatus,
+      };
+    });
+  }, []);
+
+  const clearMetricasEmail = useCallback((email) => {
+    setMetricasRuta((prev) => {
+      if (!prev[email]) return prev;
+      const next = { ...prev };
+      delete next[email];
+      return next;
+    });
+  }, []);
 
   const updateCombustible = (email, field, value) => {
     setCombustiblePorRepartidor((prev) => ({
@@ -505,6 +575,12 @@ export default function AdminHojaRuta() {
     user,
   ]);
 
+  useEffect(() => {
+    setMapaAbiertoEmail("");
+    setMapaRutaLoadingByEmail({});
+    setMetricasRuta({});
+  }, [fechaSeleccionada, provinciaId]);
+
   // Inicializa config de combustible por repartidor
   useEffect(() => {
     const emails = Object.keys(pedidosPorRepartidor || {});
@@ -534,6 +610,7 @@ export default function AdminHojaRuta() {
     const reordered = arrayMove(items, oldIndex, newIndex);
 
     setPedidosPorRepartidor((prev) => ({ ...prev, [email]: reordered }));
+    clearMetricasEmail(email);
   };
 
   const handleReindex = async (email, pedidoId, toIndex) => {
@@ -549,6 +626,7 @@ export default function AdminHojaRuta() {
     const [m] = items.splice(from, 1);
     items.splice(to, 0, m);
     setPedidosPorRepartidor((prev) => ({ ...prev, [email]: items }));
+    clearMetricasEmail(email);
 
     if (busyByEmail[email]) return;
     setBusy(email, true);
@@ -616,19 +694,15 @@ export default function AdminHojaRuta() {
     return out;
   };
 
-  const baseContext = useMemo(() => {
-    const parts = String(BASE_DIRECCION || "")
-      .split(",")
-      .map((t) => t.trim());
-    return parts.slice(-3).join(", ");
-  }, [BASE_DIRECCION]);
+  const baseContext = useMemo(
+    () => buildBaseContextFromDireccion(BASE_DIRECCION),
+    [BASE_DIRECCION]
+  );
 
   const baseCity = useMemo(() => {
-    const parts = String(BASE_DIRECCION || "")
-      .split(",")
-      .map((t) => t.trim());
-    return parts.length >= 3 ? parts[parts.length - 3] : "";
-  }, [BASE_DIRECCION]);
+    const parts = splitDireccionParts(baseContext).filter((p) => !/argentina/i.test(p));
+    return parts.length >= 2 ? parts[0] : parts[0] || "";
+  }, [baseContext]);
 
   const [baseBounds, setBaseBounds] = useState(null);
   const [baseLoc, setBaseLoc] = useState(null);
@@ -835,78 +909,76 @@ export default function AdminHojaRuta() {
     [isMapsLoaded, baseLoc, baseBounds, baseContext, baseCity]
   );
 
-  // NUEVO: recalcula métricas cuando cambia el orden / fecha / rutas
-  useEffect(() => {
-    if (loading || !isMapsLoaded || !baseLoc || !baseBounds) return;
+  const calcularMetricasRuta = useCallback(
+    async (email) => {
+      const pedidos = pedidosPorRepartidor[email] || [];
 
-    const emails = Object.keys(pedidosPorRepartidor || {});
-    if (!emails.length) {
-      setMetricasRuta({});
-      return;
-    }
+      if (!pedidos.length) {
+        setMetricasRuta((prev) => ({
+          ...prev,
+          [email]: {
+            kmTotal: 0,
+            tramos: 0,
+            direccionesOmitidas: 0,
+            calculando: false,
+            error: "",
+          },
+        }));
+        return;
+      }
 
-    let cancelado = false;
+      if (!isMapsLoaded || !baseLoc || !baseBounds) {
+        Swal.fire(
+          "⏳ Preparando Google Maps",
+          "Esperá unos segundos y volvé a tocar Calcular KM.",
+          "info"
+        );
+        return;
+      }
 
-    const run = async () => {
-      for (const email of emails) {
-        if (cancelado) return;
+      setMetricasRuta((prev) => ({
+        ...prev,
+        [email]: {
+          ...(prev[email] || {}),
+          calculando: true,
+          error: "",
+        },
+      }));
+
+      try {
+        const datos = await calcularMetricasRutaLista(pedidos);
 
         setMetricasRuta((prev) => ({
           ...prev,
           [email]: {
-            ...(prev[email] || {}),
-            calculando: true,
+            ...datos,
+            calculando: false,
             error: "",
           },
         }));
+      } catch (err) {
+        console.error("Error calculando km de ruta:", email, err);
 
-        try {
-          const datos = await calcularMetricasRutaLista(
-            pedidosPorRepartidor[email] || []
-          );
-
-          if (cancelado) return;
-
-          setMetricasRuta((prev) => ({
-            ...prev,
-            [email]: {
-              ...datos,
-              calculando: false,
-              error: "",
-            },
-          }));
-        } catch (err) {
-          console.error("Error calculando km de ruta:", email, err);
-
-          if (cancelado) return;
-
-          setMetricasRuta((prev) => ({
-            ...prev,
-            [email]: {
-              kmTotal: 0,
-              tramos: 0,
-              direccionesOmitidas: 0,
-              calculando: false,
-              error: err?.message || "No se pudo calcular la distancia.",
-            },
-          }));
-        }
+        setMetricasRuta((prev) => ({
+          ...prev,
+          [email]: {
+            kmTotal: 0,
+            tramos: 0,
+            direccionesOmitidas: 0,
+            calculando: false,
+            error: err?.message || "No se pudo calcular la distancia.",
+          },
+        }));
       }
-    };
-
-    run();
-
-    return () => {
-      cancelado = true;
-    };
-  }, [
-    pedidosPorRepartidor,
-    loading,
-    isMapsLoaded,
-    baseLoc,
-    baseBounds,
-    calcularMetricasRutaLista,
-  ]);
+    },
+    [
+      pedidosPorRepartidor,
+      isMapsLoaded,
+      baseLoc,
+      baseBounds,
+      calcularMetricasRutaLista,
+    ]
+  );
 
   const guardarOrden = async (email) => {
     if (busyByEmail[email]) return;
@@ -936,6 +1008,59 @@ export default function AdminHojaRuta() {
     } finally {
       setBusy(email, false);
     }
+  };
+
+  const getDestinoTramoPedido = (pedido) => {
+    if (!pedido) return BASE_DIRECCION;
+    return (
+      getPedidoWaypointText(pedido, baseContext) ||
+      pedido?.direccion ||
+      BASE_DIRECCION
+    );
+  };
+
+  const optimizarRutaEnTramos = async (service, pedidos = []) => {
+    const chunks = chunkArray(pedidos, MAX_WAYPOINTS);
+    const nuevosPedidos = [];
+    let origenActual = baseLoc;
+
+    for (let i = 0; i < chunks.length; i += 1) {
+      const chunk = chunks[i] || [];
+      if (!chunk.length) continue;
+
+      const esUltimo = i === chunks.length - 1;
+      const pedidoCorte = esUltimo ? null : chunk[chunk.length - 1];
+      const destination = esUltimo
+        ? baseLoc
+        : getDestinoTramoPedido(pedidoCorte);
+
+      const pedidosWaypoints = esUltimo ? chunk : chunk.slice(0, -1);
+
+      const optim = pedidosWaypoints.length
+        ? await optimizarSegmento(service, {
+            origin: origenActual,
+            destination,
+            pedidos: pedidosWaypoints,
+            baseContext,
+            bounds: baseBounds,
+            baseCity,
+          })
+        : [];
+
+      nuevosPedidos.push(...optim);
+
+      // En tramos intermedios, el último pedido del chunk se usa como
+      // destination del tramo. DirectionsService no lo devuelve dentro de
+      // waypoint_order, por eso hay que reinsertarlo manualmente.
+      if (pedidoCorte) {
+        nuevosPedidos.push(pedidoCorte);
+        origenActual = getDestinoTramoPedido(pedidoCorte);
+      } else {
+        origenActual = baseLoc;
+      }
+    }
+
+    return nuevosPedidos;
   };
 
   const optimizarRuta = async (email) => {
@@ -973,40 +1098,7 @@ export default function AdminHojaRuta() {
         });
         nuevosPedidos = optim;
       } else {
-        const chunks = chunkArray(pedidos, MAX_WAYPOINTS);
-
-        const last1 = chunks[0][chunks[0].length - 1]?.direccion;
-        let acumulado = await optimizarSegmento(service, {
-          origin: baseLoc,
-          destination: last1,
-          pedidos: chunks[0].slice(0, -1),
-          baseContext,
-          bounds: baseBounds,
-          baseCity,
-        });
-        nuevosPedidos.push(...acumulado);
-
-        for (let i = 1; i < chunks.length; i++) {
-          const origen =
-            acumulado[acumulado.length - 1]?.direccion || BASE_DIRECCION;
-
-          const esUltimo = i === chunks.length - 1;
-          const lastAddr = chunks[i][chunks[i].length - 1]?.direccion;
-          const destination = esUltimo ? baseLoc : lastAddr;
-          const pedidosWaypoints = esUltimo ? chunks[i] : chunks[i].slice(0, -1);
-
-          const optim = await optimizarSegmento(service, {
-            origin: origen,
-            destination,
-            pedidos: pedidosWaypoints,
-            baseContext,
-            bounds: baseBounds,
-            baseCity,
-          });
-
-          acumulado = optim;
-          nuevosPedidos.push(...optim);
-        }
+        nuevosPedidos = await optimizarRutaEnTramos(service, pedidos);
 
         Swal.fire(
           "⚠️ Ruta dividida",
@@ -1016,6 +1108,7 @@ export default function AdminHojaRuta() {
       }
 
       setPedidosPorRepartidor((prev) => ({ ...prev, [email]: nuevosPedidos }));
+      clearMetricasEmail(email);
       const { escritos, omitidos } = await persistirOrdenSoloDifs(
         email,
         nuevosPedidos
@@ -1078,44 +1171,13 @@ export default function AdminHojaRuta() {
         });
         nuevosPedidos = optim;
       } else {
-        const chunks = chunkArray(pedidos, MAX_WAYPOINTS);
-        const last1 = chunks[0][chunks[0].length - 1]?.direccion;
-
-        let acumulado = await optimizarSegmento(service, {
-          origin: baseLoc,
-          destination: last1,
-          pedidos: chunks[0].slice(0, -1),
-          baseContext,
-          bounds: baseBounds,
-          baseCity,
-        });
-        nuevosPedidos.push(...acumulado);
-
-        for (let i = 1; i < chunks.length; i++) {
-          const origen =
-            acumulado[acumulado.length - 1]?.direccion || BASE_DIRECCION;
-          const esUltimo = i === chunks.length - 1;
-          const lastAddr = chunks[i][chunks[i].length - 1]?.direccion;
-          const destination = esUltimo ? baseLoc : lastAddr;
-          const pedidosWaypoints = esUltimo ? chunks[i] : chunks[i].slice(0, -1);
-
-          const optim = await optimizarSegmento(service, {
-            origin: origen,
-            destination,
-            pedidos: pedidosWaypoints,
-            baseContext,
-            bounds: baseBounds,
-            baseCity,
-          });
-
-          acumulado = optim;
-          nuevosPedidos.push(...optim);
-        }
+        nuevosPedidos = await optimizarRutaEnTramos(service, pedidos);
       }
 
       nuevosPedidos.reverse();
 
       setPedidosPorRepartidor((prev) => ({ ...prev, [email]: nuevosPedidos }));
+      clearMetricasEmail(email);
 
       const { escritos, omitidos } = await persistirOrdenSoloDifs(
         email,
@@ -1496,6 +1558,9 @@ export default function AdminHojaRuta() {
           Object.keys(pedidosPorRepartidor).map((email, idx) => {
             const r = { email, label: `R${idx + 1}` };
             const e = email;
+            const pedidosDelRepartidor = pedidosPorRepartidor[r.email] || [];
+            const mapaVisible = mapaAbiertoEmail === e;
+            const mapaLoading = mapaRutaLoadingByEmail[e] || {};
             const canOptimize = isMapsLoaded && !!baseLoc && !!baseBounds;
 
             const disabledGuardar =
@@ -1505,6 +1570,8 @@ export default function AdminHojaRuta() {
               cierreYaProcesado || !!busyByEmail[e] || !canOptimize;
 
             const met = metricasRuta[e] || {};
+            const disabledCalcularKm =
+              pedidosDelRepartidor.length === 0 || met.calculando || !canOptimize;
             const cfg = getCombustibleConfig(e);
             const fuel = calcularCombustibleRuta(
               met.kmTotal || 0,
@@ -1531,6 +1598,20 @@ export default function AdminHojaRuta() {
                       disabled={disabledGuardar}
                     >
                       {busyByEmail[e] ? "⏳ Guardando…" : "💾 Guardar orden"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="w-full btn btn-sm btn-outline sm:w-auto"
+                      onClick={() => calcularMetricasRuta(e)}
+                      disabled={disabledCalcularKm}
+                      title="Calcula distancia y combustible solamente cuando lo pedís"
+                    >
+                      {met.calculando
+                        ? "⏳ Calculando KM…"
+                        : !canOptimize
+                          ? "⏳ Preparando mapa…"
+                          : "📏 Calcular KM"}
                     </button>
 
                     <button
@@ -1572,9 +1653,11 @@ export default function AdminHojaRuta() {
                       value={
                         met.calculando
                           ? "Calculando..."
-                          : !canOptimize
-                            ? "Preparando mapa..."
-                            : `${fuel.kmTotal} km`
+                          : pedidosDelRepartidor.length === 0
+                            ? "Sin pedidos"
+                            : met.kmTotal != null
+                              ? `${fuel.kmTotal} km`
+                              : "Sin calcular"
                       }
                     />
                   </label>
@@ -1651,6 +1734,13 @@ export default function AdminHojaRuta() {
                     <span className="text-error">
                       ⚠️ No se pudo calcular la distancia: {met.error}
                     </span>
+                  ) : met.calculando ? (
+                    <span>⏳ Calculando distancia de la ruta...</span>
+                  ) : met.kmTotal == null ? (
+                    <span>
+                      ℹ️ KM sin calcular. Tocá “Calcular KM” solo cuando necesitás
+                      distancia o combustible.
+                    </span>
                   ) : met.direccionesOmitidas > 0 ? (
                     <span className="text-warning">
                       ⚠️ {met.direccionesOmitidas} dirección(es) no pudieron
@@ -1675,11 +1765,11 @@ export default function AdminHojaRuta() {
                   onDragEnd={(event) => handleDragEnd(event, r.email)}
                 >
                   <SortableContext
-                    items={(pedidosPorRepartidor[r.email] || []).map((p) => p.id)}
+                    items={pedidosDelRepartidor.map((p) => p.id)}
                     strategy={verticalListSortingStrategy}
                   >
                     <ul className="mt-2">
-                      {(pedidosPorRepartidor[r.email] || []).map((pedido, idx) => (
+                      {pedidosDelRepartidor.map((pedido, idx) => (
                         <SortablePedido
                           key={pedido.id}
                           pedido={pedido}
@@ -1688,14 +1778,50 @@ export default function AdminHojaRuta() {
                       ))}
                     </ul>
 
-                    {pedidosPorRepartidor[r.email]?.length > 0 && (
-                      <MapaRutaRepartidor
-                        pedidos={pedidosPorRepartidor[r.email]}
-                        onReindex={(pedidoId, toIndex) =>
-                          handleReindex(r.email, pedidoId, toIndex)
-                        }
-                      />
-                    )}
+                    <div className="p-3 mt-4 border rounded-lg bg-base-100 border-base-300">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="font-semibold">Mapa de este repartidor</div>
+                          <div className="text-xs opacity-70">
+                            La lista de pedidos se mantiene visible. El mapa se
+                            carga solo cuando tocás el botón.
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline btn-primary sm:w-auto"
+                          onClick={() => {
+                            setMapaAbiertoEmail((prev) => (prev === e ? "" : e));
+                            setMapaRutaLoading(e, { loading: false, message: "" });
+                          }}
+                          disabled={pedidosDelRepartidor.length === 0}
+                        >
+                          {pedidosDelRepartidor.length === 0
+                            ? "Sin pedidos"
+                            : mapaVisible
+                              ? "Ocultar mapa"
+                              : "Ver mapa"}
+                        </button>
+                      </div>
+
+                      {mapaVisible && mapaLoading.loading && (
+                        <div className="flex items-center gap-2 mt-3 text-sm opacity-80">
+                          <span className="loading loading-spinner loading-sm" />
+                          <span>{mapaLoading.message || "Cargando mapa..."}</span>
+                        </div>
+                      )}
+
+                      {mapaVisible && pedidosDelRepartidor.length > 0 && (
+                        <MapaRutaRepartidor
+                          pedidos={pedidosDelRepartidor}
+                          onLoadingChange={(status) => setMapaRutaLoading(e, status)}
+                          onReindex={(pedidoId, toIndex) =>
+                            handleReindex(r.email, pedidoId, toIndex)
+                          }
+                        />
+                      )}
+                    </div>
                   </SortableContext>
                 </DndContext>
               </div>

@@ -5,95 +5,339 @@
   logs: true;
 }
 
+/* =========================
+   TEMA CLARO GLOBAL
+   Versión mate suave
+   Fondo con imagen tenue
+   Sin blanco puro
+========================= */
+
+html[data-theme="corporate"],
 :root {
   color-scheme: light;
-  --crm-app: #f3f4f6;
-  --crm-surface: #ffffff;
-  --crm-surface-2: #f7f9fb;
-  --crm-elevated: #eef2f5;
-  --crm-elevated-2: #e6edf2;
-  --crm-menu: #ffffff;
-  --crm-chip: #dde5ea;
-  --crm-avatar: #dbe6ec;
-  --crm-avatar-text: #35505c;
-  --crm-border: #d7e0e7;
-  --crm-border-soft: #e7edf2;
-  --crm-text: #111827;
-  --crm-muted: #667781;
-  --crm-soft: #6b7b85;
-  --crm-hover: #e8eef3;
-  --crm-reply-bg: #eef2f5;
-  --crm-accent: #00a884;
-  --crm-accent-strong: #00856a;
-  --crm-accent-contrast: #081c15;
-  --crm-info-accent: #53bdeb;
-  --crm-success-soft: #dff7ee;
-  --crm-success-text: #0d5b48;
-  --crm-warning-soft: #fff3cd;
-  --crm-warning-text: #8a6d00;
-  --crm-warning-border: #e2c86b;
-  --crm-danger-soft: #fde7ea;
-  --crm-danger-text: #a63b47;
-  --crm-danger-border: #d6808c;
-  --crm-danger-action: #b54753;
-  --crm-info-soft: #e7f3ff;
-  --crm-info-text: #235b7d;
-  --crm-info-border: #8fc2e8;
-  --crm-bubble-out: #dcf8c6;
-  --crm-bubble-out-text: #0b141a;
-  --crm-bubble-out-soft-text: #33543d;
-  --crm-bubble-out-border: #b8d9a7;
-  --crm-bubble-in: #ffffff;
-  --crm-bubble-in-text: #111827;
-  --crm-bubble-in-border: #d7e0e7;
-  --crm-chat-wall-dot: rgba(15, 23, 42, 0.05);
-  --crm-chat-wall-grad-start: rgba(243, 244, 246, 0.72);
-  --crm-chat-wall-grad-end: rgba(243, 244, 246, 0.92);
+
+  /* Imagen desde /public/estilospinturas.jpg */
+  --app-bg-image: url("/estilospinturas.png");
+
+  /* DaisyUI core tokens */
+  --color-base-100: #dde1e6;
+  --color-base-200: #d1d7de;
+  --color-base-300: #bac4ce;
+  --color-base-content: #222b35;
+
+  --color-primary: #3a536d;
+  --color-primary-content: #f8fafc;
+
+  --color-secondary: #48695f;
+  --color-secondary-content: #f8fafc;
+
+  --color-accent: #87613d;
+  --color-accent-content: #fffaf3;
+
+  --color-neutral: #263241;
+  --color-neutral-content: #f4f7fb;
+
+  --color-info: #456f8d;
+  --color-info-content: #f8fafc;
+
+  --color-success: #3c714e;
+  --color-success-content: #f8fafc;
+
+  --color-warning: #966f2e;
+  --color-warning-content: #1f2933;
+
+  --color-error: #984545;
+  --color-error-content: #fff5f5;
+
+  --radius-selector: 0.9rem;
+  --radius-field: 0.85rem;
+  --radius-box: 1rem;
+  --border: 1px;
+
+  /* CRM claro mate */
+  --crm-app: #d8dde4;
+  --crm-surface: #e3e7eb;
+  --crm-surface-2: #dbe1e8;
+  --crm-elevated: #d1d8e0;
+  --crm-elevated-2: #c5ced8;
+  --crm-menu: #e2e6ea;
+  --crm-chip: #c6d0da;
+  --crm-avatar: #c2ccd6;
+  --crm-avatar-text: #263241;
+  --crm-border: #adb8c4;
+  --crm-border-soft: #c5ced8;
+  --crm-text: #222b35;
+  --crm-muted: #64717f;
+  --crm-soft: #6f7d8c;
+  --crm-hover: #cbd3dc;
+  --crm-reply-bg: #d1d8e0;
+
+  --crm-accent: #3a536d;
+  --crm-accent-strong: #30485f;
+  --crm-accent-contrast: #f8fafc;
+
+  --crm-info-accent: #456f8d;
+
+  --crm-success-soft: #d2e2d8;
+  --crm-success-text: #2f6041;
+
+  --crm-warning-soft: #e5d9c3;
+  --crm-warning-text: #66491f;
+  --crm-warning-border: #a17c42;
+
+  --crm-danger-soft: #e3cece;
+  --crm-danger-text: #703333;
+  --crm-danger-border: #b37f7f;
+  --crm-danger-action: #984545;
+
+  --crm-info-soft: #d2dee7;
+  --crm-info-text: #33566e;
+  --crm-info-border: #86a9bd;
+
+  --crm-bubble-out: #cbd6e2;
+  --crm-bubble-out-text: #22364c;
+  --crm-bubble-out-soft-text: #36536f;
+  --crm-bubble-out-border: #adbecf;
+
+  --crm-bubble-in: #e5e8ec;
+  --crm-bubble-in-text: #222b35;
+  --crm-bubble-in-border: #bac4ce;
+
+  --crm-chat-wall-dot: rgba(58, 83, 109, 0.03);
+  --crm-chat-wall-grad-start: rgba(221, 225, 230, 0.92);
+  --crm-chat-wall-grad-end: rgba(209, 215, 222, 0.96);
 }
+
+/* =========================
+   TEMA OSCURO GLOBAL
+   Fondo con imagen más apagada
+========================= */
 
 html[data-theme="dim"],
 html[data-theme="business"] {
   color-scheme: dark;
-  --crm-app: #0b141a;
-  --crm-surface: #111b21;
-  --crm-surface-2: #132028;
-  --crm-elevated: #202c33;
-  --crm-elevated-2: #182229;
-  --crm-menu: #1f2c33;
-  --crm-chip: #2a3942;
-  --crm-avatar: #233138;
-  --crm-avatar-text: #dfe6ea;
-  --crm-border: #2a3942;
-  --crm-border-soft: #24343d;
-  --crm-text: #e9edef;
-  --crm-muted: #8696a0;
-  --crm-soft: #9fb0b8;
-  --crm-hover: #26353d;
-  --crm-reply-bg: #1b262d;
-  --crm-accent: #00a884;
-  --crm-accent-strong: #1f6f59;
-  --crm-accent-contrast: #081c15;
-  --crm-info-accent: #53bdeb;
-  --crm-success-soft: #103529;
-  --crm-success-text: #d8fff3;
-  --crm-warning-soft: #3a2f13;
-  --crm-warning-text: #ffd86b;
-  --crm-warning-border: #6b571e;
-  --crm-danger-soft: #3b1f23;
-  --crm-danger-text: #ffb3bc;
-  --crm-danger-border: #6e2a35;
-  --crm-danger-action: #6d2323;
-  --crm-info-soft: #132a35;
-  --crm-info-text: #9edcff;
-  --crm-info-border: #21485c;
-  --crm-bubble-out: #005c4b;
-  --crm-bubble-out-text: #e9edef;
-  --crm-bubble-out-soft-text: #d9fdd3;
-  --crm-bubble-out-border: #0b4f41;
-  --crm-bubble-in: #202c33;
-  --crm-bubble-in-text: #e9edef;
-  --crm-bubble-in-border: #24343d;
-  --crm-chat-wall-dot: rgba(255, 255, 255, 0.04);
-  --crm-chat-wall-grad-start: rgba(11, 20, 26, 0.72);
-  --crm-chat-wall-grad-end: rgba(11, 20, 26, 0.90);
+
+  /* Imagen desde /public/estilospinturas.jpg */
+  --app-bg-image: url("/estilospinturas.png");
+
+  --color-base-100: #0f172a;
+  --color-base-200: #111c33;
+  --color-base-300: #1e293b;
+  --color-base-content: #e5edf7;
+
+  --color-primary: #60a5fa;
+  --color-primary-content: #08111f;
+
+  --color-secondary: #2dd4bf;
+  --color-secondary-content: #041311;
+
+  --color-accent: #fb923c;
+  --color-accent-content: #1c0f04;
+
+  --color-neutral: #020617;
+  --color-neutral-content: #f8fafc;
+
+  --color-info: #38bdf8;
+  --color-info-content: #06121c;
+
+  --color-success: #22c55e;
+  --color-success-content: #031107;
+
+  --color-warning: #fbbf24;
+  --color-warning-content: #1f1300;
+
+  --color-error: #f87171;
+  --color-error-content: #1f0505;
+
+  --radius-selector: 0.9rem;
+  --radius-field: 0.85rem;
+  --radius-box: 1rem;
+  --border: 1px;
+
+  --crm-app: #0b1220;
+  --crm-surface: #111827;
+  --crm-surface-2: #172033;
+  --crm-elevated: #1e293b;
+  --crm-elevated-2: #263449;
+  --crm-menu: #111827;
+  --crm-chip: #253247;
+  --crm-avatar: #263449;
+  --crm-avatar-text: #dbeafe;
+  --crm-border: #334155;
+  --crm-border-soft: #253247;
+  --crm-text: #e5edf7;
+  --crm-muted: #94a3b8;
+  --crm-soft: #b6c2d2;
+  --crm-hover: #1f2b3d;
+  --crm-reply-bg: #1e293b;
+
+  --crm-accent: #60a5fa;
+  --crm-accent-strong: #3b82f6;
+  --crm-accent-contrast: #08111f;
+
+  --crm-info-accent: #38bdf8;
+
+  --crm-success-soft: #0f3b25;
+  --crm-success-text: #bbf7d0;
+
+  --crm-warning-soft: #3b2f11;
+  --crm-warning-text: #fde68a;
+  --crm-warning-border: #a16207;
+
+  --crm-danger-soft: #3f1d1d;
+  --crm-danger-text: #fecaca;
+  --crm-danger-border: #7f1d1d;
+  --crm-danger-action: #ef4444;
+
+  --crm-info-soft: #0c2e44;
+  --crm-info-text: #bae6fd;
+  --crm-info-border: #075985;
+
+  --crm-bubble-out: #1e3a5f;
+  --crm-bubble-out-text: #dbeafe;
+  --crm-bubble-out-soft-text: #bfdbfe;
+  --crm-bubble-out-border: #2563eb;
+
+  --crm-bubble-in: #1e293b;
+  --crm-bubble-in-text: #e5edf7;
+  --crm-bubble-in-border: #334155;
+
+  --crm-chat-wall-dot: rgba(96, 165, 250, 0.07);
+  --crm-chat-wall-grad-start: rgba(15, 23, 42, 0.82);
+  --crm-chat-wall-grad-end: rgba(2, 6, 23, 0.95);
+}
+
+/* =========================
+   AJUSTES VISUALES GLOBALES
+   Solo estética, no lógica
+========================= */
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  background: var(--color-base-100);
+}
+
+body {
+  min-height: 100vh;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(221, 225, 230, 0.92) 0%,
+      rgba(209, 215, 222, 0.88) 45%,
+      rgba(186, 196, 206, 0.92) 100%
+    ),
+    var(--app-bg-image);
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+html[data-theme="dim"] body,
+html[data-theme="business"] body {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(15, 23, 42, 0.94) 0%,
+      rgba(17, 28, 51, 0.92) 45%,
+      rgba(2, 6, 23, 0.95) 100%
+    ),
+    var(--app-bg-image);
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Permite que se vea la imagen global detrás del sistema */
+#root {
+  background: transparent !important;
+}
+
+/* Varias pantallas usan min-h-screen bg-base-100 y tapan el fondo */
+.min-h-screen.bg-base-100,
+.min-h-screen.bg-base-200 {
+  background-color: transparent !important;
+}
+
+/* Evita problemas de background fixed en celulares */
+@media (max-width: 768px) {
+  body,
+  html[data-theme="dim"] body,
+  html[data-theme="business"] body {
+    background-attachment: scroll;
+  }
+}
+
+/* Cards más planas y menos brillantes */
+.card {
+  border-color: color-mix(in srgb, var(--color-base-300) 88%, transparent);
+  box-shadow: 0 7px 18px rgba(31, 41, 51, 0.04);
+}
+
+html[data-theme="dim"] .card,
+html[data-theme="business"] .card {
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.24);
+}
+
+/* Botones menos saturados */
+.btn-primary {
+  box-shadow: 0 5px 12px rgba(58, 83, 109, 0.12);
+}
+
+html[data-theme="dim"] .btn-primary,
+html[data-theme="business"] .btn-primary {
+  box-shadow: 0 8px 20px rgba(96, 165, 250, 0.18);
+}
+
+/* Inputs mate */
+.input,
+.select,
+.textarea {
+  background-color: #e5e8ec;
+}
+
+html[data-theme="dim"] .input,
+html[data-theme="dim"] .select,
+html[data-theme="dim"] .textarea,
+html[data-theme="business"] .input,
+html[data-theme="business"] .select,
+html[data-theme="business"] .textarea {
+  background-color: color-mix(in srgb, var(--color-base-200) 92%, black);
+}
+
+/* Tablas más legibles */
+.table :where(th) {
+  color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Scrollbar suave */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-primary) 32%, transparent) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }

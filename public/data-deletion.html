@@ -1,187 +1,198 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Eliminación de Datos — Estilos Pinturas</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Eliminación de datos | Sistema CRM Pedidos</title>
+  <meta
+    name="description"
+    content="Instrucciones para solicitar eliminación de datos en Sistema CRM Pedidos."
+  />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --accent: #2563eb;
+      --danger-bg: #fff1f2;
+      --danger-border: #fecdd3;
+      --danger-text: #9f1239;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      background: #0f172a;
-      color: #e2e8f0;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 0.9375rem;
-      line-height: 1.7;
-      padding: 2rem 1rem 4rem;
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.65;
+      background: var(--bg);
+      color: var(--text);
     }
-    .container {
-      max-width: 760px;
-      margin: 0 auto;
+
+    main {
+      width: min(980px, calc(100% - 32px));
+      margin: 32px auto;
+      padding: 32px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
     }
-    header {
-      border-bottom: 1px solid #334155;
-      padding-bottom: 1.5rem;
-      margin-bottom: 2rem;
+
+    h1, h2, h3 {
+      line-height: 1.25;
+      margin-top: 0;
     }
-    header .brand {
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 0.5rem;
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
     }
-    header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #f1f5f9;
-    }
-    header .updated {
-      font-size: 0.8125rem;
-      color: #64748b;
-      margin-top: 0.35rem;
-    }
+
     h2 {
-      font-size: 1.0625rem;
-      font-weight: 700;
-      color: #f1f5f9;
-      margin-top: 2rem;
-      margin-bottom: 0.5rem;
+      font-size: 1.25rem;
+      margin-top: 32px;
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
     }
-    p { color: #cbd5e1; margin-bottom: 0.75rem; }
-    ul {
-      color: #cbd5e1;
-      padding-left: 1.4rem;
-      margin-bottom: 0.75rem;
+
+    p, li {
+      color: var(--muted);
     }
-    ul li { margin-bottom: 0.3rem; }
-    a { color: #38bdf8; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .steps {
-      counter-reset: steps;
-      list-style: none;
-      padding: 0;
+
+    strong {
+      color: var(--text);
     }
-    .steps li {
-      counter-increment: steps;
-      display: flex;
-      gap: 1rem;
-      align-items: flex-start;
-      margin-bottom: 1rem;
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
     }
-    .steps li::before {
-      content: counter(steps);
-      background: #1e40af;
-      color: #bfdbfe;
-      font-size: 0.75rem;
-      font-weight: 700;
-      width: 1.5rem;
-      height: 1.5rem;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      margin-top: 0.15rem;
+
+    a:hover {
+      text-decoration: underline;
     }
-    .card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 1rem;
-      padding: 1.25rem 1.5rem;
-      margin-top: 2rem;
+
+    .meta {
+      margin-bottom: 24px;
+      color: var(--muted);
     }
-    .card p { margin: 0; }
-    .badge {
+
+    .notice {
+      padding: 16px;
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      border-radius: 12px;
+      color: var(--danger-text);
+    }
+
+    ol, ul {
+      padding-left: 22px;
+    }
+
+    code {
       display: inline-block;
-      background: #164e63;
-      color: #67e8f9;
-      border: 1px solid #0e7490;
-      border-radius: 0.5rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 0.2rem 0.6rem;
-      margin-bottom: 0.75rem;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: #0f172a;
+      font-size: 0.95em;
+    }
+
+    footer {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.95rem;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <div class="brand">Estilos Pinturas</div>
-      <h1>Eliminación de Datos</h1>
-      <div class="updated">Última actualización: mayo de 2026</div>
-    </header>
-
-    <p>
-      En cumplimiento con los requisitos de la plataforma Meta, te explicamos
-      cómo podés solicitar la eliminación de los datos asociados a tu cuenta y
-      a la integración con WhatsApp Business.
+  <main>
+    <h1>Instrucciones para eliminación de datos</h1>
+    <p class="meta">
+      <strong>Sistema CRM Pedidos</strong><br />
+      Última actualización: 5 de junio de 2026
     </p>
 
-    <h2>Qué datos podés solicitar eliminar</h2>
+    <p class="notice">
+      Esta página explica cómo solicitar la eliminación de datos asociados al uso de Sistema CRM Pedidos,
+      incluyendo datos de cuenta, CRM e integración con WhatsApp Business Platform.
+    </p>
+
+    <h2>1. Qué datos pueden eliminarse</h2>
+    <p>Según el tipo de cuenta, conexión y uso de la plataforma, la solicitud puede incluir:</p>
     <ul>
-      <li>Token de acceso de WhatsApp Business almacenado en la plataforma.</li>
-      <li>Phone Number ID y WABA ID asociados a tu cuenta de vendedor.</li>
-      <li>Historial de conversaciones guardado en el CRM.</li>
-      <li>Datos de perfil de usuario (correo electrónico, configuración).</li>
-      <li>Pedidos e historial registrados bajo tu cuenta.</li>
+      <li>Datos del usuario del CRM, como nombre, email, rol y estado de acceso.</li>
+      <li>Datos de clientes cargados en el CRM, incluyendo nombre, teléfono, dirección, etiquetas y notas.</li>
+      <li>Historial de conversaciones, mensajes, archivos adjuntos, audios, imágenes y documentos.</li>
+      <li>Datos de pedidos, agenda, recordatorios y seguimiento comercial.</li>
+      <li>Datos técnicos asociados a WhatsApp Business Platform, como WABA ID, Phone Number ID, identificadores de mensajes, estado de conexión y credenciales técnicas vinculadas a la integración autorizada.</li>
     </ul>
 
-    <h2>Cómo solicitar la eliminación</h2>
-
-    <div class="badge">Opción 1 — Desde la aplicación</div>
+    <h2>2. Cómo solicitar la eliminación</h2>
+    <p>Podés solicitar la eliminación de datos enviando un correo a:</p>
     <p>
-      Si tenés acceso a tu cuenta, podés desconectar la casilla de WhatsApp
-      desde el panel CRM. Esto elimina de inmediato el token de acceso y
-      desvincula el número de la plataforma.
+      <strong>Email:</strong>
+      <a href="mailto:federudiero@gmail.com">federudiero@gmail.com</a>
     </p>
 
-    <div class="badge">Opción 2 — Por correo electrónico</div>
-    <p>Enviá un correo a <a href="mailto:info@estilospinturas.com">info@estilospinturas.com</a> con:</p>
-    <ul class="steps">
-      <li>Tu nombre completo y correo electrónico registrado en la plataforma.</li>
-      <li>El número de WhatsApp Business que querés desvincular (si aplica).</li>
-      <li>Indicación de si querés eliminar solo la integración de WhatsApp o la cuenta completa.</li>
-    </ul>
+    <p>El correo debe incluir:</p>
+    <ol>
+      <li>Nombre de la empresa o cuenta asociada al CRM.</li>
+      <li>Email del usuario administrador que solicita la eliminación.</li>
+      <li>Número de WhatsApp conectado, si corresponde.</li>
+      <li>Detalle de los datos que se desean eliminar: cuenta completa, conexión de WhatsApp, conversaciones, clientes, pedidos u otros datos específicos.</li>
+      <li>Motivo de la solicitud, si desea informarlo.</li>
+    </ol>
 
-    <h2>Tiempos de respuesta</h2>
-    <ul>
-      <li><strong>Desconexión de WhatsApp:</strong> inmediata desde la app, o dentro de las 48 hs si es por correo.</li>
-      <li><strong>Eliminación completa de datos:</strong> dentro de los 30 días de recibida la solicitud.</li>
-    </ul>
-
-    <h2>Datos de Meta / Facebook</h2>
+    <h2>3. Desconexión de WhatsApp desde el CRM</h2>
     <p>
-      Si querés revocar los permisos otorgados a la aplicación directamente
-      desde tu cuenta de Facebook o Meta Business, podés hacerlo desde:
-    </p>
-    <ul>
-      <li>
-        <a href="https://www.facebook.com/settings?tab=applications" target="_blank" rel="noopener noreferrer">
-          Configuración de Facebook → Aplicaciones y sitios web
-        </a>
-      </li>
-      <li>
-        <a href="https://business.facebook.com/" target="_blank" rel="noopener noreferrer">
-          Meta Business Suite → Configuración → Integraciones
-        </a>
-      </li>
-    </ul>
-    <p>
-      Revocar el acceso desde Meta elimina los permisos de la app pero no
-      necesariamente los datos almacenados en nuestra plataforma. Para eso,
-      seguí el proceso de eliminación indicado arriba.
+      Si la empresa tiene una conexión activa con WhatsApp Business Platform, también puede solicitar la
+      desconexión del número conectado. Al procesar la desconexión, se podrá invalidar o eliminar la conexión
+      técnica usada por el CRM para operar ese número.
     </p>
 
-    <div class="card">
+    <h2>4. Plazos de procesamiento</h2>
+    <p>
+      Revisaremos la solicitud y podremos pedir información adicional para verificar la identidad o autorización
+      de quien solicita la eliminación. Una vez validada la solicitud, procesaremos la eliminación en un plazo
+      razonable, salvo que exista una obligación legal, contractual, contable, de seguridad o auditoría que requiera
+      conservar cierta información durante más tiempo.
+    </p>
+
+    <h2>5. Datos que pueden conservarse</h2>
+    <p>
+      Es posible que algunos registros mínimos se conserven temporalmente para cumplir obligaciones legales,
+      resolver disputas, prevenir abuso, mantener seguridad o registrar que la solicitud fue procesada. Cuando
+      corresponda, estos datos se conservarán solo por el tiempo necesario.
+    </p>
+
+    <h2>6. Eliminación desde Facebook o Meta</h2>
+    <p>
+      Si el usuario elimina la app desde la configuración de Facebook o Meta, puede usar esta página como URL
+      de instrucciones de eliminación de datos. Para completar la eliminación dentro de Sistema CRM Pedidos,
+      debe enviar la solicitud por correo siguiendo los pasos indicados en esta página.
+    </p>
+
+    <h2>7. Contacto</h2>
+    <p>
+      Para cualquier consulta relacionada con eliminación, privacidad o desconexión de WhatsApp, escribí a:
+      <a href="mailto:federudiero@gmail.com">federudiero@gmail.com</a>.
+    </p>
+
+    <footer>
       <p>
-        Consultas sobre eliminación de datos:
-        <a href="mailto:info@estilospinturas.com">info@estilospinturas.com</a>
-        &nbsp;·&nbsp;
-        <a href="/privacy-policy.html">Política de Privacidad</a>
+        Sitio web: <a href="https://estilospinturaspedidos.com/">https://estilospinturaspedidos.com/</a><br />
+        Política de privacidad: <a href="/privacy-policy.html">/privacy-policy.html</a>
       </p>
-    </div>
-  </div>
+    </footer>
+  </main>
 </body>
 </html>

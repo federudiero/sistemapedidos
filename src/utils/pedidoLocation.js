@@ -17,18 +17,89 @@ export const sanitizeDireccion = (s) => {
   return x;
 };
 
+const normalizeComparable = (s) =>
+  sanitizeDireccion(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const stripPostalPrefix = (s) =>
+  String(s || "")
+    .trim()
+    .replace(/^[A-Z]?\d{3,5}\s+/i, "")
+    .trim();
+
+const splitParts = (s) =>
+  String(s || "")
+    .split(",")
+    .map((t) => stripPostalPrefix(t))
+    .filter(Boolean);
+
+const pushUniquePart = (arr, value) => {
+  const v = stripPostalPrefix(value);
+  if (!v) return;
+  const n = normalizeComparable(v);
+  if (!n) return;
+  if (!arr.some((x) => normalizeComparable(x) === n)) arr.push(v);
+};
+
+const looksLikeStreetOrAddress = (s) => {
+  const value = String(s || "").trim();
+  return /\d/.test(value) || /^(av\.?|avenida|calle|ruta|rn|rp|boulevard|bulevar|diag\.?|diagonal)\b/i.test(value);
+};
+
+// Contexto geográfico para direcciones ambiguas.
+// Prioridad: localidad/partido del pedido + provincia de la base + Argentina.
+// Ejemplo real: "juan b justo fray luis beltran" + partido "Maipu" + base Mendoza
+// => "juan b justo fray luis beltran, Maipu, Mendoza, Argentina".
+export const buildPedidoAddressContext = (pedido, base = "") => {
+  const baseParts = splitParts(base).filter((p) => !/argentina/i.test(p));
+
+  const provincia = baseParts.length ? baseParts[baseParts.length - 1] : "";
+
+  const pedidoLocalidad =
+    pedido?.partido ||
+    pedido?.localidad ||
+    pedido?.ciudad ||
+    pedido?.zona ||
+    "";
+
+  let localidad = String(pedidoLocalidad || "").trim();
+
+  // Si el pedido no tiene partido/localidad, usamos la localidad de la base cuando existe.
+  // Formatos soportados:
+  // - Calle 123, Localidad, Provincia
+  // - Localidad, Provincia
+  if (!localidad && baseParts.length >= 3) {
+    localidad = baseParts[baseParts.length - 2];
+  } else if (!localidad && baseParts.length === 2 && !looksLikeStreetOrAddress(baseParts[0])) {
+    localidad = baseParts[0];
+  }
+
+  const parts = [];
+  pushUniquePart(parts, localidad);
+  pushUniquePart(parts, provincia);
+  pushUniquePart(parts, "Argentina");
+
+  return parts.join(", ");
+};
+
 export const ensureARContext = (addr, base) => {
   const s = String(addr || "").trim();
   if (!s) return "";
   if (/argentina/i.test(s)) return s;
 
-  const parts = String(base || "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const ctx = buildPedidoAddressContext(null, base) || String(base || "").trim();
+  if (!ctx) return s;
 
-  const ctx = parts.slice(-3).join(", ");
-  return ctx ? `${s}, ${ctx}` : s;
+  const normalizedAddr = normalizeComparable(s);
+  const missingParts = splitParts(ctx).filter((part) => {
+    const normalizedPart = normalizeComparable(part);
+    return normalizedPart && !normalizedAddr.includes(normalizedPart);
+  });
+
+  return missingParts.length ? `${s}, ${missingParts.join(", ")}` : `${s}, Argentina`;
 };
 
 export const parseMapsLinkLocation = (raw) => {
@@ -95,12 +166,18 @@ const getSavedUbicacion = (pedido) => {
       ? pedido.ubicacionRuta
       : null;
 
+  // Fuente de verdad para mapas/rutas:
+  // 1) campos raíz del pedido (lo que muestra el vendedor/admin y lo que se edita)
+  // 2) ubicacionRuta solo como fallback legacy.
+  //
+  // Esto evita casos viejos donde `coordenadas` raíz apuntan correctamente a una localidad,
+  // pero `ubicacionRuta.coordenadas` quedó desactualizado apuntando a otra.
   return {
-    fuente: String(u?.fuente || pedido?.ubicacionFuente || "").trim(),
-    direccion: String(u?.direccion ?? pedido?.direccion ?? "").trim(),
-    linkUbicacion: String(u?.linkUbicacion ?? pedido?.linkUbicacion ?? "").trim(),
-    placeId: String(u?.placeId ?? pedido?.placeId ?? "").trim(),
-    coordenadas: asCoords(u?.coordenadas ?? pedido?.coordenadas),
+    fuente: String(pedido?.ubicacionFuente || u?.fuente || "").trim(),
+    direccion: String(pedido?.direccion ?? u?.direccion ?? "").trim(),
+    linkUbicacion: String(pedido?.linkUbicacion ?? u?.linkUbicacion ?? "").trim(),
+    placeId: String(pedido?.placeId ?? u?.placeId ?? "").trim(),
+    coordenadas: asCoords(pedido?.coordenadas) || asCoords(u?.coordenadas),
   };
 };
 
@@ -119,12 +196,13 @@ export const getPedidoLocationIntent = (pedido, baseContext = "") => {
   const saved = getSavedUbicacion(pedido);
   const parsedLink = parseMapsLinkLocation(saved.linkUbicacion);
   const fuente = saved.fuente.toLowerCase();
+  const pedidoContext = buildPedidoAddressContext(pedido, baseContext);
 
   // Pedidos nuevos: respetar la fuente exacta elegida/guardada por PedidoForm.
   if (fuente) {
     if (fuente === "direccion" || fuente === "manual-direccion" || fuente === "link-address") {
       const linkAddress = parsedLink?.type === "address" ? parsedLink.value : "";
-      return addressIntent(saved.direccion || linkAddress, baseContext, fuente);
+      return addressIntent(saved.direccion || linkAddress, pedidoContext, fuente);
     }
 
     if (fuente === "link-coords") {
@@ -134,7 +212,7 @@ export const getPedidoLocationIntent = (pedido, baseContext = "") => {
         isFiniteCoord(parsedLink.value?.lng)
           ? parsedLink.value
           : saved.coordenadas;
-      return coordsIntent(coords, fuente) || addressIntent(saved.direccion, baseContext, fuente);
+      return coordsIntent(coords, fuente) || addressIntent(saved.direccion, pedidoContext, fuente);
     }
 
     if (fuente === "link-placeid" || fuente === "link-place-id") {
@@ -142,7 +220,7 @@ export const getPedidoLocationIntent = (pedido, baseContext = "") => {
       return (
         placeIntent(placeId, fuente) ||
         coordsIntent(saved.coordenadas, fuente) ||
-        addressIntent(saved.direccion, baseContext, fuente)
+        addressIntent(saved.direccion, pedidoContext, fuente)
       );
     }
 
@@ -150,7 +228,7 @@ export const getPedidoLocationIntent = (pedido, baseContext = "") => {
       return (
         placeIntent(saved.placeId, fuente) ||
         coordsIntent(saved.coordenadas, fuente) ||
-        addressIntent(saved.direccion, baseContext, fuente)
+        addressIntent(saved.direccion, pedidoContext, fuente)
       );
     }
 
@@ -158,7 +236,7 @@ export const getPedidoLocationIntent = (pedido, baseContext = "") => {
       return (
         coordsIntent(saved.coordenadas, fuente) ||
         placeIntent(saved.placeId, fuente) ||
-        addressIntent(saved.direccion, baseContext, fuente)
+        addressIntent(saved.direccion, pedidoContext, fuente)
       );
     }
   }
@@ -181,7 +259,7 @@ export const getPedidoLocationIntent = (pedido, baseContext = "") => {
     coordsIntent(saved.coordenadas, "coordenadas-legacy") ||
     addressIntent(
       parsedLink?.type === "address" ? parsedLink.value : saved.direccion,
-      baseContext,
+      pedidoContext,
       parsedLink?.type === "address" ? "link-address-legacy" : "direccion-legacy"
     )
   );
@@ -212,7 +290,7 @@ export const getPedidoMapsUrl = (pedido, baseContext = "") => {
 
   if (intent.type === "placeId") {
     const direccion = String(
-      pedido?.ubicacionRuta?.direccion ?? pedido?.direccion ?? "Google Maps"
+      pedido?.direccion ?? pedido?.ubicacionRuta?.direccion ?? "Google Maps"
     ).trim();
 
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -230,7 +308,7 @@ export const getPedidoWaypointText = (pedido, baseContext = "") => {
   if (!intent) return "";
   if (intent.type === "latlng") return `${intent.lat},${intent.lng}`;
   if (intent.type === "placeId") {
-    return String(pedido?.ubicacionRuta?.direccion ?? pedido?.direccion ?? intent.placeId).trim();
+    return String(pedido?.direccion ?? pedido?.ubicacionRuta?.direccion ?? intent.placeId).trim();
   }
   return intent.address;
 };

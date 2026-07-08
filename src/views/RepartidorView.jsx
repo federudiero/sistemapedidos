@@ -90,6 +90,28 @@ const normalizeLocationUrl = (raw) => {
 
 const buildMapsLink = (p, base) => getPedidoMapsUrl(p, base);
 
+const PAYMENT_METHOD_TARJETA_CREDITO = "tarjetaCredito";
+const PAYMENT_METHODS_CON_RECARGO_10 = new Set([
+  "transferencia10",
+  PAYMENT_METHOD_TARJETA_CREDITO,
+]);
+
+const tieneRecargo10PorMetodo = (metodoPago) =>
+  PAYMENT_METHODS_CON_RECARGO_10.has(String(metodoPago || ""));
+
+const aplicarRecargo10 = (monto) => roundMoney(Number(monto || 0) * 1.1);
+
+const formatMetodoPagoLabel = (metodoPago) => {
+  switch (metodoPago) {
+    case "transferencia10":
+      return "Transferencia";
+    case PAYMENT_METHOD_TARJETA_CREDITO:
+      return "Tarjeta de crédito";
+    default:
+      return "Pago";
+  }
+};
+
 const formatPhoneARDisplay = (raw) => {
   let d = String(raw || "").replace(/\D/g, "");
   if (!d) return "";
@@ -292,6 +314,11 @@ function RepartidorView() {
   const [bloqueado, setBloqueado] = useState(false);
 
   const [showDescuentoById, setShowDescuentoById] = useState({});
+  const [mostrarMapaRuta, setMostrarMapaRuta] = useState(false);
+  const [mapaRutaLoading, setMapaRutaLoading] = useState({
+    loading: false,
+    message: "",
+  });
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -308,6 +335,11 @@ function RepartidorView() {
   const puedeEntregar = true;
   const puedePagos = true;
   const puedeBloquear = true;
+
+  useEffect(() => {
+    setMostrarMapaRuta(false);
+    setMapaRutaLoading({ loading: false, message: "" });
+  }, [fechaSeleccionada, provinciaId, emailRepartidor]);
 
   useEffect(() => {
     if (!authReady || !provinciaId || !emailRepartidor) return undefined;
@@ -944,10 +976,11 @@ function RepartidorView() {
     }
   };
 
-  const { efectivo, transferencia10, transferencia0, total } = useMemo(() => {
+  const { efectivo, transferencia10, transferencia0, tarjetaCredito, total } = useMemo(() => {
     let efectivo = 0,
       transferencia10 = 0,
-      transferencia0 = 0;
+      transferencia0 = 0,
+      tarjetaCredito = 0;
 
     pedidos.forEach((p) => {
       if (!p.entregado) return;
@@ -959,7 +992,10 @@ function RepartidorView() {
           efectivo += baseCobrar;
           break;
         case "transferencia10":
-          transferencia10 += baseCobrar * 1.1;
+          transferencia10 += aplicarRecargo10(baseCobrar);
+          break;
+        case PAYMENT_METHOD_TARJETA_CREDITO:
+          tarjetaCredito += aplicarRecargo10(baseCobrar);
           break;
         case "transferencia":
           transferencia0 += baseCobrar;
@@ -967,7 +1003,7 @@ function RepartidorView() {
         case "mixto": {
           const ef = Number(p.pagoMixtoEfectivo || 0);
           const tr = Number(p.pagoMixtoTransferencia || 0);
-          if (p.pagoMixtoCon10) transferencia10 += tr * 1.1;
+          if (p.pagoMixtoCon10) transferencia10 += aplicarRecargo10(tr);
           else transferencia0 += tr;
           efectivo += ef;
           break;
@@ -981,7 +1017,8 @@ function RepartidorView() {
       efectivo,
       transferencia10,
       transferencia0,
-      total: efectivo + transferencia10 + transferencia0,
+      tarjetaCredito,
+      total: efectivo + transferencia10 + transferencia0 + tarjetaCredito,
     };
   }, [pedidos]);
 
@@ -1095,8 +1132,9 @@ function RepartidorView() {
             const extra10MixtoActual = roundMoney((p.pagoMixtoCon10 ? tr : 0) * 0.1);
             const trCon10Actual = roundMoney(tr + extra10MixtoActual);
 
-            const montoHeader =
-              p.metodoPago === "transferencia10" ? totalCon10Full : roundMoney(baseCobrar);
+            const montoHeader = tieneRecargo10PorMetodo(p.metodoPago)
+              ? totalCon10Full
+              : roundMoney(baseCobrar);
 
             const calcProductos = hasProductos
               ? calcTotalFromProductos(p.productos, p.descuentosProductos)
@@ -1455,15 +1493,17 @@ function RepartidorView() {
                       <option value="">-- Seleccionar --</option>
                       <option value="efectivo">Efectivo</option>
                       <option value="transferencia10">Transferencia (+10%)</option>
+                      <option value={PAYMENT_METHOD_TARJETA_CREDITO}>Tarjeta de crédito (+10%)</option>
                       <option value="transferencia">Transferencia (sin 10%)</option>
                       <option value="mixto">Mixto (efectivo + transferencia)</option>
                     </select>
                   </div>
 
-                  {p.metodoPago === "transferencia10" && (
+                  {tieneRecargo10PorMetodo(p.metodoPago) && (
                     <div className="p-3 rounded-lg bg-base-300">
                       <p className="text-sm">
-                        Base a cobrar: ${roundMoney(baseCobrar).toFixed(0)} —{" "}
+                        {formatMetodoPagoLabel(p.metodoPago)} seleccionado. Base a cobrar: $
+                        {roundMoney(baseCobrar).toFixed(0)} —{" "}
                         <strong>+10%:</strong> ${extra10Full} —{" "}
                         <strong>Total con 10%:</strong> ${totalCon10Full}
                       </p>
@@ -1600,13 +1640,60 @@ function RepartidorView() {
         <p>
           <strong>Total transferencia (sin 10%):</strong> ${Math.round(transferencia0)}
         </p>
+        <p>
+          <strong>Total tarjeta de crédito (+10%):</strong> ${Math.round(tarjetaCredito)}
+        </p>
         <hr className="my-2" />
         <p>
           <strong>🧾 Total general:</strong> ${Math.round(total)}
         </p>
       </div>
 
-      <MapaRutaRepartidor pedidos={pedidos} />
+      <div className="p-4 mt-8 border rounded-xl bg-base-200 border-base-300">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">🗺️ Mapa de ruta</h3>
+            <p className="text-sm opacity-70">
+              La hoja de ruta y la lista de pedidos siguen visibles siempre. El mapa
+              se carga solamente cuando lo necesitás.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary sm:w-auto"
+            onClick={() => {
+              setMostrarMapaRuta((prev) => !prev);
+              if (mostrarMapaRuta) {
+                setMapaRutaLoading({ loading: false, message: "" });
+              }
+            }}
+            disabled={pedidos.length === 0}
+          >
+            {mostrarMapaRuta ? "Ocultar mapa" : "Ver mapa de ruta"}
+          </button>
+        </div>
+
+        {pedidos.length === 0 && (
+          <div className="mt-3 text-sm opacity-70">
+            No hay pedidos asignados para mostrar en el mapa.
+          </div>
+        )}
+
+        {mostrarMapaRuta && mapaRutaLoading.loading && (
+          <div className="flex items-center gap-2 mt-4 text-sm opacity-80">
+            <span className="loading loading-spinner loading-sm" />
+            <span>{mapaRutaLoading.message || "Cargando mapa..."}</span>
+          </div>
+        )}
+
+        {mostrarMapaRuta && pedidos.length > 0 && (
+          <MapaRutaRepartidor
+            pedidos={pedidos}
+            onLoadingChange={setMapaRutaLoading}
+          />
+        )}
+      </div>
 
       <CargaDelDiaRepartidor
         provinciaId={provinciaId}

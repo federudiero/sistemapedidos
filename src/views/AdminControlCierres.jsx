@@ -21,6 +21,7 @@ import { useProvincia } from "../hooks/useProvincia";
  * Ej: ["cierres", "cierresRepartidor", "cierresIndividuales"]
  */
 const CIERRE_COLLECTIONS = ["cierres", "cierresRepartidor"];
+const PAYMENT_METHOD_TARJETA_CREDITO = "tarjetacredito";
 
 function yyyyMmDd(d) {
     if (!d) return "";
@@ -72,6 +73,7 @@ function calcTotalesDesdePedidos(pedidosEntregados) {
     let efectivo = 0;
     let transferencia = 0;
     let transferencia10 = 0;
+    let tarjetaCredito = 0;
     let desconocido = 0;
 
     for (const p of items) {
@@ -84,6 +86,8 @@ function calcTotalesDesdePedidos(pedidosEntregados) {
             transferencia += monto;
         } else if (mp === "transferencia10") {
             transferencia10 += monto;
+        } else if (mp === PAYMENT_METHOD_TARJETA_CREDITO) {
+            tarjetaCredito += monto;
         } else if (mp === "mixto") {
             const e = safeNum(p?.pagoMixtoEfectivo);
             const t = safeNum(p?.pagoMixtoTransferencia);
@@ -95,7 +99,7 @@ function calcTotalesDesdePedidos(pedidosEntregados) {
         }
     }
 
-    return { efectivo, transferencia, transferencia10, desconocido };
+    return { efectivo, transferencia, transferencia10, tarjetaCredito, desconocido };
 }
 
 /**
@@ -525,6 +529,7 @@ export default function AdminControlCierres() {
         let totalEfeCalc = 0;
         let totalTrCalc = 0;
         let totalTr10Calc = 0;
+        let totalTarjetaCalc = 0;
         let totalDesconocido = 0;
 
         let totalGastos = 0;
@@ -549,9 +554,14 @@ export default function AdminControlCierres() {
                 totalEfeCalc += calc.efectivo;
                 totalTrCalc += calc.transferencia;
                 totalTr10Calc += calc.transferencia10;
+                totalTarjetaCalc += calc.tarjetaCredito;
                 totalDesconocido += calc.desconocido;
                 totalCobradoCalc +=
-                    calc.efectivo + calc.transferencia + calc.transferencia10 + calc.desconocido;
+                    calc.efectivo +
+                    calc.transferencia +
+                    calc.transferencia10 +
+                    calc.tarjetaCredito +
+                    calc.desconocido;
 
                 totalGastos += sumObjectNumbers(c.gastos);
                 entregados += Array.isArray(c.pedidosEntregados) ? c.pedidosEntregados.length : 0;
@@ -569,6 +579,7 @@ export default function AdminControlCierres() {
             totalEfeCalc,
             totalTrCalc,
             totalTr10Calc,
+            totalTarjetaCalc,
             totalDesconocido,
             totalGastos,
         };
@@ -658,7 +669,7 @@ export default function AdminControlCierres() {
                                 <div className="stat-desc">
                                     Efe {money(resumenRango.totalEfeCalc)} · Tr{" "}
                                     {money(resumenRango.totalTrCalc)} · Tr10{" "}
-                                    {money(resumenRango.totalTr10Calc)}
+                                    {money(resumenRango.totalTr10Calc)} · Tarjeta {money(resumenRango.totalTarjetaCalc)}
                                     {resumenRango.totalDesconocido > 0 ? (
                                         <> · ⚠️ Desconocido {money(resumenRango.totalDesconocido)}</>
                                     ) : null}
@@ -697,6 +708,7 @@ export default function AdminControlCierres() {
                                 acc.efectivo += calc.efectivo;
                                 acc.transferencia += calc.transferencia;
                                 acc.transferencia10 += calc.transferencia10;
+                                acc.tarjetaCredito += calc.tarjetaCredito;
                                 acc.desconocido += calc.desconocido;
                                 acc.gastos += sumObjectNumbers(c.gastos);
                                 acc.entregados += Array.isArray(c.pedidosEntregados)
@@ -711,6 +723,7 @@ export default function AdminControlCierres() {
                                 efectivo: 0,
                                 transferencia: 0,
                                 transferencia10: 0,
+                                tarjetaCredito: 0,
                                 desconocido: 0,
                                 gastos: 0,
                                 entregados: 0,
@@ -722,6 +735,7 @@ export default function AdminControlCierres() {
                             daySum.efectivo +
                             daySum.transferencia +
                             daySum.transferencia10 +
+                            daySum.tarjetaCredito +
                             daySum.desconocido;
 
                         const opsGrouped = groupOpsAplicadas(global?.opsAplicadas);
@@ -749,7 +763,7 @@ export default function AdminControlCierres() {
                                             <div className="font-semibold">Efe {money(daySum.efectivo)}</div>
                                             <div className="text-sm opacity-80">
                                                 Tr {money(daySum.transferencia)} · Tr10{" "}
-                                                {money(daySum.transferencia10)}
+                                                {money(daySum.transferencia10)} · Tarjeta {money(daySum.tarjetaCredito)}
                                                 {daySum.desconocido > 0 ? <> · ⚠️ {money(daySum.desconocido)}</> : null}
                                             </div>
                                         </div>
@@ -898,15 +912,18 @@ export default function AdminControlCierres() {
                                                 const docE = safeNum(c.efectivo);
                                                 const docT = safeNum(c.transferencia);
                                                 const docT10 = safeNum(c.transferencia10);
+                                                const docTarjeta = safeNum(c.tarjetaCredito);
 
                                                 const diffE = calc.efectivo - docE;
                                                 const diffT = calc.transferencia - docT;
                                                 const diffT10 = calc.transferencia10 - docT10;
+                                                const diffTarjeta = calc.tarjetaCredito - docTarjeta;
 
                                                 const ok =
                                                     Math.abs(diffE) < 0.0001 &&
                                                     Math.abs(diffT) < 0.0001 &&
                                                     Math.abs(diffT10) < 0.0001 &&
+                                                    Math.abs(diffTarjeta) < 0.0001 &&
                                                     calc.desconocido === 0;
 
                                                 const gastosTotal = sumObjectNumbers(c.gastos);
@@ -933,7 +950,7 @@ export default function AdminControlCierres() {
                                                                 </div>
 
                                                                 <div className="text-sm opacity-80">
-                                                                    Calc: {money(calc.efectivo + calc.transferencia + calc.transferencia10 + calc.desconocido)} ·
+                                                                    Calc: {money(calc.efectivo + calc.transferencia + calc.transferencia10 + calc.tarjetaCredito + calc.desconocido)} ·
                                                                     Gastos: {money(gastosTotal)}
                                                                 </div>
                                                             </div>
@@ -985,6 +1002,9 @@ export default function AdminControlCierres() {
                                                                         <div className="text-sm">
                                                                             Transferencia10: <b>{money(calc.transferencia10)}</b>
                                                                         </div>
+                                                                        <div className="text-sm">
+                                                                            Tarjeta crédito: <b>{money(calc.tarjetaCredito)}</b>
+                                                                        </div>
                                                                         {calc.desconocido > 0 ? (
                                                                             <div className="text-sm text-warning">
                                                                                 ⚠️ Método desconocido: <b>{money(calc.desconocido)}</b>
@@ -1012,6 +1032,12 @@ export default function AdminControlCierres() {
                                                                             transferencia10: <b>{money(docT10)}</b>{" "}
                                                                             <span className={Math.abs(diffT10) > 0.0001 ? "text-warning" : "text-success"}>
                                                                                 (diff {money(diffT10)})
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="text-sm">
+                                                                            tarjetaCredito: <b>{money(docTarjeta)}</b>{" "}
+                                                                            <span className={Math.abs(diffTarjeta) > 0.0001 ? "text-warning" : "text-success"}>
+                                                                                (diff {money(diffTarjeta)})
                                                                             </span>
                                                                         </div>
 

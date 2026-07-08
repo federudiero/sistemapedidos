@@ -1,6 +1,7 @@
 export const ADMIN_SECTIONS = {
   DASHBOARD_ADMIN: "dashboardAdmin",
   BUSCADOR_GLOBAL: "buscadorGlobal",
+  BACKUP_DATOS: "backupDatos",
   PEDIDOS: "pedidos",
   DIVIDIR_PEDIDOS: "dividirPedidos",
   HOJA_RUTA: "hojaRuta",
@@ -24,6 +25,7 @@ export const ADMIN_SECTION_KEYS = Object.values(ADMIN_SECTIONS);
 export const ADMIN_SECTION_LABELS = {
   [ADMIN_SECTIONS.DASHBOARD_ADMIN]: "Dashboard",
   [ADMIN_SECTIONS.BUSCADOR_GLOBAL]: "Buscador global",
+  [ADMIN_SECTIONS.BACKUP_DATOS]: "Backup de datos",
   [ADMIN_SECTIONS.PEDIDOS]: "Pedidos",
   [ADMIN_SECTIONS.DIVIDIR_PEDIDOS]: "División de pedidos",
   [ADMIN_SECTIONS.HOJA_RUTA]: "Hoja de ruta",

@@ -2,6 +2,7 @@
 import Swal from "sweetalert2";
 import { useProvincia } from "../hooks/useProvincia.js";
 import { baseDireccion } from "../constants/provincias";
+import { getPedidoWaypointText } from "../utils/pedidoLocation.js";
 
 function generarLinksGoogleMaps(pedidos, base) {
   // Google Maps acepta hasta ~23 waypoints por tramo
@@ -13,15 +14,24 @@ function generarLinksGoogleMaps(pedidos, base) {
   for (let i = 0; i < ordenados.length; i += maxWaypoints) {
     const tramoPedidos = ordenados.slice(i, i + maxWaypoints);
     const direccionesValidas = tramoPedidos
-      .filter((p) => {
-        const ok = typeof p.direccion === "string" && p.direccion.length > 5;
+      .map((p) => ({
+        pedido: p,
+        waypoint: getPedidoWaypointText(p, base),
+      }))
+      .filter(({ pedido, waypoint }) => {
+        const ok = typeof waypoint === "string" && waypoint.trim().length > 5;
         if (!ok) {
           direccionesInvalidas = true;
-          console.warn("❌ Dirección inválida:", { nombre: p.nombre, direccion: p.direccion });
+          console.warn("❌ Ubicación inválida:", {
+            nombre: pedido?.nombre,
+            direccion: pedido?.direccion,
+            coordenadas: pedido?.coordenadas,
+            placeId: pedido?.placeId,
+          });
         }
         return ok;
       })
-      .map((p) => p.direccion);
+      .map(({ waypoint }) => waypoint.trim());
 
     if (direccionesValidas.length === 0) continue;
 
