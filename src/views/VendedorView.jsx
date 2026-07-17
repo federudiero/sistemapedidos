@@ -49,10 +49,12 @@ function VendedorView() {
     - "seguimiento": seguimiento de reparto, separado para no ocupar pantalla.
   */
   const [vistaActiva, setVistaActiva] = useState("cargar");
+  const [drawerJornadaAbierto, setDrawerJornadaAbierto] = useState(false);
 
   const formTopRef = useRef(null);
   const tableTopRef = useRef(null);
   const seguimientoTopRef = useRef(null);
+  const scrollPedidosPendienteRef = useRef(false);
 
   const isAliveRef = useRef(true);
 
@@ -128,6 +130,40 @@ function VendedorView() {
     }, 0);
   };
 
+  const cambiarFechaSeleccionada = (fecha) => {
+    if (!(fecha instanceof Date) || Number.isNaN(fecha.getTime())) return;
+
+    setFechaSeleccionada(fecha);
+    setPedidoAEditar(null);
+    setPrefillDraft(null);
+    setVistaActiva("cargar");
+    setDrawerJornadaAbierto(false);
+
+    setTimeout(() => {
+      scrollToRef(formTopRef);
+    }, 0);
+  };
+
+  useEffect(() => {
+    if (!drawerJornadaAbierto) return undefined;
+
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const cerrarConEscape = (event) => {
+      if (event.key === "Escape") {
+        setDrawerJornadaAbierto(false);
+      }
+    };
+
+    window.addEventListener("keydown", cerrarConEscape);
+
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      window.removeEventListener("keydown", cerrarConEscape);
+    };
+  }, [drawerJornadaAbierto]);
+
   useEffect(() => {
     const draft =
       location?.state?.pedidoDraft ||
@@ -165,7 +201,6 @@ function VendedorView() {
       scrollToRef(formTopRef);
     }, 0);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location?.state, navigate, location?.pathname, estaCerrado]);
 
   useEffect(() => {
@@ -212,6 +247,42 @@ function VendedorView() {
       setPedidoAEditar(null);
     }
   }, [estaCerrado, pedidoAEditar]);
+
+  useEffect(() => {
+    if (vistaActiva !== "pedidos" || !scrollPedidosPendienteRef.current) {
+      return undefined;
+    }
+
+    let segundoFrame = null;
+
+    const primerFrame = window.requestAnimationFrame(() => {
+      segundoFrame = window.requestAnimationFrame(() => {
+        const elemento = tableTopRef.current;
+
+        if (elemento) {
+          const margenSticky = 96;
+          const top =
+            elemento.getBoundingClientRect().top +
+            window.scrollY -
+            margenSticky;
+
+          window.scrollTo({
+            top: Math.max(0, top),
+            behavior: "auto",
+          });
+        }
+
+        scrollPedidosPendienteRef.current = false;
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(primerFrame);
+      if (segundoFrame !== null) {
+        window.cancelAnimationFrame(segundoFrame);
+      }
+    };
+  }, [vistaActiva, pedidos.length]);
 
   const colPedidos = useMemo(
     () =>
@@ -264,7 +335,7 @@ function VendedorView() {
         "No podés cargar pedidos en un día cerrado.",
         "info"
       );
-      return;
+      return false;
     }
 
     const fechaElegida = fechaSeleccionada;
@@ -286,22 +357,21 @@ function VendedorView() {
 
       setPedidos((prev) => [nuevo, ...prev]);
       setCantidadPedidos((n) => n + 1);
-      setPrefillDraft(null);
-      setPedidoAEditar(null);
-      setVistaActiva("pedidos");
-
-      setTimeout(() => {
-        scrollToRef(tableTopRef);
-      }, 0);
+      return true;
     } catch (e) {
-      Swal.fire("Error", e?.message || "No se pudo agregar el pedido.", "error");
+      await Swal.fire(
+        "Error",
+        e?.message || "No se pudo agregar el pedido.",
+        "error"
+      );
+      return false;
     }
   };
 
   const actualizarPedido = async (pedidoActualizado) => {
     const previo = pedidos.find((p) => p.id === pedidoActualizado.id);
 
-    if (!previo) return;
+    if (!previo) return false;
 
     if (previo.entregado) {
       await Swal.fire(
@@ -309,7 +379,7 @@ function VendedorView() {
         "No podés editar un pedido ya entregado.",
         "info"
       );
-      return;
+      return false;
     }
 
     const soyDueno =
@@ -322,7 +392,7 @@ function VendedorView() {
         "Este pedido no pertenece a tu usuario o tu cuenta no figura como vendedor de esta provincia.",
         "error"
       );
-      return;
+      return false;
     }
 
     try {
@@ -342,7 +412,7 @@ function VendedorView() {
           "No podés editar pedidos porque el día ya fue cerrado.",
           "info"
         );
-        return;
+        return false;
       }
 
       const {
@@ -437,6 +507,7 @@ function VendedorView() {
         "ubicacionRuta",
         "vendedorNombreManual",
         "vendedorReferenciaEmail",
+        "tipoPedido",
         "coordenadas",
         "pedido",
         "productos",
@@ -473,17 +544,13 @@ function VendedorView() {
       };
 
       if (Object.keys(updatePayload).length === 0) {
-        setPedidoAEditar(null);
-        setVistaActiva("pedidos");
-        return;
+        return true;
       }
 
       await updateDoc(
         doc(db, "provincias", provinciaId, "pedidos", pedidoActualizado.id),
         updatePayload
       );
-
-      setPedidoAEditar(null);
 
       setPedidos((prev) =>
         prev.map((p) =>
@@ -500,19 +567,22 @@ function VendedorView() {
             : p
         )
       );
-
-      setVistaActiva("pedidos");
-
-      setTimeout(() => {
-        scrollToRef(tableTopRef);
-      }, 0);
+      return true;
     } catch (e) {
-      Swal.fire(
+      await Swal.fire(
         "Error",
         e?.message || "No se pudo actualizar el pedido.",
         "error"
       );
+      return false;
     }
+  };
+
+  const finalizarGuardadoPedido = () => {
+    setPedidoAEditar(null);
+    setPrefillDraft(null);
+    scrollPedidosPendienteRef.current = true;
+    setVistaActiva("pedidos");
   };
 
   const eliminarPedido = async (id) => {
@@ -671,7 +741,40 @@ function VendedorView() {
           </div>
         </div>
 
-        <div className="sticky z-30 p-4 mb-4 border shadow-sm top-2 bg-base-100/95 backdrop-blur border-base-300 rounded-xl animate-fade-in-up">
+        {/* Resumen compacto visible en móvil. El selector completo vive en el drawer. */}
+        <div className="sticky z-30 mb-4 top-2 sm:hidden animate-fade-in-up">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full gap-3 p-3 text-left border shadow-sm bg-base-100/95 backdrop-blur border-base-300 rounded-xl"
+            onClick={() => setDrawerJornadaAbierto(true)}
+            aria-haspopup="dialog"
+            aria-expanded={drawerJornadaAbierto}
+            aria-controls="drawer-jornada-vendedor"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 font-semibold">
+                <span aria-hidden="true">📅</span>
+                <span>{format(fechaSeleccionada, "dd/MM/yyyy")}</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mt-1 text-xs opacity-80">
+                <span>{cantidadPedidos} pedidos</span>
+                {estaCerrado ? (
+                  <span className="badge badge-warning badge-sm">Día cerrado</span>
+                ) : (
+                  <span className="badge badge-success badge-sm">Día abierto</span>
+                )}
+              </div>
+            </div>
+
+            <span className="shrink-0 btn btn-circle btn-ghost btn-sm" aria-hidden="true">
+              ›
+            </span>
+          </button>
+        </div>
+
+        {/* En tablet/escritorio se conserva el panel original. */}
+        <div className="sticky z-30 hidden p-4 mb-4 border shadow-sm sm:block top-2 bg-base-100/95 backdrop-blur border-base-300 rounded-xl animate-fade-in-up">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <label className="block mb-2 font-semibold">
@@ -680,12 +783,7 @@ function VendedorView() {
 
               <DatePicker
                 selected={fechaSeleccionada}
-                onChange={(fecha) => {
-                  setFechaSeleccionada(fecha);
-                  setPedidoAEditar(null);
-                  setPrefillDraft(null);
-                  setVistaActiva("cargar");
-                }}
+                onChange={cambiarFechaSeleccionada}
                 className="w-full text-black bg-white input input-bordered"
                 dateFormat="dd/MM/yyyy"
                 locale="es"
@@ -739,6 +837,100 @@ function VendedorView() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Drawer de jornada para móvil: entra desde la derecha y no altera la lógica de pedidos. */}
+        <div
+          id="drawer-jornada-vendedor"
+          className={`fixed inset-0 z-[70] sm:hidden ${
+            drawerJornadaAbierto ? "pointer-events-auto" : "pointer-events-none"
+          }`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Opciones de la jornada"
+          aria-hidden={!drawerJornadaAbierto}
+        >
+          <button
+            type="button"
+            className={`absolute inset-0 bg-black/45 transition-opacity duration-200 ${
+              drawerJornadaAbierto ? "opacity-100" : "opacity-0"
+            }`}
+            onClick={() => setDrawerJornadaAbierto(false)}
+            aria-label="Cerrar opciones de la jornada"
+            tabIndex={drawerJornadaAbierto ? 0 : -1}
+          />
+
+          <aside
+            className={`absolute inset-y-0 right-0 flex w-[86vw] max-w-sm flex-col border-l border-base-300 bg-base-100 shadow-2xl transition-transform duration-200 ease-out ${
+              drawerJornadaAbierto ? "translate-x-0" : "translate-x-full"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3 p-4 border-b border-base-300">
+              <div>
+                <h3 className="text-lg font-bold">📅 Jornada</h3>
+                <p className="text-xs opacity-65">Fecha y estado de tus pedidos</p>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-circle btn-ghost btn-sm"
+                onClick={() => setDrawerJornadaAbierto(false)}
+                aria-label="Cerrar panel"
+                tabIndex={drawerJornadaAbierto ? 0 : -1}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 p-4 overflow-y-auto">
+              <label className="block mb-2 font-semibold" htmlFor="fecha-jornada-movil">
+                Ver pedidos del día
+              </label>
+
+              <DatePicker
+                id="fecha-jornada-movil"
+                selected={fechaSeleccionada}
+                onChange={cambiarFechaSeleccionada}
+                className="w-full text-black bg-white input input-bordered"
+                wrapperClassName="w-full"
+                calendarClassName="shadow-xl"
+                tabIndex={drawerJornadaAbierto ? 0 : -1}
+                dateFormat="dd/MM/yyyy"
+                locale="es"
+              />
+
+              <div className="p-3 mt-4 border bg-base-200/70 border-base-300 rounded-xl">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm opacity-75">Pedidos cargados</span>
+                  <strong className="text-lg">{cantidadPedidos}</strong>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 mt-3">
+                  <span className="text-sm opacity-75">Estado del día</span>
+                  {estaCerrado ? (
+                    <span className="badge badge-warning">Día cerrado</span>
+                  ) : (
+                    <span className="badge badge-success">Día abierto</span>
+                  )}
+                </div>
+              </div>
+
+              <p className="mt-4 text-xs leading-relaxed opacity-60">
+                Al elegir otra fecha se abre la vista de carga correspondiente a ese día.
+              </p>
+            </div>
+
+            <div className="p-4 border-t border-base-300">
+              <button
+                type="button"
+                className="w-full btn btn-primary"
+                onClick={() => setDrawerJornadaAbierto(false)}
+                tabIndex={drawerJornadaAbierto ? 0 : -1}
+              >
+                Listo
+              </button>
+            </div>
+          </aside>
         </div>
 
         {estaCerrado && pedidosNoEntregados.length > 0 && (
@@ -795,6 +987,7 @@ function VendedorView() {
                 bloqueado={estaCerrado}
                 prefillDraft={prefillDraft}
                 onPrefillConsumed={() => setPrefillDraft(null)}
+                onGuardado={finalizarGuardadoPedido}
                 fechaPedido={fechaSeleccionada}
               />
 

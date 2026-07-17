@@ -16,6 +16,23 @@ import {
 
 const LIBRARIES = ["places", "marker"];
 
+const TIPO_PEDIDO_POR_MENOR = "por_menor";
+const TIPO_PEDIDO_POR_MAYOR = "por_mayor";
+
+const normalizarTipoPedido = (value, { permitirVacio = false } = {}) => {
+  const tipo = String(value || "").trim().toLowerCase();
+
+  if (tipo === TIPO_PEDIDO_POR_MAYOR || tipo === "por mayor" || tipo === "mayor") {
+    return TIPO_PEDIDO_POR_MAYOR;
+  }
+
+  if (tipo === TIPO_PEDIDO_POR_MENOR || tipo === "por menor" || tipo === "menor") {
+    return TIPO_PEDIDO_POR_MENOR;
+  }
+
+  return permitirVacio ? "" : TIPO_PEDIDO_POR_MENOR;
+};
+
 const phoneToWaE164 = (raw, { defaultCountry = "AR" } = {}) => {
   if (!raw) return "";
   let s = String(raw).trim();
@@ -194,6 +211,7 @@ const PedidoForm = ({
   bloqueado,
   prefillDraft,
   onPrefillConsumed,
+  onGuardado,
   fechaPedido,
 }) => {
   const { provinciaId } = useProvincia();
@@ -219,10 +237,12 @@ const PedidoForm = ({
   const [busqueda, setBusqueda] = useState("");
   const [linkUbicacion, setLinkUbicacion] = useState("");
   const [ubicacionFuente, setUbicacionFuente] = useState("direccion");
+  const [tipoPedido, setTipoPedido] = useState("");
 
   const [vendedoresProvincia, setVendedoresProvincia] = useState([]);
   const [vendedorEmailSeleccionado, setVendedorEmailSeleccionado] = useState("");
   const [vendedorNombreManual, setVendedorNombreManual] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
@@ -966,6 +986,9 @@ const PedidoForm = ({
       setEntreCalles(pedidoAEditar.entreCalles || "");
       setPartido(pedidoAEditar.partido || "");
       setTelefonoAlt(pedidoAEditar.telefonoAlt || "");
+      setTipoPedido(
+        normalizarTipoPedido(pedidoAEditar.tipoPedido, { permitirVacio: true })
+      );
 
       const autoLinkEdit = buildGoogleMapsLink({
         linkUbicacion: pedidoAEditar.linkUbicacion,
@@ -1023,6 +1046,7 @@ const PedidoForm = ({
     );
     setEntreCalles(d.entreCalles || "");
     setPartido(d.partido || d.localidad || "");
+    setTipoPedido(normalizarTipoPedido(d.tipoPedido, { permitirVacio: true }));
 
     const autoLinkPrefill = buildGoogleMapsLink({
       linkUbicacion: d.linkUbicacion,
@@ -1096,6 +1120,7 @@ const PedidoForm = ({
     setCoordenadas(null);
     setPlaceId(null);
     setUbicacionFuente("direccion");
+    setTipoPedido("");
     setMostrarDevolucion(false);
     setBusqueda("");
     setErrorNombre("");
@@ -1124,8 +1149,8 @@ const PedidoForm = ({
     onPrefillConsumed?.();
   };
 
-  const onSubmit = () => {
-    if (bloqueado) return;
+  const onSubmit = async () => {
+    if (bloqueado || guardando) return;
 
     if (
       !nombre.trim() ||
@@ -1261,6 +1286,7 @@ const PedidoForm = ({
       vendedorEmail: vendedorEmailAuth,
       vendedorReferenciaEmail,
       vendedorNombreManual: vendedorNombreManualFinal,
+      tipoPedido: normalizarTipoPedido(tipoPedido),
       nombre,
       telefono,
       telefonoAlt: telefonoAlt?.trim() ? telefonoAlt : null,
@@ -1286,20 +1312,39 @@ const PedidoForm = ({
           }),
     };
 
-    if (pedidoAEditar) {
-      onActualizar({ ...pedidoAEditar, ...pedidoConProductos });
-    } else {
-      onAgregar(pedidoConProductos);
-    }
+    setGuardando(true);
 
-    Swal.fire({
-      icon: "success",
-      title: pedidoAEditar ? "✅ Pedido actualizado correctamente." : "✅ Pedido cargado correctamente.",
-      confirmButtonText: "OK",
-      customClass: { confirmButton: "swal2-confirm btn btn-primary" },
-    }).then(() => {
+    try {
+      const guardadoCorrectamente = pedidoAEditar
+        ? await onActualizar({ ...pedidoAEditar, ...pedidoConProductos })
+        : await onAgregar(pedidoConProductos);
+
+      if (guardadoCorrectamente !== true) {
+        setGuardando(false);
+        return;
+      }
+
+      await Swal.fire({
+        icon: "success",
+        title: pedidoAEditar
+          ? "✅ Pedido actualizado correctamente."
+          : "✅ Pedido cargado correctamente.",
+        confirmButtonText: "OK",
+        returnFocus: false,
+        customClass: { confirmButton: "swal2-confirm btn btn-primary" },
+      });
+
       resetFormulario();
-    });
+      setGuardando(false);
+      onGuardado?.();
+    } catch (e) {
+      setGuardando(false);
+      await Swal.fire(
+        "Error",
+        e?.message || "No se pudo guardar el pedido.",
+        "error"
+      );
+    }
   };
 
   const e164Principal = useMemo(
@@ -1483,6 +1528,27 @@ const PedidoForm = ({
                   </span>
                 )
               ) : null}
+
+              <label className="mt-4 label">
+                <span className="label-text">🏷️ Tipo de pedido (opcional)</span>
+              </label>
+              <select
+                className="w-full select select-bordered"
+                value={tipoPedido}
+                onChange={(e) =>
+                  setTipoPedido(
+                    normalizarTipoPedido(e.target.value, { permitirVacio: true })
+                  )
+                }
+                disabled={bloqueado}
+              >
+                <option value="">Sin seleccionar — se guarda como pedido por menor</option>
+                <option value={TIPO_PEDIDO_POR_MENOR}>Pedido por menor</option>
+                <option value={TIPO_PEDIDO_POR_MAYOR}>Pedido por mayor</option>
+              </select>
+              <p className="mt-1 text-xs opacity-70">
+                Si no seleccionás una opción, el pedido se guarda automáticamente como por menor.
+              </p>
 
               <label className="mt-4 label">
                 <span className="label-text">🧑‍💼 Vendedor de la provincia (opcional)</span>
@@ -1828,9 +1894,13 @@ const PedidoForm = ({
             <button
               type="submit"
               className={`btn ${pedidoAEditar ? "btn-warning" : "btn-primary"}`}
-              disabled={bloqueado}
+              disabled={bloqueado || guardando}
             >
-              {pedidoAEditar ? "✏️ Actualizar pedido" : "➕ Agregar pedido"}
+              {guardando
+                ? "Guardando..."
+                : pedidoAEditar
+                  ? "✏️ Actualizar pedido"
+                  : "➕ Agregar pedido"}
             </button>
           </div>
 
