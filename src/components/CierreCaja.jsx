@@ -183,6 +183,21 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
+function timestampToMillis(value) {
+  if (!value) return null;
+  if (typeof value?.toMillis === "function") {
+    try {
+      return value.toMillis();
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  if (value instanceof Date) return value.getTime();
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function buildHtmlTablaStock(rows, limit = 60) {
   const top = rows.slice(0, limit);
   return `
@@ -356,6 +371,10 @@ export default function CierreCaja() {
   const [repartidores, setRepartidores] = useState([]);
   const [gastos, setGastos] = useState({});
   const [resumenGlobal, setResumenGlobal] = useState(null);
+  const [cierreGlobal, setCierreGlobal] = useState(null);
+  const [estadoGlobalCargado, setEstadoGlobalCargado] = useState(false);
+  const [resumenGlobalCargado, setResumenGlobalCargado] = useState(false);
+  const [errorEstadoGlobal, setErrorEstadoGlobal] = useState(null);
 
   const [busyByEmail, setBusyByEmail] = useState({});
   const [busyGlobal, setBusyGlobal] = useState(false);
@@ -549,29 +568,155 @@ export default function CierreCaja() {
     const refResumen = doc(colResumenVentas, fechaStr);
     const refCierre = doc(colCierres, `global_${fechaStr}`);
 
-    const unsubResumen = onSnapshot(refResumen, async (snap) => {
-      if (!snap.exists()) {
-        setResumenGlobal(null);
-        return;
-      }
-      const base = snap.data();
-      const cierreSnap = await getDoc(refCierre);
-      const stockDescontado = cierreSnap.exists()
-        ? !!cierreSnap.data().stockDescontado
-        : false;
-      setResumenGlobal({ ...base, stockDescontado });
-    });
+    setResumenGlobal(null);
+    setCierreGlobal(null);
+    setEstadoGlobalCargado(false);
+    setResumenGlobalCargado(false);
+    setErrorEstadoGlobal(null);
 
-    const unsubCierre = onSnapshot(refCierre, (cSnap) => {
-      const flag = cSnap.exists() ? !!cSnap.data().stockDescontado : false;
-      setResumenGlobal((prev) => (prev ? { ...prev, stockDescontado: flag } : prev));
-    });
+    const unsubResumen = onSnapshot(
+      refResumen,
+      (snap) => {
+        setResumenGlobal(snap.exists() ? snap.data() : null);
+        setResumenGlobalCargado(true);
+      },
+      (error) => {
+        console.error("No se pudo escuchar resumenVentas del cierre:", error);
+        setResumenGlobalCargado(true);
+        setErrorEstadoGlobal("No se pudo leer el resumen global del día.");
+      }
+    );
+
+    const unsubCierre = onSnapshot(
+      refCierre,
+      (snap) => {
+        setCierreGlobal(snap.exists() ? snap.data() : null);
+        setEstadoGlobalCargado(true);
+      },
+      (error) => {
+        console.error("No se pudo escuchar el documento de cierre global:", error);
+        setCierreGlobal(null);
+        setEstadoGlobalCargado(true);
+        setErrorEstadoGlobal("No se pudo verificar el estado real del cierre global.");
+      }
+    );
 
     return () => {
       unsubResumen();
       unsubCierre();
     };
   }, [provinciaId, colResumenVentas, colCierres, fechaStr]);
+
+  const estadoCierreGlobal = useMemo(() => {
+    if (!estadoGlobalCargado || !resumenGlobalCargado) return "cargando";
+    if (errorEstadoGlobal) return "error";
+
+    const stockDescontado = cierreGlobal?.stockDescontado === true;
+    const enProceso = cierreGlobal?.inProgress === true;
+    const tieneResumen = !!resumenGlobal;
+
+    if (stockDescontado) {
+      if (enProceso) return "cerrado_inconsistente";
+      return tieneResumen ? "cerrado" : "cerrado_sin_resumen";
+    }
+
+    if (enProceso) {
+      const inicioMs = timestampToMillis(
+        cierreGlobal?.startedAt || cierreGlobal?.timestamp
+      );
+      const procesoAntiguo =
+        Number.isFinite(inicioMs) && Date.now() - inicioMs > 15 * 60 * 1000;
+
+      if (procesoAntiguo) {
+        return "interrumpido";
+      }
+      return "en_proceso";
+    }
+
+    if (tieneResumen) return "resumen_sin_cierre";
+    return "abierto";
+  }, [
+    estadoGlobalCargado,
+    resumenGlobalCargado,
+    errorEstadoGlobal,
+    cierreGlobal,
+    resumenGlobal,
+  ]);
+
+  const estadoGlobalUI = useMemo(() => {
+    switch (estadoCierreGlobal) {
+      case "cargando":
+        return {
+          label: "Verificando estado",
+          detalle: "Se está consultando el documento global del día.",
+          alertClass: "alert-info",
+        };
+      case "error":
+        return {
+          label: "Estado no verificable",
+          detalle:
+            errorEstadoGlobal ||
+            "No se pudo verificar el cierre. Las acciones quedan bloqueadas por seguridad.",
+          alertClass: "alert-error",
+        };
+      case "en_proceso":
+        return {
+          label: "Cierre en proceso",
+          detalle:
+            "Existe un cierre global ejecutándose. No se permite iniciar otro cierre ni modificar las cajas individuales.",
+          alertClass: "alert-info",
+        };
+      case "interrumpido":
+        return {
+          label: "Cierre interrumpido o trabado",
+          detalle:
+            "El documento sigue con inProgress=true. No vuelva a ejecutar el cierre hasta verificar si el stock fue descontado total o parcialmente.",
+          alertClass: "alert-warning",
+        };
+      case "cerrado":
+        return {
+          label: "Cerrado",
+          detalle:
+            "El cierre global finalizó, el stock figura descontado y existe el resumen de ventas.",
+          alertClass: "alert-success",
+        };
+      case "cerrado_sin_resumen":
+        return {
+          label: "Cerrado con inconsistencia",
+          detalle:
+            "El stock figura descontado, pero falta el resumen de ventas. No vuelva a cerrar el día.",
+          alertClass: "alert-warning",
+        };
+      case "cerrado_inconsistente":
+        return {
+          label: "Cerrado con bandera pendiente",
+          detalle:
+            "El stock figura descontado, pero inProgress continúa activo. El día permanece bloqueado para evitar un doble descuento.",
+          alertClass: "alert-warning",
+        };
+      case "resumen_sin_cierre":
+        return {
+          label: "Resumen sin documento de cierre",
+          detalle:
+            "Existe resumen de ventas, pero falta el documento global que confirma el descuento de stock. El cierre queda bloqueado para revisión.",
+          alertClass: "alert-warning",
+        };
+      default:
+        return {
+          label: "Abierto",
+          detalle:
+            "No existe un cierre global activo ni finalizado para esta fecha.",
+          alertClass: "alert-info",
+        };
+    }
+  }, [estadoCierreGlobal, errorEstadoGlobal]);
+
+  const cierreGlobalBloqueado = estadoCierreGlobal !== "abierto";
+  const cierreGlobalFinalizado = [
+    "cerrado",
+    "cerrado_sin_resumen",
+    "cerrado_inconsistente",
+  ].includes(estadoCierreGlobal);
 
   useEffect(() => {
     if (!provinciaId || !colCierres || !colResumenVentas) return;
@@ -1072,7 +1217,17 @@ export default function CierreCaja() {
     }
     if (busyGlobal) return;
 
+    if (estadoCierreGlobal !== "abierto") {
+      await Swal.fire(
+        estadoGlobalUI.label,
+        `${estadoGlobalUI.detalle} No se inició ninguna operación.`,
+        estadoCierreGlobal === "error" ? "error" : "info"
+      );
+      return;
+    }
+
     setBusyGlobal(true);
+    let cierreGlobalTomado = false;
 
     const gastoGlobalExtraMonto = Number(gastoGlobalExtra?.monto || 0) || 0;
     const gastoGlobalExtraConcepto = String(gastoGlobalExtra?.concepto || "").trim();
@@ -1383,6 +1538,7 @@ export default function CierreCaja() {
             { merge: true }
           );
         });
+        cierreGlobalTomado = true;
       } catch (e) {
         if (String(e.message).includes("YA_CERRADO_O_PROGRESO")) {
           await Swal.fire(
@@ -1449,6 +1605,7 @@ export default function CierreCaja() {
           },
           { merge: true }
         );
+        cierreGlobalTomado = false;
 
         await Swal.fire(
           "Cierre Global realizado",
@@ -1605,6 +1762,7 @@ export default function CierreCaja() {
         },
         { merge: true }
       );
+      cierreGlobalTomado = false;
 
       if (verificacionStock?.enabled && verificacionStock.mismatches > 0) {
         await Swal.fire(
@@ -1627,7 +1785,14 @@ export default function CierreCaja() {
       }
     } catch (e) {
       console.error("Error en cierre global:", e);
-      Swal.fire("Error", "No se pudo ejecutar el cierre global.", "error");
+
+      Swal.fire(
+        "Error en cierre global",
+        cierreGlobalTomado
+          ? "El cierre se interrumpió después de iniciar. Quedó bloqueado por seguridad para evitar un doble descuento de stock."
+          : "No se pudo ejecutar el cierre global.",
+        "error"
+      );
     } finally {
       setBusyGlobal(false);
     }
@@ -1949,17 +2114,21 @@ export default function CierreCaja() {
             <h3 className="mb-2 text-xl font-bold">{email}</h3>
 
             <p className={`font-semibold ${yaCerrado ? "text-success" : "text-error"}`}>
-              Estado: {yaCerrado ? "Cerrado" : "Abierto"}
+              Estado individual: {yaCerrado ? "Cerrado" : "Abierto"}
             </p>
 
             {!yaCerrado && (
               <div className="mt-2 alert alert-warning">
                 <span className="text-sm">
-                  ⚠️ No existe caja guardada para <b>{email}</b> en el día <b>{fechaStr}</b>.
+                  ⚠️ No existe caja individual guardada para <b>{email}</b> en el día <b>{fechaStr}</b>.
                   {pedidosRep.length === 0 ? (
                     <> Además, no hay pedidos asignados a este repartidor en esta fecha.</>
-                  ) : (
+                  ) : estadoCierreGlobal === "abierto" ? (
                     <> Podés cerrarla con el botón de abajo.</>
+                  ) : (
+                    <>
+                      {" "}No puede cerrarse ni modificarse porque el estado global es <b>{estadoGlobalUI.label}</b>.
+                    </>
                   )}
                 </span>
               </div>
@@ -2098,7 +2267,11 @@ export default function CierreCaja() {
                     value={gastos[email]?.[tipo] || ""}
                     onChange={(e) => handleGastoChange(email, tipo, e.target.value)}
                     className="w-32 input input-sm input-bordered"
-                    disabled={yaCerrado || busyByEmail[email]}
+                    disabled={
+                      yaCerrado ||
+                      busyByEmail[email] ||
+                      estadoCierreGlobal !== "abierto"
+                    }
                   />
                 </div>
               ))}
@@ -2109,7 +2282,7 @@ export default function CierreCaja() {
               </p>
             </div>
 
-            {!yaCerrado && (
+            {!yaCerrado && estadoCierreGlobal === "abierto" && (
               <button
                 onClick={() => cerrarCajaIndividual(email)}
                 className={`mt-4 btn btn-success ${busyByEmail[email] ? "btn-disabled" : ""}`}
@@ -2119,15 +2292,23 @@ export default function CierreCaja() {
               </button>
             )}
 
-            {yaCerrado && (!resumenGlobal || !resumenGlobal.stockDescontado) && (
+            {!yaCerrado && estadoCierreGlobal !== "abierto" && (
+              <button disabled className="mt-4 btn btn-disabled">
+                🔒 Caja individual bloqueada por estado global
+              </button>
+            )}
+
+            {yaCerrado && estadoCierreGlobal === "abierto" && (
               <button onClick={() => anularCierreIndividual(email)} className="mt-2 btn btn-warning">
                 🧨 Anular cierre de {email}
               </button>
             )}
 
-            {yaCerrado && resumenGlobal?.stockDescontado === true && (
+            {yaCerrado && estadoCierreGlobal !== "abierto" && (
               <button disabled className="mt-2 btn btn-disabled">
-                🔒 Cierre global realizado
+                {cierreGlobalFinalizado
+                  ? "🔒 Cierre global realizado"
+                  : "🔒 Estado global bloqueado"}
               </button>
             )}
           </div>
@@ -2147,6 +2328,13 @@ export default function CierreCaja() {
         <p>Total de repartidores: {repartidores.length}</p>
         <p>Cajas cerradas: {Object.keys(cierres).length}</p>
 
+        <div className={`mt-3 alert ${estadoGlobalUI.alertClass}`}>
+          <div>
+            <div className="font-bold">Estado global: {estadoGlobalUI.label}</div>
+            <div className="text-sm">{estadoGlobalUI.detalle}</div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 mt-4 md:grid-cols-2">
           <div className="p-4 shadow rounded-xl bg-base-200">
             <h4 className="mb-3 text-lg font-bold">↕️ Ingreso / Egreso global</h4>
@@ -2163,7 +2351,7 @@ export default function CierreCaja() {
                       tipo: e.target.value,
                     }))
                   }
-                  disabled={!!resumenGlobal || busyGlobal}
+                  disabled={cierreGlobalBloqueado || busyGlobal}
                 >
                   <option value="egreso">Egreso</option>
                   <option value="ingreso">Ingreso</option>
@@ -2183,7 +2371,7 @@ export default function CierreCaja() {
                       concepto: e.target.value,
                     }))
                   }
-                  disabled={!!resumenGlobal || busyGlobal}
+                  disabled={cierreGlobalBloqueado || busyGlobal}
                 />
               </div>
 
@@ -2200,7 +2388,7 @@ export default function CierreCaja() {
                       monto: e.target.value,
                     }))
                   }
-                  disabled={!!resumenGlobal || busyGlobal}
+                  disabled={cierreGlobalBloqueado || busyGlobal}
                 />
               </div>
               <button
@@ -2213,7 +2401,7 @@ export default function CierreCaja() {
       monto: "",
     })
   }
-  disabled={!!resumenGlobal || busyGlobal}
+  disabled={cierreGlobalBloqueado || busyGlobal}
 >
   Limpiar movimiento
 </button>
@@ -2286,7 +2474,7 @@ export default function CierreCaja() {
             {busyPreview ? "🔄 Previsualizando…" : "🔎 Previsualizar descuento (dry-run)"}
           </button>
 
-          {!resumenGlobal && (
+          {estadoCierreGlobal === "abierto" ? (
             <button
               className={`btn btn-accent ${busyGlobal ? "btn-disabled" : ""}`}
               onClick={cerrarGlobal}
@@ -2295,10 +2483,18 @@ export default function CierreCaja() {
             >
               {busyGlobal ? "⏳ Cerrando global…" : "🔐 Cerrar caja global del día"}
             </button>
+          ) : (
+            <button className="btn btn-disabled" disabled>
+              🔒 {estadoGlobalUI.label}
+            </button>
           )}
 
-          {resumenGlobal && (
-            <button className="btn btn-warning" onClick={anularCierreGlobal}>
+          {cierreGlobalFinalizado && (
+            <button
+              className="btn btn-warning"
+              onClick={anularCierreGlobal}
+              disabled={busyGlobal}
+            >
               🧨 Anular cierre global
             </button>
           )}
@@ -2407,7 +2603,7 @@ export default function CierreCaja() {
                   : "Sin fecha de cierre"}
               </p>
               <p className="mt-1">
-                {resumenGlobal?.stockDescontado ? (
+                {cierreGlobal?.stockDescontado ? (
                   <span className="font-semibold text-success">✔️ Stock descontado</span>
                 ) : (
                   <span className="font-semibold text-error">⚠️ Stock NO descontado</span>

@@ -1,239 +1,206 @@
 const crmService = require("../services/crm.service");
 
+function errorResponse(res, error, fallback) {
+  const status = Number(error?.status) || 500;
+  return res.status(status).json({
+    ok: false,
+    error: error?.message || fallback,
+    details: error?.response?.data || null,
+  });
+}
+
 async function health(_req, res) {
-  const data = crmService.getHealth();
-  return res.status(200).json(data);
+  return res.status(200).json(crmService.getHealth());
 }
 
 async function verifyWebhook(req, res) {
   const result = crmService.verifyWebhook(req);
-  if (result.ok) {
-    return res.status(200).send(result.challenge);
-  }
-  return res.sendStatus(403);
+  return result.ok
+    ? res.status(200).send(result.challenge)
+    : res.sendStatus(403);
 }
 
 async function handleWebhook(req, res) {
   try {
     const data = await crmService.handleWebhook(req);
     return res.status(200).json(data);
-  } catch (e) {
-    console.error("WEBHOOK ERROR:", e);
+  } catch (error) {
+    // Meta reintenta respuestas no 2xx. Se responde 200 y se registra el error
+    // para no generar una tormenta de reintentos sobre el mismo evento.
+    console.error("WEBHOOK ERROR:", error);
     return res.status(200).json({
       ok: false,
-      error: e?.message || "Webhook error",
+      error: error?.message || "Webhook error",
     });
+  }
+}
+
+async function getSellerDashboardData(req, res) {
+  try {
+    return res.json(await crmService.getSellerDashboardData(req));
+  } catch (error) {
+    console.error("SELLER DASHBOARD DATA ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudieron cargar los datos del CRM del vendedor"
+    );
+  }
+}
+
+async function updateSellerCommercialTag(req, res) {
+  try {
+    return res.json(await crmService.updateSellerCommercialTag(req));
+  } catch (error) {
+    console.error("SELLER COMMERCIAL TAG UPDATE ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo actualizar el estado comercial"
+    );
+  }
+}
+
+async function createSellerPersonalLabel(req, res) {
+  try {
+    return res.json(await crmService.createSellerPersonalLabel(req));
+  } catch (error) {
+    console.error("SELLER PERSONAL LABEL CREATE ERROR:", error);
+    return errorResponse(res, error, "No se pudo crear la etiqueta personal");
+  }
+}
+
+async function renameSellerPersonalLabel(req, res) {
+  try {
+    return res.json(await crmService.renameSellerPersonalLabel(req));
+  } catch (error) {
+    console.error("SELLER PERSONAL LABEL RENAME ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo renombrar la etiqueta personal"
+    );
+  }
+}
+
+async function deleteSellerPersonalLabel(req, res) {
+  try {
+    return res.json(await crmService.deleteSellerPersonalLabel(req));
+  } catch (error) {
+    console.error("SELLER PERSONAL LABEL DELETE ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo eliminar la etiqueta personal"
+    );
+  }
+}
+
+async function addSellerPersonalLabel(req, res) {
+  try {
+    return res.json(await crmService.addSellerPersonalLabel(req));
+  } catch (error) {
+    console.error("SELLER PERSONAL LABEL ADD ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo asignar la etiqueta personal"
+    );
+  }
+}
+
+async function removeSellerPersonalLabel(req, res) {
+  try {
+    return res.json(await crmService.removeSellerPersonalLabel(req));
+  } catch (error) {
+    console.error("SELLER PERSONAL LABEL REMOVE ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo quitar la etiqueta personal"
+    );
+  }
+}
+
+async function getAdminWhatsAppConnectionStatuses(req, res) {
+  try {
+    return res.json(
+      await crmService.getAdminWhatsAppConnectionStatuses(req)
+    );
+  } catch (error) {
+    console.error("ADMIN CONNECTION STATUSES ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudieron consultar las conexiones del CRM"
+    );
   }
 }
 
 async function getWhatsAppConnectionStatus(req, res) {
   try {
-    const data = await crmService.getWhatsAppConnectionStatus(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("WHATSAPP CONNECTION STATUS ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "getWhatsAppConnectionStatus error",
-      details: e?.response?.data || null,
-    });
+    return res.json(await crmService.getWhatsAppConnectionStatus(req));
+  } catch (error) {
+    console.error("WHATSAPP CONNECTION STATUS ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo consultar la conexión de WhatsApp"
+    );
   }
 }
 
 async function startWhatsAppConnection(req, res) {
   try {
-    const data = await crmService.startWhatsAppConnection(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("WHATSAPP CONNECTION START ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "startWhatsAppConnection error",
-      details: e?.response?.data || null,
-    });
+    return res.json(await crmService.startWhatsAppConnection(req));
+  } catch (error) {
+    console.error("WHATSAPP CONNECTION START ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo iniciar la conexión de WhatsApp"
+    );
   }
 }
 
-
 async function completeEmbeddedWhatsAppConnection(req, res) {
   try {
-    const data = await crmService.completeEmbeddedWhatsAppConnection(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("WHATSAPP CONNECTION COMPLETE EMBEDDED ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "completeEmbeddedWhatsAppConnection error",
-      details: e?.response?.data || null,
-    });
+    return res.json(
+      await crmService.completeEmbeddedWhatsAppConnection(req)
+    );
+  } catch (error) {
+    console.error("WHATSAPP CONNECTION COMPLETE EMBEDDED ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo completar Embedded Signup"
+    );
   }
 }
 
 async function completeManualWhatsAppConnection(req, res) {
   try {
-    const data = await crmService.completeManualWhatsAppConnection(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("WHATSAPP CONNECTION COMPLETE MANUAL ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "completeManualWhatsAppConnection error",
-      details: e?.response?.data || null,
-    });
+    return res.json(await crmService.completeManualWhatsAppConnection(req));
+  } catch (error) {
+    console.error("WHATSAPP CONNECTION COMPLETE MANUAL ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo completar la conexión manual"
+    );
   }
 }
 
 async function disconnectWhatsAppConnection(req, res) {
   try {
-    const data = await crmService.disconnectWhatsAppConnection(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("WHATSAPP CONNECTION DISCONNECT ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "disconnectWhatsAppConnection error",
-      details: e?.response?.data || null,
-    });
-  }
-}
-async function setConversationOptIn(req, res) {
-  try {
-    const data = await crmService.setConversationOptIn(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("SET CONVERSATION OPTIN ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "setConversationOptIn error",
-      details: e?.response?.data || null,
-    });
-  }
-}
-
-async function listMetaTemplates(req, res) {
-  try {
-    const data = await crmService.listMetaTemplates(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("META TEMPLATES ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "No se pudieron cargar las plantillas de Meta",
-      details: e?.response?.data || null,
-    });
-  }
-}
-
-async function canSendText(req, res) {
-  try {
-    const data = await crmService.canSendText(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("CAN SEND TEXT ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "canSendText error",
-      details: e?.response?.data || null,
-    });
-  }
-}
-
-async function canSendTemplate(req, res) {
-  try {
-    const data = await crmService.canSendTemplate(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("CAN SEND TEMPLATE ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "canSendTemplate error",
-      details: e?.response?.data || null,
-    });
-  }
-}
-
-async function getConversationSendPolicy(req, res) {
-  try {
-    const data = await crmService.getConversationSendPolicy(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("GET CONVERSATION SEND POLICY ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "getConversationSendPolicy error",
-      details: e?.response?.data || null,
-    });
-  }
-}
-
-async function sendTemplateBatch(req, res) {
-  try {
-    const data = await crmService.sendTemplateBatch(req);
-    return res.json(data);
-  } catch (e) {
-    console.error("SEND TEMPLATE BATCH ERROR:", e?.response?.data || e);
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "sendTemplateBatch error",
-      details: e?.response?.data || null,
-    });
-  }
-}
-
-async function sendText(req, res) {
-  try {
-    const data = await crmService.sendText(req);
-    return res.json(data);
-  } catch (e) {
-    const metaError = e?.response?.data || null;
-    console.error("SEND ERROR:", {
-      message: e?.message || null,
-      status: e?.response?.status || null,
-      data: metaError,
-    });
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "sendText error",
-      details: metaError,
-    });
-  }
-}
-
-async function sendMedia(req, res) {
-  try {
-    const data = await crmService.sendMedia(req);
-    return res.json(data);
-  } catch (e) {
-    const metaError = e?.response?.data || null;
-    console.error("SEND MEDIA ERROR:", {
-      message: e?.message || null,
-      status: e?.response?.status || null,
-      data: metaError,
-    });
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "sendMedia error",
-      details: metaError,
-    });
-  }
-}
-
-async function sendLocation(req, res) {
-  try {
-    const data = await crmService.sendLocation(req);
-    return res.json(data);
-  } catch (e) {
-    const metaError = e?.response?.data || null;
-    console.error("SEND LOCATION ERROR:", {
-      message: e?.message || null,
-      status: e?.response?.status || null,
-      data: metaError,
-    });
-    return res.status(500).json({
-      ok: false,
-      error: e?.message || "sendLocation error",
-      details: metaError,
-    });
+    return res.json(await crmService.disconnectWhatsAppConnection(req));
+  } catch (error) {
+    console.error("WHATSAPP CONNECTION DISCONNECT ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo desconectar WhatsApp"
+    );
   }
 }
 
@@ -241,18 +208,17 @@ module.exports = {
   health,
   verifyWebhook,
   handleWebhook,
+  getSellerDashboardData,
+  updateSellerCommercialTag,
+  createSellerPersonalLabel,
+  renameSellerPersonalLabel,
+  deleteSellerPersonalLabel,
+  addSellerPersonalLabel,
+  removeSellerPersonalLabel,
+  getAdminWhatsAppConnectionStatuses,
   getWhatsAppConnectionStatus,
   startWhatsAppConnection,
   completeEmbeddedWhatsAppConnection,
   completeManualWhatsAppConnection,
   disconnectWhatsAppConnection,
-  listMetaTemplates,
-  canSendText,
-  canSendTemplate,
-  getConversationSendPolicy,
-  sendTemplateBatch,
-  sendText,
-  sendMedia,
-  sendLocation,
-   setConversationOptIn,
 };

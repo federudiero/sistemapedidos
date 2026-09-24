@@ -14,7 +14,7 @@ const geoCache = new Map();
 
 // ====== Persistencia en localStorage (por provincia) ======
 // v2: el cache anterior guardaba por dirección cruda y podía conservar geocodificaciones ambiguas.
-const LS_KEY = (prov) => `gm_geocache:v2:${prov}`;
+const LS_KEY = (prov) => `gm_geocache:v3:${prov}`;
 const loadProvCache = (prov) => {
   try {
     const raw = localStorage.getItem(LS_KEY(prov));

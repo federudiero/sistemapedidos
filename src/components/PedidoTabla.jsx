@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import SeguimientoPedidoButton from "./SeguimientoPedidoButton.jsx";
+import PedidoCrmEtiqueta from "./PedidoCrmEtiqueta.jsx";
 
 const normalizar = (s = "") =>
   String(s).toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
@@ -624,6 +625,15 @@ ${totalLinea ? `\n${totalLinea}\n` : ""}
                           p.vendedorEmail || p.vendedor || p.seller || "—"
                         )}
                       </span>
+                    </li>
+
+                    <li>
+                      <strong>🏷️ CRM:</strong>
+                      <PedidoCrmEtiqueta
+                        provinciaId={provinciaId}
+                        pedido={p}
+                        currentUserEmail={currentUserEmail}
+                      />
                     </li>
 
                     <li>

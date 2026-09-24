@@ -33,6 +33,7 @@ service cloud.firestore {
         e == "federudiero@gmail.com" ||
         e == "agus.belen64@gmail.com" ||
         e == "franco.coronel.134@gmail.com" ||
+        e == "rafaelacalderon98@gmail.com" ||
         e == "eliascalderon731@gmail.com" ||
         e == "admin2@mail.com" ||
         e == "admin3@mail.com"
@@ -184,30 +185,62 @@ service cloud.firestore {
       allow create: if esAdminProv(prov) || esVendedorProv(prov);
     }
 
-    // ---- CRM: CONVERSACIONES (BASE)
-    match /provincias/{prov}/conversaciones/{convId} {
-      // Admin puede leer todo.
-      // Vendedor solo si la conversación está asignada a su email.
-      allow get: if esAdminProv(prov) || esAgenteConv(prov, convId);
+   // ---- CRM: CONVERSACIONES (BASE)
+match /provincias/{prov}/conversaciones/{convId} {
+  // Admin puede leer todo.
+  // Vendedor solo si la conversación está asignada a su email.
+  allow get: if esAdminProv(prov) || esAgenteConv(prov, convId);
 
-      // IMPORTANTE:
-      // esto cierra el listado para que un vendedor solo pueda consultar
-      // conversaciones cuyo assignedToEmail sea su propio usuario.
-      allow list: if esAdminProv(prov)
-        || esAgenteConvData(prov, resource.data);
+  // IMPORTANTE:
+  // esto cierra el listado para que un vendedor solo pueda consultar
+  // conversaciones cuyo assignedToEmail sea su propio usuario.
+  allow list: if esAdminProv(prov)
+    || esAgenteConvData(prov, resource.data);
 
-      allow update: if (esAdminProv(prov) || esAgenteConv(prov, convId))
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          "status","updatedAt","updatedBy",
-          "labels",
-          "lastMessageText","lastMessageAt","lastFrom",
-          "nombre","telefonoE164","clienteId",
-          "internalNote","internalNoteAt",
-          "nextFollowUpAt","nextFollowUpNote","followUpDoneAt"
-        ]);
+  allow update: if (esAdminProv(prov) || esAgenteConv(prov, convId))
+    && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      "status","updatedAt","updatedBy",
+      "labels",
+      "lastMessageText","lastMessageAt","lastFrom",
+      "nombre","telefonoE164","clienteId",
+      "internalNote","internalNoteAt",
+      "nextFollowUpAt","nextFollowUpNote","followUpDoneAt",
 
-      allow create, delete: if esAdminProv(prov);
-    }
+      // NUEVO: etiquetas comerciales del CRM
+      "crmEtiqueta","crmEtiquetaUpdatedAt","crmEtiquetaUpdatedBy"
+    ])
+    && (
+      !request.resource.data.diff(resource.data).changedKeys().hasAny(["crmEtiqueta"])
+      || (
+        // Admin puede corregir cualquier estado comercial, incluidos los
+        // automáticos. Las Cloud Functions usan Admin SDK y no dependen de reglas.
+        esAdminProv(prov)
+        && request.resource.data.crmEtiqueta in [
+          "nuevo",
+          "en_seguimiento",
+          "no_contesto",
+          "venta_pendiente",
+          "vendido",
+          "no_interesa",
+          "numero_incorrecto"
+        ]
+      )
+      || (
+        // El vendedor sólo puede elegir estados manuales. Venta pendiente y
+        // Vendido quedan reservados a la sincronización automática del CRM.
+        esAgenteConv(prov, convId)
+        && request.resource.data.crmEtiqueta in [
+          "nuevo",
+          "en_seguimiento",
+          "no_contesto",
+          "no_interesa",
+          "numero_incorrecto"
+        ]
+      )
+    );
+
+  allow create, delete: if esAdminProv(prov);
+}
 
     // ---- CRM: MENSAJES
     match /provincias/{prov}/conversaciones/{convId}/mensajes/{msgId} {
@@ -372,7 +405,10 @@ service cloud.firestore {
     // ---- CRM: STATS ADMIN DIARIOS
     // /provincias/{prov}/crmAdminStats/{userEmail}/days/{dayId}
     match /provincias/{prov}/crmAdminStats/{userEmail}/days/{dayId} {
-      allow get, list: if esAdminProv(prov);
+      // Admin puede ver todos los vendedores. Cada vendedor puede leer
+      // únicamente sus propias métricas diarias del CRM.
+      allow get, list: if esAdminProv(prov)
+        || (esVendedorProv(prov) && userEmail.toLowerCase() == emailActual());
       allow create, update, delete: if false;
     }
 

@@ -1,1362 +1,752 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { deleteField, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  addDoc,
+  arrayRemove,
+  arrayUnion,
+  collection,
+  doc,
+  increment,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { db } from "../../../firebase/firebase";
-import { useAuthState } from "../../../hooks/useAuthState";
-import { useNavigate } from "react-router-dom";
-import CreatePedidoFromCrmModal from "../CreatePedidoFromCrmModal";
-import MetaTemplatesModal from "../crmchat/MetaTemplatesModal";
+import ToolFollowUp from "../tools/ToolFollowUp";
+import ToolInternalNotes from "../tools/ToolInternalNotes";
 
-import { PRESET_LABELS } from "./crmChatConstants";
-import { buildTimeline, normalizeEmail } from "./crmChatUtils";
-import { setConversationOptIn as setConversationOptInApi } from "../../../services/crmConsentApi";
+const GESTION_ESTADOS = [
+  ["nuevo", "Nuevo"],
+  ["pendiente", "Pendiente"],
+  ["en_seguimiento", "En seguimiento"],
+  ["atendido", "Atendido"],
+  ["no_contesto", "No contestó"],
+  ["vendido", "Vendido"],
+  ["no_interesa", "No interesa"],
+  ["numero_incorrecto", "Número incorrecto"],
+];
 
-import {
-  useChatAutoScroll,
-  useCrmClient,
-  useCrmConversation,
-  useCrmLabelActions,
-  useCrmMessages,
-  useCrmSender,
-  useCrmTemplates,
-  useCrmUserLabels,
-} from "./CrmChat.hooks.js";
+const GESTION_VALUES = new Set(GESTION_ESTADOS.map(([value]) => value));
 
-import {
-  AttachModal,
-  AudioRecorderButton,
-  ClientModal,
-  EmojisModal,
-  MessageBubble,
-  ProfileDrawer,
-  TagsModal,
-  TemplatesModal,
-} from "./CrmChat.parts.jsx";
+const PRESET_LABELS = [
+  { slug: "nuevo", name: "Nuevo" },
+  { slug: "seguimiento", name: "Seguimiento" },
+  { slug: "cotizado", name: "Cotizado" },
+  { slug: "vendido", name: "Vendido" },
+  { slug: "no_interesa", name: "No interesa" },
+];
 
-function getMessageLocation(m) {
-  const lat = Number(
-    m?.location?.lat ??
-      m?.location?.latitude ??
-      m?.coords?.lat ??
-      m?.coords?.latitude ??
-      m?.lat ??
-      m?.latitude
-  );
+const EVENT_LABELS = {
+  contact_received: "Cliente escribió por primera vez",
+  inbound_received: "Cliente envió un nuevo mensaje",
+  whatsapp_opened: "Vendedor abrió WhatsApp",
+  status_changed: "Estado comercial modificado",
+  note_created: "Nota interna creada",
+  note_updated: "Nota interna actualizada",
+  follow_up_scheduled: "Seguimiento programado",
+  follow_up_completed: "Seguimiento completado",
+  follow_up_cancelled: "Seguimiento cancelado",
+  seller_response_detected: "Respuesta detectada desde WhatsApp Business",
+  conversation_archived: "Conversación archivada",
+  conversation_reopened: "Conversación reabierta",
+};
 
-  const lng = Number(
-    m?.location?.lng ??
-      m?.location?.lon ??
-      m?.location?.longitude ??
-      m?.coords?.lng ??
-      m?.coords?.lon ??
-      m?.coords?.longitude ??
-      m?.lng ??
-      m?.lon ??
-      m?.longitude
-  );
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng };
+function dateValue(value) {
+  const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
 }
 
-function ActionButton({ title, onClick, children, className = "", disabled = false }) {
+function formatDate(value) {
+  const date = dateValue(value);
+  return date
+    ? date.toLocaleString("es-AR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : "—";
+}
+
+function formatDuration(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return "—";
+  if (value < 60) return `${Math.round(value)} s`;
+  if (value < 3600) return `${Math.floor(value / 60)} min ${Math.round(value % 60)} s`;
+  return `${Math.floor(value / 3600)} h ${Math.floor((value % 3600) / 60)} min`;
+}
+
+function fallbackGestionEstado(conversation) {
+  const current = String(conversation?.gestionEstado || "").trim();
+  if (GESTION_VALUES.has(current)) return current;
+
+  return "nuevo";
+}
+
+function normalizeE164ForWaLink(value) {
+  const raw = String(value || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 15) return "";
+  return digits;
+}
+
+function messagePreview(message) {
+  const direct = String(
+    message?.text ||
+      message?.caption ||
+      message?.preview ||
+      message?.media?.caption ||
+      ""
+  ).trim();
+  if (direct) return direct;
+
+  const kind = String(
+    message?.media?.kind || message?.rawType || message?.type || "mensaje"
+  ).toLowerCase();
+
+  const labels = {
+    image: "Imagen",
+    audio: "Audio",
+    document: "Documento",
+    video: "Video",
+    location: "Ubicación",
+    sticker: "Sticker",
+    echo: "Mensaje enviado desde WhatsApp Business",
+  };
+
+  return `[${labels[kind] || kind}]`;
+}
+
+function messageMediaUrl(message) {
   return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className={`crm-icon-btn ${className}`}
-      disabled={disabled}
+    message?.media?.url ||
+    message?.audio?.url ||
+    message?.image?.url ||
+    message?.video?.url ||
+    message?.document?.url ||
+    message?.mediaUrl ||
+    ""
+  );
+}
+
+function eventDescription(event) {
+  if (event.type === "status_changed") {
+    return `${event.previousStatus || "—"} → ${event.newStatus || "—"}`;
+  }
+  if (event.type === "seller_response_detected" && event.responseTimeSec != null) {
+    return `Tiempo confirmado: ${formatDuration(event.responseTimeSec)}`;
+  }
+  if (event.preview) return event.preview;
+  return "";
+}
+
+function MessageItem({ message }) {
+  const outbound = message.direction === "out" || message.from === "agent";
+  const mediaUrl = messageMediaUrl(message);
+  const kind = String(message?.media?.kind || message?.rawType || message?.type || "").toLowerCase();
+
+  return (
+    <div
+      className={[
+        "rounded-xl border p-3 text-sm",
+        outbound
+          ? "ml-6 border-[var(--crm-border)] bg-[var(--crm-elevated)]"
+          : "mr-6 border-[var(--crm-border)] bg-[var(--crm-surface)]",
+      ].join(" ")}
     >
-      {children}
-    </button>
-  );
-}
-
-function Toast({ notice, onClose }) {
-  if (!notice) return null;
-
-  const toneClass =
-    notice.kind === "error"
-      ? "border-[var(--crm-danger-border)]/40 bg-[var(--crm-danger-soft)] text-[var(--crm-danger-text)]"
-      : notice.kind === "success"
-      ? "border-[var(--crm-accent)]/30 bg-[var(--crm-success-soft)] text-[var(--crm-success-text)]"
-      : "border-[var(--crm-border-soft)] bg-[var(--crm-menu)] text-[var(--crm-text)]";
-
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 z-[120] flex justify-center px-3">
-      <div
-        className={`pointer-events-auto flex w-full max-w-xl items-start gap-3 rounded-2xl border px-4 py-3 shadow-2xl ${toneClass}`}
-      >
-        <div className="flex-1 min-w-0 text-sm">{notice.message}</div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="px-2 py-1 text-xs transition rounded-full opacity-80 hover:bg-[var(--crm-hover)] hover:opacity-100"
-        >
-          ✕
-        </button>
+      <div className="mb-1 flex justify-between gap-2 text-[11px] text-[var(--crm-muted)]">
+        <span>{outbound ? "Vendedor (histórico)" : "Cliente"}</span>
+        <span>{formatDate(message.timestamp || message.ts)}</span>
       </div>
+
+      <div className="break-words whitespace-pre-wrap">{messagePreview(message)}</div>
+
+      {mediaUrl && kind === "audio" ? (
+        <audio className="w-full mt-2" controls preload="none" src={mediaUrl} />
+      ) : null}
+
+      {mediaUrl && kind !== "audio" ? (
+        <a
+          className="inline-block mt-2 link"
+          href={mediaUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Ver archivo histórico
+        </a>
+      ) : null}
     </div>
   );
 }
 
-function ComposerReplyBar({ replyTarget, onClose }) {
-  if (!replyTarget) return null;
+export default function CrmChat({ provinciaId, meEmail, convId, onBack }) {
+  const [conversation, setConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [customLabels, setCustomLabels] = useState([]);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  return (
-    <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--crm-border-soft)] bg-[var(--crm-reply-bg)] px-2.5 py-1.5">
-      <div className="text-xs text-[var(--crm-accent)]">↩</div>
-
-      <div className="flex-1 min-w-0 overflow-hidden">
-        <div className="truncate text-[11px] font-semibold text-[var(--crm-accent)]">
-          Respondiendo a {replyTarget.author || "mensaje"}
-        </div>
-        <div className="truncate text-[11px] text-[var(--crm-soft)]">
-          {replyTarget.textPreview || "Mensaje"}
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={onClose}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)] hover:text-[var(--crm-text)]"
-        title="Cancelar respuesta"
-      >
-        ✕
-      </button>
-    </div>
+  const convRef = useMemo(
+    () =>
+      convId && provinciaId
+        ? doc(
+            db,
+            "provincias",
+            String(provinciaId),
+            "conversaciones",
+            String(convId)
+          )
+        : null,
+    [provinciaId, convId]
   );
-}
-
-function PinnedMessageBar({ pinnedMessage, onJump, onUnpin }) {
-  if (!pinnedMessage) return null;
-
-  return (
-    <div className="shrink-0 border-b border-[var(--crm-border)] bg-[var(--crm-elevated-2)] px-2 py-1.5">
-      <div className="flex items-center max-w-5xl gap-2 mx-auto">
-        <span className="text-xs text-[var(--crm-accent)]">📌</span>
-
-        <button
-          type="button"
-          onClick={onJump}
-          className="flex-1 min-w-0 text-left"
-          title="Ir al mensaje fijado"
-        >
-          <div className="truncate text-[11px] font-semibold text-[var(--crm-accent)]">
-            Mensaje fijado
-          </div>
-          <div className="truncate text-[11px] text-[var(--crm-soft)]">
-            {pinnedMessage?.textPreview || "Mensaje"}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={onUnpin}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)] hover:text-[var(--crm-text)]"
-          title="Desfijar mensaje"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function CrmChat({
-  provinciaId,
-  meEmail,
-  conversationId,
-  convId,
-  onBack,
-}) {
-  const { user } = useAuthState();
-  const navigate = useNavigate();
-
-  const myEmail = useMemo(
-    () => normalizeEmail(meEmail || user?.email || ""),
-    [meEmail, user?.email]
-  );
-
-  const effectiveConversationId = conversationId || convId || null;
-
-  const [text, setText] = useState("");
-  const [showTags, setShowTags] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showClientModal, setShowClientModal] = useState(false);
-  const [showAttach, setShowAttach] = useState(false);
-  const [showEmojis, setShowEmojis] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [showMetaTemplates, setShowMetaTemplates] = useState(false);
-  const [showCrearPedido, setShowCrearPedido] = useState(false);
-  const [replyTarget, setReplyTarget] = useState(null);
-  const [pinnedMessage, setPinnedMessage] = useState(null);
-
-  const [templateDraft, setTemplateDraft] = useState({ title: "", text: "" });
-  const [savingTemplate, setSavingTemplate] = useState(false);
-  const [notice, setNotice] = useState(null);
-
-  const viewportRef = useRef(null);
-  const inputRef = useRef(null);
-  const messageRefs = useRef(new Map());
-  const [savingConsent, setSavingConsent] = useState(false);
-
-  const pushNotice = useCallback((kind, message) => {
-    if (!message) return;
-    setNotice({ id: `${Date.now()}_${Math.random().toString(16).slice(2)}`, kind, message });
-  }, []);
 
   useEffect(() => {
-    if (!notice?.id) return undefined;
-    const t = setTimeout(() => setNotice(null), 4200);
-    return () => clearTimeout(t);
-  }, [notice?.id]);
+    setError("");
+    if (!convRef) {
+      setConversation(null);
+      return undefined;
+    }
 
-  const userMetaRef = useMemo(() => {
-    if (!provinciaId || !effectiveConversationId || !myEmail) return null;
+    return onSnapshot(
+      convRef,
+      (snapshot) =>
+        setConversation(
+          snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null
+        ),
+      (snapshotError) => {
+        console.error("CRM conversation snapshot error:", snapshotError);
+        setError("No se pudo leer la conversación.");
+      }
+    );
+  }, [convRef]);
 
-    return doc(
+  useEffect(() => {
+    if (!convRef) {
+      setMessages([]);
+      return undefined;
+    }
+
+    const messagesQuery = query(
+      collection(convRef, "mensajes"),
+      orderBy("timestamp", "asc")
+    );
+
+    return onSnapshot(
+      messagesQuery,
+      (snapshot) =>
+        setMessages(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+      (snapshotError) => {
+        console.error("CRM messages snapshot error:", snapshotError);
+        setError("No se pudo leer el historial de mensajes.");
+      }
+    );
+  }, [convRef]);
+
+  useEffect(() => {
+    if (!convRef) {
+      setEvents([]);
+      return undefined;
+    }
+
+    const eventsQuery = query(
+      collection(convRef, "gestionEventos"),
+      orderBy("createdAt", "desc")
+    );
+
+    return onSnapshot(
+      eventsQuery,
+      (snapshot) =>
+        setEvents(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+      (snapshotError) => {
+        console.error("CRM audit snapshot error:", snapshotError);
+        setEvents([]);
+      }
+    );
+  }, [convRef]);
+
+  useEffect(() => {
+    if (!provinciaId || !meEmail) {
+      setCustomLabels([]);
+      return undefined;
+    }
+
+    const labelsRef = collection(
       db,
       "provincias",
       String(provinciaId),
-      "conversaciones",
-      String(effectiveConversationId),
-      "userMeta",
-      String(normalizeEmail(myEmail))
-    );
-  }, [effectiveConversationId, myEmail, provinciaId]);
-
-  useEffect(() => {
-    if (!userMetaRef) {
-      setPinnedMessage(null);
-      return;
-    }
-
-    const unsub = onSnapshot(
-      userMetaRef,
-      (snap) => {
-        const data = snap.exists() ? snap.data() : null;
-        setPinnedMessage(data?.pinnedMessage || null);
-      },
-      (err) => {
-        console.error("userMeta snapshot error:", err);
-      }
+      "crmUserLabels",
+      String(meEmail),
+      "labels"
     );
 
-    return () => unsub();
-  }, [userMetaRef]);
-
-  useEffect(() => {
-    setReplyTarget(null);
-  }, [effectiveConversationId]);
-
-  const { convRef, conversation } = useCrmConversation({
-    db,
-    provinciaId,
-    myEmail,
-    conversationId: effectiveConversationId,
-  });
-
-  const { msgs } = useCrmMessages({
-    db,
-    provinciaId,
-    myEmail,
-    conversationId: effectiveConversationId,
-  });
-
-  const { customLabels } = useCrmUserLabels({ db, provinciaId, myEmail });
-
-  const { templates, createTemplate, deleteTemplate } = useCrmTemplates({
-    db,
-    provinciaId,
-    myEmail,
-  });
-
-  const clientId = useMemo(() => {
-    const phone =
-      conversation?.telefonoE164 ||
-      conversation?.telefono ||
-      effectiveConversationId;
-    return String(phone || effectiveConversationId || "");
-  }, [conversation?.telefonoE164, conversation?.telefono, effectiveConversationId]);
-
-  const { clientDoc, clientForm, setClientForm, savingClient, saveClient } =
-    useCrmClient({
-      db,
-      provinciaId,
-      clientId,
-      conversation,
-      myEmail,
-      convRef,
-    });
-
-  const customSlugSet = useMemo(() => {
-    return new Set(
-      customLabels
-        .map((l) => String(l?.slug || "").trim().toLowerCase())
-        .filter(Boolean)
+    return onSnapshot(
+      labelsRef,
+      (snapshot) =>
+        setCustomLabels(
+          snapshot.docs
+            .map((item) => ({ id: item.id, ...item.data() }))
+            .filter((item) => item.slug && item.name)
+        ),
+      (snapshotError) => {
+        console.error("CRM labels snapshot error:", snapshotError);
+        setCustomLabels([]);
+      }
     );
-  }, [customLabels]);
+  }, [provinciaId, meEmail]);
 
-  const allLabels = useMemo(() => {
-    const bySlug = new Map();
-    PRESET_LABELS.forEach((l) => bySlug.set(l.slug, l));
-    customLabels.forEach((l) => {
-      if (l?.slug) {
-        const s = String(l.slug).trim().toLowerCase();
-        bySlug.set(s, { ...l, slug: s });
-      }
+  async function audit(payload) {
+    if (!convRef) return;
+    await addDoc(collection(convRef, "gestionEventos"), {
+      ...payload,
+      actorEmail: meEmail,
+      createdAt: serverTimestamp(),
     });
-    return Array.from(bySlug.values());
-  }, [customLabels]);
+  }
 
-  const labelsFromDoc = useMemo(
-    () => (Array.isArray(conversation?.labels) ? conversation.labels : []),
-    [conversation?.labels]
-  );
+  async function changeStatus(nextStatus) {
+    if (!convRef || !conversation) return;
 
-  const {
-    optimisticLabels,
-    setOptimisticLabels,
-    toggleLabel,
-    removeLabel,
-    createCustomLabel,
-    updateCustomLabel,
-    deleteCustomLabel,
-  } = useCrmLabelActions({
-    db,
-    provinciaId,
-    myEmail,
-    convRef,
-    labels: labelsFromDoc,
-  });
+    const previousStatus = fallbackGestionEstado(conversation);
+    if (nextStatus === previousStatus) return;
 
-  const labels = useMemo(() => {
-    if (Array.isArray(optimisticLabels)) return optimisticLabels;
-    return Array.isArray(labelsFromDoc) ? labelsFromDoc : [];
-  }, [optimisticLabels, labelsFromDoc]);
-
-  useEffect(() => {
-    setOptimisticLabels(null);
-  }, [conversation?.id, conversation?.updatedAt, setOptimisticLabels]);
-
-  const {
-    sendText,
-    sendMediaFiles,
-    sendAudio,
-    sendLocation,
-    sending,
-    anySending,
-    sendError,
-    clearSendError,
-  } = useCrmSender({
-    db,
-    provinciaId,
-    myEmail,
-    conversationId: effectiveConversationId,
-    convRef,
-  });
-
-  useEffect(() => {
-    if (!sendError) return;
-    pushNotice("error", sendError);
-    clearSendError();
-  }, [clearSendError, pushNotice, sendError]);
-
-  useChatAutoScroll({ viewportRef, msgs });
-
-  useEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, [text]);
-
-  const lastChatLocation = useMemo(() => {
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      const loc = getMessageLocation(msgs[i]);
-      if (loc) return loc;
-    }
-    return null;
-  }, [msgs]);
-
-  const defaultsForPedido = useMemo(() => {
-    return {
-      nombre: clientDoc?.nombre || conversation?.nombre || "",
-      telefono:
-        clientDoc?.telefono ||
-        conversation?.telefonoE164 ||
-        conversation?.telefono ||
-        clientId ||
-        "",
-      telefonoAlt: "",
-      direccion: clientDoc?.direccion || "",
-      entreCalles: "",
-      partido: clientDoc?.localidad || "",
-      linkUbicacion: "",
-      coordenadas: null,
-      productos: [],
-    };
-  }, [
-    clientDoc,
-    conversation?.nombre,
-    conversation?.telefonoE164,
-    conversation?.telefono,
-    clientId,
-  ]);
-
-  const goToPedidos = (draft) => {
-    const stamp = Date.now();
-    const payload = { ...draft, __fromCrm: true, __stamp: stamp };
-
-    navigate("/vendedor", {
-      state: {
-        fromCrmAt: stamp,
-        fromConvId: effectiveConversationId,
-        pedidoDraft: payload,
-        prefillPedido: payload,
-      },
-    });
-  };
-
-  const scrollToMessage = useCallback((localMessageId) => {
-    if (!localMessageId) return false;
-    const node = messageRefs.current.get(localMessageId);
-    if (!node) return false;
-
-    node.scrollIntoView({ behavior: "smooth", block: "center" });
-    return true;
-  }, []);
-
-  const handleReplyToMessage = useCallback((message) => {
-    if (!message?.id) return;
-
-    setReplyTarget({
-      id: message.id,
-      type: message.type || "text",
-      textPreview: message.textPreview || "Mensaje",
-      author: message.author || "mensaje",
-    });
-
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
-
-  const handleTogglePinMessage = useCallback(
-    async (message) => {
-      if (!userMetaRef || !message?.id) return;
-
-      const samePinned =
-        String(pinnedMessage?.id || "") === String(message.id || "");
-
-      try {
-        await setDoc(
-          userMetaRef,
-          samePinned
-            ? {
-                pinnedMessage: deleteField(),
-                updatedAt: serverTimestamp(),
-              }
-            : {
-                pinnedMessage: {
-                  id: String(message.id || ""),
-                  messageId: String(message.messageId || message.id || ""),
-                  type: String(message.type || "text"),
-                  textPreview: String(message.textPreview || "Mensaje"),
-                  author: String(message.author || ""),
-                  timestamp: message.timestamp || serverTimestamp(),
-                  pinnedAt: serverTimestamp(),
-                },
-                updatedAt: serverTimestamp(),
-              },
-          { merge: true }
-        );
-
-        pushNotice(
-          "success",
-          samePinned ? "Mensaje desfijado." : "Mensaje fijado en este chat."
-        );
-      } catch (e) {
-        console.error(e);
-        pushNotice("error", e?.message || "No se pudo fijar el mensaje.");
-      }
-    },
-    [pinnedMessage?.id, pushNotice, userMetaRef]
-  );
-
-  const handleSaveConsent = useCallback(
-  async ({ optIn, marketingOptIn }) => {
-    if (!provinciaId || !effectiveConversationId) {
-      pushNotice("error", "No hay conversación activa.");
-      return;
-    }
+    setBusy(true);
+    setError("");
 
     try {
-      setSavingConsent(true);
+      const payload = {
+        gestionEstado: nextStatus,
+        gestionEstadoUpdatedAt: serverTimestamp(),
+        gestionEstadoUpdatedBy: meEmail,
+        updatedAt: serverTimestamp(),
+        updatedBy: meEmail,
+      };
 
-      await setConversationOptInApi({
-        provinciaId,
-        convId: effectiveConversationId,
-        optIn,
-        marketingOptIn,
+      if (
+        nextStatus === "atendido" &&
+        conversation.responseConfirmation !== "automatic"
+      ) {
+        payload.manualAttentionAt = serverTimestamp();
+        payload.manualAttentionBy = meEmail;
+        payload.responseConfirmation = "manual";
+      }
+
+      await setDoc(convRef, payload, { merge: true });
+      await audit({
+        type: "status_changed",
+        previousStatus,
+        newStatus: nextStatus,
       });
-
-      pushNotice("success", "Consentimiento WhatsApp actualizado.");
-    } catch (e) {
-      console.error(e);
-      pushNotice(
-        "error",
-        e?.message || "No se pudo actualizar el consentimiento."
-      );
+    } catch (changeError) {
+      console.error("CRM status change error:", changeError);
+      setError(changeError?.message || "No se pudo cambiar el estado.");
     } finally {
-      setSavingConsent(false);
+      setBusy(false);
     }
-  },
-  [effectiveConversationId, provinciaId, pushNotice]
-);
+  }
 
-  const handleJumpToPinned = useCallback(() => {
-    if (!pinnedMessage?.id) return;
-    const ok = scrollToMessage(pinnedMessage.id);
-    if (!ok) {
-      pushNotice("error", "No encontré ese mensaje en la vista actual.");
-    }
-  }, [pinnedMessage?.id, pushNotice, scrollToMessage]);
-
-  const handleUnpinMessage = useCallback(async () => {
-    if (!userMetaRef) return;
+  async function toggleLabel(slug) {
+    if (!convRef || !slug || busy) return;
+    const active = Array.isArray(conversation?.labels)
+      ? conversation.labels.includes(slug)
+      : false;
 
     try {
+      setBusy(true);
       await setDoc(
-        userMetaRef,
+        convRef,
         {
-          pinnedMessage: deleteField(),
+          labels: active ? arrayRemove(slug) : arrayUnion(slug),
+          updatedAt: serverTimestamp(),
+          updatedBy: meEmail,
+        },
+        { merge: true }
+      );
+    } catch (labelError) {
+      console.error("CRM label update error:", labelError);
+      setError(labelError?.message || "No se pudo actualizar la etiqueta.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createCustomLabel() {
+    const name = String(newLabelName || "").trim();
+    const slug = name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+
+    if (!name || !slug || !provinciaId || !meEmail) return;
+
+    try {
+      setBusy(true);
+      const labelRef = doc(
+        db,
+        "provincias",
+        String(provinciaId),
+        "crmUserLabels",
+        String(meEmail),
+        "labels",
+        slug
+      );
+      await setDoc(
+        labelRef,
+        {
+          slug,
+          name: name.slice(0, 60),
+          color: "badge-ghost",
+          createdAt: serverTimestamp(),
+          createdBy: meEmail,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
-      pushNotice("success", "Mensaje desfijado.");
-    } catch (e) {
-      console.error(e);
-      pushNotice("error", e?.message || "No se pudo desfijar el mensaje.");
-    }
-  }, [pushNotice, userMetaRef]);
-
-  const onKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (text.trim() && !anySending) handleSendText();
-    }
-  };
-
-  const handleSendText = async () => {
-    const body = (text || "").trim();
-    if (!body || anySending) return;
-
-    setText("");
-    requestAnimationFrame(() => inputRef.current?.focus());
-
-    try {
-      await sendText(body, {
-        replyTo: replyTarget,
-      });
-      setReplyTarget(null);
-    } catch (e) {
-      console.error("send error:", e);
-      setText((prev) => prev || body);
-      pushNotice("error", e?.message || "No se pudo enviar.");
-    }
-  };
-
-  const insertAtCursor = (valueToInsert) => {
-    const el = inputRef.current;
-    if (!el) {
-      setText((t) => t + valueToInsert);
-      return;
-    }
-
-    const start = el.selectionStart ?? text.length;
-    const end = el.selectionEnd ?? text.length;
-    const next = text.slice(0, start) + valueToInsert + text.slice(end);
-
-    setText(next);
-
-    requestAnimationFrame(() => {
-      el.focus();
-      const p = start + valueToInsert.length;
-      el.setSelectionRange?.(p, p);
-    });
-  };
-
-  const markAsSold = async () => {
-    if (!convRef) return;
-
-    try {
-      if (!labels.map((x) => String(x).trim().toLowerCase()).includes("vendido")) {
-        await toggleLabel("vendido");
-      }
-
-      const { setDoc, serverTimestamp } = await import("firebase/firestore");
       await setDoc(
         convRef,
-        { status: "vendido", updatedAt: serverTimestamp() },
+        {
+          labels: arrayUnion(slug),
+          updatedAt: serverTimestamp(),
+          updatedBy: meEmail,
+        },
         { merge: true }
       );
-
-      pushNotice("success", "La conversación quedó marcada como vendida.");
-    } catch (e) {
-      console.error(e);
-      pushNotice("error", e?.message || "No se pudo marcar como vendido.");
+      setNewLabelName("");
+    } catch (labelError) {
+      console.error("CRM custom label error:", labelError);
+      setError(labelError?.message || "No se pudo crear la etiqueta.");
+    } finally {
+      setBusy(false);
     }
-  };
+  }
 
-  const handleCreateTemplate = async () => {
-    const title = (templateDraft.title || "").trim();
-    const body = (templateDraft.text || "").trim();
-    if (!title || !body) {
-      pushNotice("error", "Poné título y texto en la plantilla.");
+  async function openWhatsApp() {
+    if (!convRef || !conversation) return;
+
+    const phone = normalizeE164ForWaLink(
+      conversation.telefonoE164 || conversation.clienteWaId
+    );
+
+    if (!phone) {
+      setError("El teléfono del contacto no tiene un formato E.164 válido.");
       return;
     }
 
-    try {
-      setSavingTemplate(true);
-      await createTemplate({ myEmail, title, text: body });
-      setTemplateDraft({ title: "", text: "" });
-      pushNotice("success", "Plantilla guardada correctamente.");
-    } catch (e) {
-      console.error(e);
-      pushNotice("error", e?.message || "No se pudo crear la plantilla.");
-    } finally {
-      setSavingTemplate(false);
-    }
-  };
-
-  const handleDeleteTemplate = async (template) => {
-    const ok = window.confirm(
-      `¿Eliminar la plantilla "${template?.title || "sin título"}"?`
+    // Se abre de forma sincrónica para evitar que el navegador bloquee el popup.
+    window.open(
+      `https://wa.me/${encodeURIComponent(phone)}`,
+      "_blank",
+      "noopener,noreferrer"
     );
-    if (!ok) return;
 
     try {
-      await deleteTemplate({ id: template?.id, scope: template?.scope });
-      pushNotice("success", "Plantilla eliminada.");
-    } catch (e) {
-      console.error(e);
-      pushNotice("error", e?.message || "No se pudo borrar la plantilla.");
+      await setDoc(
+        convRef,
+        {
+          whatsappOpenedAt: serverTimestamp(),
+          whatsappOpenedBy: meEmail,
+          whatsappOpenCount: increment(1),
+          updatedAt: serverTimestamp(),
+          updatedBy: meEmail,
+        },
+        { merge: true }
+      );
+      await audit({ type: "whatsapp_opened" });
+    } catch (openError) {
+      console.error("CRM WhatsApp audit error:", openError);
+      setError(
+        "WhatsApp se abrió, pero no se pudo registrar la acción en la auditoría."
+      );
     }
-  };
+  }
 
-  const handlePickFiles = async (files) => {
-    setShowAttach(false);
-    try {
-      await sendMediaFiles(files, {
-        replyTo: replyTarget,
-      });
-      setReplyTarget(null);
-    } catch (e) {
-      console.error("media send error:", e);
-      pushNotice("error", e?.message || "No se pudo enviar el archivo.");
-    }
-  };
-
-  const handleSendLocation = async () => {
-    setShowAttach(false);
-
-    try {
-      await sendLocation({
-        name: "Ubicación compartida",
-        replyTo: replyTarget,
-      });
-      setReplyTarget(null);
-    } catch (e) {
-      console.error(e);
-      pushNotice("error", e?.message || "No pude obtener o enviar la ubicación.");
-    }
-  };
-
-  const handleSendAudio = async (blob) => {
-    try {
-      await sendAudio(blob, {
-        replyTo: replyTarget,
-      });
-      setReplyTarget(null);
-    } catch (e) {
-      console.error(e);
-      pushNotice("error", e?.message || "No se pudo enviar el audio.");
-    }
-  };
-
-  const timeline = useMemo(() => buildTimeline(msgs), [msgs]);
-
-  const displayName = clientDoc?.nombre || conversation?.nombre || "Sin nombre";
-  const displayPhone = conversation?.telefonoE164 || clientId || "";
-  const hasText = Boolean((text || "").trim());
-
-  const getLabel = (slug) => {
-    const s = String(slug || "").trim().toLowerCase();
-    const found = allLabels.find(
-      (l) => String(l.slug || "").trim().toLowerCase() === s
-    );
-    return found || { slug: s, name: s, color: "badge-ghost" };
-  };
-
-  const initialLetter = String(displayName || "C").slice(0, 1).toUpperCase();
-  const labelsPreview = labels.slice(0, 2);
-
-  const busyLabel = useMemo(() => {
-    if (sending.text) return "Enviando mensaje…";
-    if (sending.media) return "Enviando archivo…";
-    if (sending.audio) return "Enviando audio…";
-    if (sending.location) return "Enviando ubicación…";
-    return "";
-  }, [sending.audio, sending.location, sending.media, sending.text]);
-
-  if (!effectiveConversationId) {
+  if (!convId) {
     return (
-      <div className="grid h-full min-h-0 place-items-center bg-[var(--crm-app)] p-6 text-[var(--crm-text)]">
-        <style>{localCss}</style>
-        <div className="text-center">
-          <div className="text-lg font-semibold">Elegí un chat</div>
-          <div className="mt-1 text-sm text-[var(--crm-muted)]">
-            Seleccioná una conversación del inbox para empezar.
-          </div>
-        </div>
+      <div className="flex h-full items-center justify-center p-6 text-[var(--crm-muted)]">
+        Seleccioná un cliente.
       </div>
     );
   }
+
+  if (!conversation && !error) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <span className="loading loading-spinner" />
+      </div>
+    );
+  }
+
+  if (!conversation) {
+    return (
+      <div className="flex items-center justify-center h-full p-6 text-error">
+        {error || "Conversación no disponible."}
+      </div>
+    );
+  }
+
+  const currentStatus = fallbackGestionEstado(conversation);
+  const inboundMessages = messages.filter(
+    (message) => message.direction === "in" || message.from === "client"
+  );
+  const lastInbound = inboundMessages[inboundMessages.length - 1];
+  const labels = Array.isArray(conversation.labels) ? conversation.labels : [];
+  const allLabels = Array.from(
+    new Map(
+      [...PRESET_LABELS, ...customLabels].map((label) => [label.slug, label])
+    ).values()
+  );
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--crm-app)] text-[var(--crm-text)]">
-      <style>{localCss}</style>
-      <Toast notice={notice} onClose={() => setNotice(null)} />
-
-      <header className="shrink-0 border-b border-[var(--crm-border)] bg-[var(--crm-elevated)]/95 backdrop-blur">
-        <div className="flex items-center justify-between gap-2 px-2 py-2 sm:px-3 sm:py-3">
-          <div className="flex items-center flex-1 min-w-0 gap-2 sm:gap-3">
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                title="Volver"
-                className="crm-icon-btn md:hidden"
-              >
-                ←
-              </button>
-            ) : null}
-
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--crm-avatar)] text-sm font-semibold text-white">
-              {initialLetter}
-              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[var(--crm-elevated)] bg-[var(--crm-accent)]" />
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="truncate text-sm font-semibold sm:text-[15px]">
-                {displayName}
-              </div>
-              <div className="truncate text-[11px] text-[var(--crm-muted)] sm:text-xs">
-                {displayPhone}
-              </div>
-
-              {labels.length > 0 ? (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {labelsPreview.map((slug) => {
-                    const l = getLabel(slug);
-                    return (
-                      <span
-                        key={slug}
-                        className={`badge badge-xs sm:badge-sm ${l.color} border border-[var(--crm-border-soft)]`}
-                      >
-                        {l.name}
-                      </span>
-                    );
-                  })}
-                  {labels.length > labelsPreview.length ? (
-                    <span className="badge badge-xs sm:badge-sm border border-[var(--crm-border-soft)] bg-transparent text-[var(--crm-muted)]">
-                      +{labels.length - labelsPreview.length}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="items-center hidden gap-1 lg:flex">
-            <ActionButton title="Etiquetas" onClick={() => setShowTags(true)}>
-              🏷️
-            </ActionButton>
-
-            <ActionButton
-              title="Plantillas internas"
-              onClick={() => setShowTemplates(true)}
-            >
-              🧩
-            </ActionButton>
-
-            <ActionButton
-              title="Plantillas Meta"
-              onClick={() => setShowMetaTemplates(true)}
-            >
-              📣
-            </ActionButton>
-
-            <ActionButton
-              title="Crear pedido"
-              onClick={() => setShowCrearPedido(true)}
-            >
-              🧾
-            </ActionButton>
-
-            <ActionButton title="Perfil" onClick={() => setShowProfile(true)}>
-              👤
-            </ActionButton>
-
-            <ActionButton
-              title={clientDoc ? "Editar cliente" : "Alta cliente"}
-              onClick={() => setShowClientModal(true)}
-            >
-              {clientDoc ? "✏️" : "➕"}
-            </ActionButton>
-
-            <button
-              type="button"
-              onClick={markAsSold}
-              title="Marcar como vendido"
-              className="crm-pill-btn bg-[var(--crm-accent-strong)] text-white hover:bg-[var(--crm-accent)]"
-            >
-              💰 Vendido
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 lg:hidden">
-            <ActionButton title="Etiquetas" onClick={() => setShowTags(true)}>
-              🏷️
-            </ActionButton>
-
-            <div className="dropdown dropdown-end">
-              <button
-                type="button"
-                tabIndex={0}
-                className="crm-icon-btn"
-                title="Más"
-              >
-                ⋯
-              </button>
-              <ul
-                tabIndex={0}
-                className="menu dropdown-content z-[60] mt-2 w-56 rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-menu)] p-2 text-[var(--crm-text)] shadow-2xl"
-              >
-                <li>
-                  <button type="button" onClick={() => setShowCrearPedido(true)}>
-                    🧾 Crear pedido
-                  </button>
-                </li>
-                <li>
-                  <button type="button" onClick={() => setShowTemplates(true)}>
-                    🧩 Plantillas internas
-                  </button>
-                </li>
-                <li>
-                  <button type="button" onClick={() => setShowMetaTemplates(true)}>
-                    📣 Plantillas Meta
-                  </button>
-                </li>
-                <li>
-                  <button type="button" onClick={() => setShowProfile(true)}>
-                    👤 Perfil
-                  </button>
-                </li>
-                <li>
-                  <button type="button" onClick={() => setShowClientModal(true)}>
-                    {clientDoc ? "✏️ Editar cliente" : "➕ Alta cliente"}
-                  </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={markAsSold}
-                    className="text-[var(--crm-accent)]"
-                  >
-                    💰 Marcar vendido
-                  </button>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <PinnedMessageBar
-        pinnedMessage={pinnedMessage}
-        onJump={handleJumpToPinned}
-        onUnpin={handleUnpinMessage}
-      />
-
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <div
-          ref={viewportRef}
-          className="h-full px-2 py-2 overflow-y-auto crm-chat-wall sm:px-3 sm:py-3 md:px-4"
-        >
-          {timeline.length === 0 ? (
-            <div className="mx-auto mt-6 max-w-lg rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-elevated)]/80 px-4 py-3 text-sm text-[var(--crm-muted)]">
-              No hay mensajes todavía.
-            </div>
-          ) : (
-            <div className="flex flex-col max-w-5xl gap-2 mx-auto">
-              {timeline.map((item) => {
-                if (item.__type === "day") {
-                  return (
-                    <div key={item.id} className="flex justify-center py-2">
-                      <span className="rounded-lg bg-[var(--crm-elevated-2)] px-3 py-1 text-[11px] text-[var(--crm-muted)] shadow-sm">
-                        {item.day}
-                      </span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={item.id}
-                    ref={(node) => {
-                      if (node) messageRefs.current.set(item.id, node);
-                      else messageRefs.current.delete(item.id);
-                    }}
-                    data-chat-msg-id={item.id}
-                  >
-                    <MessageBubble
-                      m={item}
-                      onReply={handleReplyToMessage}
-                      onPin={handleTogglePinMessage}
-                      isPinned={String(pinnedMessage?.id || "") === String(item.id || "")}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <footer className="shrink-0 border-t border-[var(--crm-border)] bg-[var(--crm-elevated)] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3">
-        <ComposerReplyBar
-          replyTarget={replyTarget}
-          onClose={() => setReplyTarget(null)}
-        />
-
-        {busyLabel ? (
-          <div className="mb-2 flex items-center gap-2 rounded-2xl border border-[var(--crm-border-soft)] bg-[var(--crm-reply-bg)] px-3 py-2 text-[12px] text-[var(--crm-soft)]">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--crm-accent)]" />
-            {busyLabel}
-          </div>
-        ) : null}
-
-        <div className="sm:hidden">
-          <div className="flex items-end gap-2">
-            <div className="flex flex-1 items-end gap-1 rounded-[26px] bg-[var(--crm-chip)] px-2 py-1.5">
-              <button
-                type="button"
-                className="crm-composer-icon"
-                onClick={() => setShowEmojis((v) => !v)}
-                title="Emojis"
-                disabled={anySending}
-              >
-                😊
-              </button>
-
-              <button
-                type="button"
-                className="crm-composer-icon"
-                onClick={() => setShowAttach(true)}
-                title="Adjuntar"
-                disabled={anySending}
-              >
-                📎
-              </button>
-
-              <textarea
-                ref={inputRef}
-                className="flex-1 crm-textarea"
-                placeholder="Escribí un mensaje"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={onKeyDown}
-                rows={1}
-                disabled={anySending && !hasText}
-              />
-            </div>
-
-            {hasText ? (
-              <button
-                type="button"
-                onClick={handleSendText}
-                disabled={!hasText || anySending}
-                title="Enviar"
-                className="crm-send-btn"
-              >
-                {sending.text ? "⏳" : "➤"}
-              </button>
-            ) : (
-              <div className="crm-audio-wrap">
-                <AudioRecorderButton
-                  onRecorded={handleSendAudio}
-                  onCancel={() => pushNotice("info", "Grabación cancelada.")}
-                  disabled={anySending && !sending.audio}
-                  busy={sending.audio}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="mt-1 text-[10px] text-[var(--crm-muted)]">
-            Enter envía · Shift+Enter salto de línea
-          </div>
-        </div>
-
-        <div className="items-end hidden gap-2 sm:flex">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--crm-app)]">
+      <header className="border-b border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            className="crm-composer-icon"
-            onClick={() => setShowEmojis((v) => !v)}
-            title="Emojis"
-            disabled={anySending}
+            className="btn btn-ghost btn-sm md:hidden"
+            onClick={onBack}
           >
-            😊
+            ←
           </button>
 
-          <div className="flex flex-1 items-end gap-1 rounded-[28px] bg-[var(--crm-chip)] px-2 py-1.5">
-            <button
-              type="button"
-              className="crm-composer-icon"
-              onClick={() => setShowAttach(true)}
-              title="Adjuntar"
-              disabled={anySending}
-            >
-              📎
-            </button>
-
-            <textarea
-              ref={inputRef}
-              className="flex-1 crm-textarea"
-              placeholder="Escribí un mensaje"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={onKeyDown}
-              rows={1}
-              disabled={anySending && !hasText}
-            />
+          <div className="flex-1 min-w-0">
+            <h2 className="font-semibold truncate">
+              {conversation.nombre || conversation.telefonoE164 || "Cliente"}
+            </h2>
+            <div className="text-xs text-[var(--crm-muted)]">
+              {conversation.telefonoE164 || conversation.clienteWaId || "—"}
+            </div>
           </div>
 
-          {hasText ? (
-            <button
-              type="button"
-              onClick={handleSendText}
-              disabled={!hasText || anySending}
-              title="Enviar"
-              className="crm-send-btn"
-            >
-              {sending.text ? "⏳" : "➤"}
-            </button>
-          ) : (
-            <div className="crm-audio-wrap">
-              <AudioRecorderButton
-                onRecorded={handleSendAudio}
-                onCancel={() => pushNotice("info", "Grabación cancelada.")}
-                disabled={anySending && !sending.audio}
-                busy={sending.audio}
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
+            onClick={openWhatsApp}
+          >
+            Abrir en WhatsApp
+          </button>
+        </div>
+
+        <div className="mt-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-elevated)] px-3 py-2 text-xs text-[var(--crm-soft)]">
+          Historial de solo lectura. Las respuestas se realizan exclusivamente desde
+          la aplicación WhatsApp Business.
+        </div>
+
+        {error ? <div className="mt-2 text-xs text-error">{error}</div> : null}
+      </header>
+
+      <div className="flex-1 min-h-0 p-3 overflow-y-auto md:p-5">
+        <div className="mx-auto grid max-w-6xl gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="space-y-4">
+            <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+              <div className="mb-3 text-sm font-semibold">Ficha comercial</div>
+
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <span className="opacity-60">Número receptor:</span>
+                  <br />
+                  {conversation.displayPhoneNumber ||
+                    conversation.waDisplayPhoneNumber ||
+                    conversation.phoneNumberDisplay ||
+                    conversation.phoneNumberIdMasked ||
+                    conversation.waPhoneNumberId ||
+                    conversation.phoneNumberId ||
+                    "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Vendedor:</span>
+                  <br />
+                  {conversation.assignedToEmail || "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Origen:</span>
+                  <br />
+                  {conversation.leadSourceType === "ad"
+                    ? "Anuncio de Meta"
+                    : conversation.leadSourceType === "post"
+                      ? "Publicación de Meta"
+                      : conversation.leadSourceType === "organic"
+                        ? "WhatsApp orgánico"
+                        : "No informado"}
+                </div>
+                <div>
+                  <span className="opacity-60">Publicación/anuncio:</span>
+                  <br />
+                  {conversation.leadSourceHeadline ||
+                    conversation.firstReferral?.headline ||
+                    conversation.leadSourceId ||
+                    "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Primer ingreso:</span>
+                  <br />
+                  {formatDate(conversation.firstInboundAt || conversation.createdAt)}
+                </div>
+                <div>
+                  <span className="opacity-60">Último ingreso:</span>
+                  <br />
+                  {formatDate(
+                    conversation.lastInboundAt || conversation.lastMessageAt
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="opacity-60">Último mensaje recibido:</span>
+                  <br />
+                  {conversation.lastInboundPreview ||
+                    (lastInbound ? messagePreview(lastInbound) : "—")}
+                </div>
+                <div>
+                  <span className="opacity-60">Primera respuesta confirmada:</span>
+                  <br />
+                  {formatDate(conversation.firstSellerResponseAt)}
+                </div>
+                <div>
+                  <span className="opacity-60">Tiempo confirmado:</span>
+                  <br />
+                  {formatDuration(conversation.responseTimeSec)}
+                </div>
+                <div>
+                  <span className="opacity-60">Confirmación:</span>
+                  <br />
+                  {conversation.responseConfirmation === "automatic"
+                    ? "Automática"
+                    : conversation.responseConfirmation === "manual"
+                      ? "Manual"
+                      : "Sin confirmar"}
+                </div>
+                <div>
+                  <span className="opacity-60">Próximo seguimiento:</span>
+                  <br />
+                  {formatDate(
+                    conversation.seguimientoAt || conversation.nextFollowUpAt
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="mb-2 text-xs opacity-70">Etiquetas adicionales</div>
+                <div className="flex flex-wrap gap-2">
+                  {allLabels.map((label) => {
+                    const active = labels.includes(label.slug);
+                    return (
+                      <button
+                        key={label.slug}
+                        type="button"
+                        className={`badge h-7 ${active ? "badge-primary" : "badge-outline"}`}
+                        disabled={busy}
+                        onClick={() => toggleLabel(label.slug)}
+                      >
+                        {label.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <input
+                    className="flex-1 min-w-0 input input-bordered input-sm"
+                    placeholder="Nueva etiqueta"
+                    value={newLabelName}
+                    onChange={(event) => setNewLabelName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        createCustomLabel();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    disabled={busy || !newLabelName.trim()}
+                    onClick={createCustomLabel}
+                  >
+                    Crear
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="block mb-1 text-xs opacity-70">
+                  Estado de gestión
+                </label>
+                <select
+                  className="w-full select select-bordered"
+                  value={currentStatus}
+                  disabled={busy}
+                  onChange={(event) => changeStatus(event.target.value)}
+                >
+                  {GESTION_ESTADOS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+              <div className="mb-3 text-sm font-semibold">
+                Historial de mensajes · solo lectura
+              </div>
+              <div className="space-y-2">
+                {messages.length === 0 ? (
+                  <div className="text-sm opacity-60">Sin mensajes.</div>
+                ) : (
+                  messages.map((message) => (
+                    <MessageItem key={message.id} message={message} />
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+              <ToolInternalNotes
+                convRef={convRef}
+                myEmail={meEmail}
+                initialNote={conversation.internalNote || ""}
+                initialCreatedBy={conversation.internalNoteCreatedBy || ""}
               />
             </div>
-          )}
+
+            <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+              <ToolFollowUp
+                convRef={convRef}
+                myEmail={meEmail}
+                convData={conversation}
+              />
+            </div>
+
+            <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-4">
+              <div className="mb-3 text-sm font-semibold">Historial de acciones</div>
+              <div className="space-y-3 text-xs">
+                {events.length ? (
+                  events.map((event) => (
+                    <div key={event.id} className="pl-3 border-l-2">
+                      <div className="font-medium">
+                        {EVENT_LABELS[event.type] || event.type}
+                      </div>
+                      {eventDescription(event) ? (
+                        <div className="mt-0.5 text-[var(--crm-soft)]">
+                          {eventDescription(event)}
+                        </div>
+                      ) : null}
+                      <div className="mt-0.5 text-[var(--crm-muted)]">
+                        {formatDate(event.createdAt)} · {event.actorEmail || "sistema"}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="opacity-60">Sin eventos registrados.</div>
+                )}
+              </div>
+            </div>
+          </aside>
         </div>
-      </footer>
-
-      <EmojisModal
-        open={showEmojis}
-        onClose={() => setShowEmojis(false)}
-        onPick={(em) => {
-          insertAtCursor(em);
-          setShowEmojis(false);
-        }}
-      />
-
-      <AttachModal
-        open={showAttach}
-        onClose={() => setShowAttach(false)}
-        onPickFiles={handlePickFiles}
-        onSendLocation={handleSendLocation}
-        sending={anySending}
-        busyLabel={busyLabel}
-      />
-
-      {showTags ? (
-        <TagsModal
-          labels={allLabels}
-          customSlugSet={customSlugSet}
-          activeSlugs={labels.map((x) => String(x).trim().toLowerCase())}
-          onClose={() => setShowTags(false)}
-          onToggle={(slug) =>
-            toggleLabel(slug).catch((e) => {
-              console.error(e);
-              pushNotice("error", e?.message || "No pude actualizar etiquetas.");
-            })
-          }
-          onCreate={(payload) => createCustomLabel(payload)}
-          onDelete={async (slug) => {
-            const ok = window.confirm(`¿Eliminar la etiqueta "${slug}"?`);
-            if (!ok) return;
-
-            try {
-              const clean = String(slug || "").trim().toLowerCase();
-              if (labels.includes(clean)) {
-                await removeLabel(clean);
-              }
-              await deleteCustomLabel({ slug: clean });
-              pushNotice("success", "Etiqueta eliminada.");
-            } catch (e) {
-              console.error(e);
-              pushNotice("error", e?.message || "No se pudo eliminar la etiqueta.");
-              setOptimisticLabels(null);
-            }
-          }}
-          onEdit={(payload) => updateCustomLabel(payload)}
-        />
-      ) : null}
-
-      <TemplatesModal
-        open={showTemplates}
-        onClose={() => setShowTemplates(false)}
-        templates={templates}
-        templateDraft={templateDraft}
-        setTemplateDraft={setTemplateDraft}
-        savingTemplate={savingTemplate}
-        onCreateTemplate={handleCreateTemplate}
-        onDeleteTemplate={handleDeleteTemplate}
-        onUseTemplate={(txt) => {
-          insertAtCursor(txt);
-          setShowTemplates(false);
-        }}
-        provinciaId={provinciaId}
-      />
-
-      <MetaTemplatesModal
-        open={showMetaTemplates}
-        onClose={() => setShowMetaTemplates(false)}
-        provinciaId={provinciaId}
-        convId={effectiveConversationId}
-        myEmail={myEmail}
-        conversation={conversation}
-        onSent={() => {
-          setShowMetaTemplates(false);
-          pushNotice("success", "Plantilla Meta enviada correctamente.");
-        }}
-      />
-
-    <ProfileDrawer
-  open={showProfile}
-  onClose={() => setShowProfile(false)}
-  displayName={displayName}
-  displayPhone={displayPhone}
-  clientDoc={clientDoc}
-  optIn={conversation?.optIn === true}
-  marketingOptIn={
-    conversation?.marketingOptIn === true
-      ? true
-      : conversation?.marketingOptIn === false
-      ? false
-      : null
-  }
-  savingConsent={savingConsent}
-  onSaveConsent={handleSaveConsent}
-  onOpenClientModal={() => {
-    setShowProfile(false);
-    setShowClientModal(true);
-  }}
-/>
-
-      <ClientModal
-        open={showClientModal}
-        onClose={() => setShowClientModal(false)}
-        clientDoc={clientDoc}
-        clientForm={clientForm}
-        setClientForm={setClientForm}
-        savingClient={savingClient}
-        onSaveClient={async () => {
-          try {
-            await saveClient();
-            setShowClientModal(false);
-            pushNotice("success", "Cliente guardado correctamente.");
-          } catch (e) {
-            console.error(e);
-            pushNotice("error", e?.message || "No se pudo guardar el cliente.");
-          }
-        }}
-        provinciaId={provinciaId}
-        clientId={clientId}
-      />
-
-      <CreatePedidoFromCrmModal
-        open={showCrearPedido}
-        onClose={() => setShowCrearPedido(false)}
-        provinciaId={provinciaId}
-        defaults={defaultsForPedido}
-        lastChatLocation={lastChatLocation}
-        onGoPedidos={goToPedidos}
-      />
+      </div>
     </div>
   );
 }
-
-const localCss = `
-  .crm-chat-wall {
-    background-color: var(--crm-app);
-    background-image:
-      radial-gradient(var(--crm-chat-wall-dot) 1px, transparent 1px),
-      linear-gradient(180deg, var(--crm-chat-wall-grad-start), var(--crm-chat-wall-grad-end));
-    background-size: 18px 18px, 100% 100%;
-  }
-
-  .crm-icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 9999px;
-    color: var(--crm-text);
-    background: transparent;
-    transition: background-color .15s ease, transform .12s ease, opacity .15s ease;
-  }
-
-  .crm-icon-btn:hover:not(:disabled) {
-    background: var(--crm-hover);
-  }
-
-  .crm-icon-btn:active:not(:disabled) {
-    transform: scale(.98);
-  }
-
-  .crm-icon-btn:disabled {
-    opacity: .55;
-    cursor: not-allowed;
-  }
-
-  .crm-pill-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: .35rem;
-    min-height: 2.25rem;
-    padding: 0 .9rem;
-    border-radius: 9999px;
-    transition: transform .12s ease, filter .15s ease;
-  }
-
-  .crm-pill-btn:hover {
-    filter: brightness(1.05);
-  }
-
-  .crm-pill-btn:active {
-    transform: scale(.98);
-  }
-
-  .crm-composer-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    flex-shrink: 0;
-    border-radius: 9999px;
-    color: var(--crm-muted);
-    background: transparent;
-    transition: background-color .15s ease, color .15s ease, opacity .15s ease;
-  }
-
-  .crm-composer-icon:hover:not(:disabled) {
-    background: var(--crm-hover);
-    color: var(--crm-text);
-  }
-
-  .crm-composer-icon:disabled {
-    opacity: .55;
-    cursor: not-allowed;
-  }
-
-  .crm-textarea {
-    min-height: 42px;
-    max-height: 120px;
-    resize: none;
-    overflow-y: auto;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--crm-text);
-    padding: .55rem .25rem;
-    font-size: 14px;
-    line-height: 1.35;
-  }
-
-  .crm-textarea::placeholder {
-    color: var(--crm-muted);
-  }
-
-  .crm-textarea:disabled {
-    opacity: .7;
-    cursor: not-allowed;
-  }
-
-  .crm-send-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 3rem;
-    height: 3rem;
-    flex-shrink: 0;
-    border-radius: 9999px;
-    background: var(--crm-accent);
-    color: white;
-    font-size: 1rem;
-    transition: transform .12s ease, filter .15s ease, opacity .15s ease;
-  }
-
-  .crm-send-btn:hover:not(:disabled) {
-    filter: brightness(1.05);
-  }
-
-  .crm-send-btn:active:not(:disabled) {
-    transform: scale(.98);
-  }
-
-  .crm-send-btn:disabled {
-    opacity: .6;
-    cursor: not-allowed;
-  }
-
-  .crm-audio-wrap .btn {
-    width: 3rem;
-    height: 3rem;
-    min-height: 3rem;
-    border-radius: 9999px;
-    border: 0;
-    background: var(--crm-accent);
-    color: white;
-    padding: 0;
-  }
-
-  .crm-audio-wrap .btn:hover {
-    filter: brightness(1.05);
-  }
-
-  .crm-audio-wrap .btn span:last-child {
-    display: none;
-  }
-
-  @media (min-width: 640px) {
-    .crm-audio-wrap .btn {
-      width: auto;
-      padding-inline: .95rem;
-      border-radius: 9999px;
-    }
-
-    .crm-audio-wrap .btn span:last-child {
-      display: inline;
-    }
-  }
-`;

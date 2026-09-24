@@ -14,7 +14,6 @@ export const ADMIN_SECTIONS = {
   AUDITORIA_PRODUCTOS: "auditoriaProductos",
   PRE_CARGA_PRODUCTOS: "preCargaProductos",
   CRM_PANEL: "crmPanel",
-  CRM_REMARKETING: "crmRemarketing",
   HISTORIAL_STOCK: "historialStock",
   CONTROL_REMITOS: "controlRemitos",
 };
@@ -37,7 +36,6 @@ export const ADMIN_SECTION_LABELS = {
   [ADMIN_SECTIONS.AUDITORIA_PRODUCTOS]: "Auditoría de productos",
   [ADMIN_SECTIONS.PRE_CARGA_PRODUCTOS]: "Precarga de productos",
   [ADMIN_SECTIONS.CRM_PANEL]: "Admin CRM Panel",
-  [ADMIN_SECTIONS.CRM_REMARKETING]: "CRM Remarketing",
   [ADMIN_SECTIONS.HISTORIAL_STOCK]: "Historial de stock",
   [ADMIN_SECTIONS.CONTROL_REMITOS]: "Control de remitos",
 };

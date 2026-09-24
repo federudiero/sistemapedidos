@@ -27,6 +27,103 @@ import { useProvincia } from "../hooks/useProvincia.js";
 
 registerLocale("es", es);
 
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function phoneToCrmDigits(raw) {
+  if (!raw) return "";
+
+  const original = String(raw).trim();
+  if (!original) return "";
+
+  if (original.startsWith("+")) return original.slice(1).replace(/\D/g, "");
+  if (original.startsWith("00")) return original.slice(2).replace(/\D/g, "");
+
+  let digits = original.replace(/\D/g, "");
+  if (!digits) return "";
+
+  if (digits.startsWith("54")) digits = digits.slice(2);
+
+  let hadTrunkZero = false;
+  if (digits.startsWith("0")) {
+    hadTrunkZero = true;
+    digits = digits.slice(1);
+  }
+
+  if (hadTrunkZero) {
+    digits = digits
+      .replace(/^(\d{4})15(\d{5,7})$/, "$1$2")
+      .replace(/^(\d{3})15(\d{6,8})$/, "$1$2")
+      .replace(/^(\d{2})15(\d{7,8})$/, "$1$2");
+  }
+
+  if (!digits.startsWith("9")) digits = `9${digits}`;
+  return `54${digits}`;
+}
+
+function conversationPhoneDigits(conversation) {
+  return [conversation?.clienteWaId, conversation?.telefonoE164]
+    .map((value) => String(value || "").replace(/\D/g, ""))
+    .filter(Boolean);
+}
+
+function timestampMillis(value) {
+  try {
+    if (!value) return 0;
+    if (typeof value?.toMillis === "function") return value.toMillis();
+    if (typeof value?.toDate === "function") return value.toDate().getTime();
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+  } catch {
+    return 0;
+  }
+}
+
+async function resolveCrmConversationForPedido({
+  provinciaId,
+  sellerEmail,
+  telefono,
+  telefonoAlt,
+}) {
+  const normalizedSeller = normalizeEmail(sellerEmail);
+  const phoneSet = new Set([telefono, telefonoAlt].map(phoneToCrmDigits).filter(Boolean));
+
+  if (!provinciaId || !normalizedSeller || !phoneSet.size) return null;
+
+  const snapshot = await getDocs(
+    query(
+      collection(db, "provincias", provinciaId, "conversaciones"),
+      where("assignedToEmail", "==", normalizedSeller)
+    )
+  );
+
+  const matches = snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }))
+    .filter((conversation) =>
+      conversationPhoneDigits(conversation).some((value) => phoneSet.has(value))
+    )
+    .sort((left, right) => {
+      const leftMs = timestampMillis(left.firstInboundAt || left.updatedAt || left.createdAt);
+      const rightMs = timestampMillis(right.firstInboundAt || right.updatedAt || right.createdAt);
+      return rightMs - leftMs;
+    });
+
+  const match = matches[0];
+  if (!match) return null;
+
+  return {
+    id: match.id,
+    telefonoE164:
+      String(match.telefonoE164 || "").trim() ||
+      (String(match.clienteWaId || "").trim() ? `+${String(match.clienteWaId).replace(/\D/g, "")}` : null),
+  };
+}
+
+// El estado comercial del CRM se sincroniza desde Cloud Functions:
+// pedido creado/actualizado -> Venta pendiente; cierre individual -> Vendido.
+// La carga operativa del pedido no depende de una segunda escritura desde el navegador.
+
 function VendedorView() {
   const { provinciaId } = useProvincia();
   const navigate = useNavigate();
@@ -341,6 +438,19 @@ function VendedorView() {
     const fechaElegida = fechaSeleccionada;
     const ref = doc(collection(db, "provincias", provinciaId, "pedidos"));
 
+    let crmLink = null;
+    try {
+      crmLink = await resolveCrmConversationForPedido({
+        provinciaId,
+        sellerEmail: emailVendedor,
+        telefono: pedido?.telefono,
+        telefonoAlt: pedido?.telefonoAlt,
+      });
+    } catch (crmError) {
+      // El CRM no debe bloquear la carga del pedido.
+      console.warn("No se pudo vincular el pedido con el contacto CRM:", crmError);
+    }
+
     const nuevo = {
       ...pedido,
       id: ref.id,
@@ -350,10 +460,17 @@ function VendedorView() {
       fechaStr: format(fechaElegida, "yyyy-MM-dd"),
       entregado: false,
       asignadoA: Array.isArray(pedido.asignadoA) ? pedido.asignadoA : [],
+      ...(crmLink?.id
+        ? {
+            crmConversationId: crmLink.id,
+            crmTelefonoE164: crmLink.telefonoE164 || null,
+          }
+        : {}),
     };
 
     try {
       await setDoc(ref, nuevo);
+
 
       setPedidos((prev) => [nuevo, ...prev]);
       setCantidadPedidos((n) => n + 1);
@@ -494,6 +611,24 @@ function VendedorView() {
         editables.vendedorReferenciaEmail = null;
       }
 
+      const crmPhoneChanged =
+        phoneToCrmDigits(previo.telefono) !== phoneToCrmDigits(editables.telefono) ||
+        phoneToCrmDigits(previo.telefonoAlt) !== phoneToCrmDigits(editables.telefonoAlt);
+
+      let crmLinkUpdate = null;
+      if (crmPhoneChanged) {
+        try {
+          crmLinkUpdate = await resolveCrmConversationForPedido({
+            provinciaId,
+            sellerEmail: emailVendedor,
+            telefono: editables.telefono,
+            telefonoAlt: editables.telefonoAlt,
+          });
+        } catch (crmError) {
+          console.warn("No se pudo actualizar el vínculo CRM del pedido:", crmError);
+        }
+      }
+
       const ALLOWED_KEYS = new Set([
         "nombre",
         "telefono",
@@ -543,6 +678,11 @@ function VendedorView() {
         ...limpiarDescuento,
       };
 
+      if (crmPhoneChanged) {
+        updatePayload.crmConversationId = crmLinkUpdate?.id || deleteField();
+        updatePayload.crmTelefonoE164 = crmLinkUpdate?.telefonoE164 || deleteField();
+      }
+
       if (Object.keys(updatePayload).length === 0) {
         return true;
       }
@@ -552,12 +692,19 @@ function VendedorView() {
         updatePayload
       );
 
+
       setPedidos((prev) =>
         prev.map((p) =>
           p.id === pedidoActualizado.id
             ? {
                 ...p,
                 ...editablesFiltrados,
+                ...(crmPhoneChanged
+                  ? {
+                      crmConversationId: crmLinkUpdate?.id || null,
+                      crmTelefonoE164: crmLinkUpdate?.telefonoE164 || null,
+                    }
+                  : {}),
                 descuentoModo: "",
                 descuentoPct: 0,
                 montoConDescuento: undefined,
@@ -784,7 +931,7 @@ function VendedorView() {
               <DatePicker
                 selected={fechaSeleccionada}
                 onChange={cambiarFechaSeleccionada}
-                className="w-full text-black bg-white input input-bordered"
+                className="w-full input input-bordered text-base-content"
                 dateFormat="dd/MM/yyyy"
                 locale="es"
               />
@@ -891,7 +1038,7 @@ function VendedorView() {
                 id="fecha-jornada-movil"
                 selected={fechaSeleccionada}
                 onChange={cambiarFechaSeleccionada}
-                className="w-full text-black bg-white input input-bordered"
+                className="w-full input input-bordered text-base-content"
                 wrapperClassName="w-full"
                 calendarClassName="shadow-xl"
                 tabIndex={drawerJornadaAbierto ? 0 : -1}

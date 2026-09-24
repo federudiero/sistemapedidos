@@ -27,7 +27,12 @@ export const PROVINCIAS = [
 },
   { id: "SL", nombre: "San Luis", base: "San Luis, San Luis" },
   { id: "SC", nombre: "Santa Cruz", base: "Río Gallegos, Santa Cruz" },
-  { id: "SF", nombre: "Santa Fe", base: "Alsina 2380, S2000 Rosario, Santa Fe" },
+   {
+    id: "SF",
+    nombre: "Santa Fe",
+    base: "Bv. Seguí 3940, Rosario, Santa Fe",
+  },
+
   { id: "SDE", nombre: "Santiago del Estero", base: "Santiago del Estero, SDE" },
   { id: "TDF", nombre: "Tierra del Fuego, Antártida e Islas del Atlántico Sur", base: "Ushuaia, TDF" },
   { id: "TUC", nombre: "Tucumán", base: "San Miguel de Tucumán, Tucumán" },

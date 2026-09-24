@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  addDoc,
   collection,
   doc,
   onSnapshot,
-  orderBy,
   query,
   setDoc,
   serverTimestamp,
@@ -12,7 +12,6 @@ import {
 import { db } from "../../firebase/firebase";
 import { useAuthState } from "../../hooks/useAuthState";
 import { useProvincia } from "../../hooks/useProvincia";
-import RemarketingInboxModal from "./RemarketingInboxModal";
 
 const PRESET_LABELS = [
   { slug: "nuevo", name: "Nuevo", color: "badge-info" },
@@ -90,13 +89,23 @@ function formatFollowUp(ts) {
   });
 }
 
-function getFollowUpState(nextFollowUpAt, followUpDoneAt) {
+function getFollowUpState(nextFollowUpAt, followUpDoneAt, normalizedStatus) {
   const next = asDate(nextFollowUpAt);
-  if (!next) return null;
+  const status = normalizedStatus || (followUpDoneAt ? "completed" : next ? "pending" : null);
 
-  const nextMs = tsToMillis(nextFollowUpAt);
-  const doneMs = tsToMillis(followUpDoneAt);
-  if (doneMs && nextMs && doneMs >= nextMs) return null;
+  if (status === "completed") {
+    return {
+      kind: "completed",
+      label: "Seguimiento realizado",
+      shortLabel: "Realizado",
+      detail: next ? formatFollowUp(nextFollowUpAt) : "",
+      sortWeight: 0,
+      className: "bg-[var(--crm-success-soft)] text-[var(--crm-success-text)] border-[var(--crm-accent-strong)]",
+    };
+  }
+
+  if (status === "cancelled") return null;
+  if (!next) return null;
 
   const now = new Date();
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -222,11 +231,10 @@ export default function CrmInbox({
   const [baseConvs, setBaseConvs] = useState([]);
   const [userMetaMap, setUserMetaMap] = useState({});
   const [search, setSearch] = useState("");
-const [filterLabel, setFilterLabel] = useState("todos");
-const [view, setView] = useState("inbox");
-const [customLabels, setCustomLabels] = useState([]);
-const [toast, setToast] = useState(null);
-const [remarketingOpen, setRemarketingOpen] = useState(false);
+  const [filterLabel, setFilterLabel] = useState("todos");
+  const [view, setView] = useState("inbox");
+  const [customLabels, setCustomLabels] = useState([]);
+  const [toast, setToast] = useState(null);
   const topRef = useRef(null);
   const metaUnsubsRef = useRef(new Map());
   const metaScopeRef = useRef("");
@@ -270,16 +278,23 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
 
     const colRef = collection(db, "provincias", String(provinciaId), "conversaciones");
 
+    // Se consulta solo por asignación y se ordena en memoria para conservar
+    // conversaciones históricas que todavía no tienen lastInboundAt.
     const qRef = query(
       colRef,
-      where("assignedToEmail", "==", myEmail),
-      orderBy("lastMessageAt", "desc")
+      where("assignedToEmail", "==", myEmail)
     );
 
     const unsub = onSnapshot(
       qRef,
       (snap) => {
-        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const rows = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort(
+            (a, b) =>
+              tsToMillis(b.lastInboundAt || b.lastMessageAt) -
+              tsToMillis(a.lastInboundAt || a.lastMessageAt)
+          );
         setBaseConvs(rows);
         setLoading(false);
       },
@@ -430,7 +445,12 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
   const convs = useMemo(() => {
     return baseConvs.map((c) => {
       const meta = userMetaMap[String(c.id)] || {};
-      const followUp = getFollowUpState(c.nextFollowUpAt, c.followUpDoneAt);
+      const followUpAt = c.seguimientoAt || c.nextFollowUpAt;
+      const followUp = getFollowUpState(
+        followUpAt,
+        c.seguimientoCompletedAt || c.followUpDoneAt,
+        c.seguimientoEstado
+      );
 
       return {
         ...c,
@@ -456,8 +476,8 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
       const labels = Array.isArray(c.labels) ? c.labels : [];
       const labelText = labels
         .map((slug) => {
-          const l = getLabel(slug);
-          return `${slug} ${l?.name || ""}`;
+          const label = labelMap.get(slug);
+          return `${slug} ${label?.name || ""}`;
         })
         .join(" ");
 
@@ -468,7 +488,9 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
         c.direccion,
         c.localidad,
         c.internalNote,
+        c.seguimientoNota,
         c.nextFollowUpNote,
+        c.gestionEstado,
         labelText,
         c.__followUp?.label,
         c.__followUp?.detail,
@@ -569,6 +591,19 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
       },
       { merge: true }
     );
+
+    const convRef = doc(
+      db,
+      "provincias",
+      String(provinciaId),
+      "conversaciones",
+      String(convId)
+    );
+    await addDoc(collection(convRef, "gestionEventos"), {
+      type: next ? "conversation_archived" : "conversation_reopened",
+      actorEmail: myEmail,
+      createdAt: serverTimestamp(),
+    });
   };
 
   const markAsRead = async (convId) => {
@@ -601,7 +636,26 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
   const unreadCount = useMemo(() => active.filter((c) => c.__unread).length, [active]);
   const favCount = useMemo(() => active.filter((c) => c.__favorite).length, [active]);
   const archivedCount = useMemo(() => withMeta.filter((c) => c.__archived).length, [withMeta]);
-  const followUpCount = useMemo(() => active.filter((c) => Boolean(c.__followUp)).length, [active]);
+  const followUpCount = useMemo(
+    () => active.filter((c) => c.__followUp && c.__followUp.kind !== "completed").length,
+    [active]
+  );
+  const followUpTodayCount = useMemo(
+    () => active.filter((c) => c.__followUp?.kind === "today").length,
+    [active]
+  );
+  const followUpOverdueCount = useMemo(
+    () => active.filter((c) => c.__followUp?.kind === "overdue").length,
+    [active]
+  );
+  const followUpFutureCount = useMemo(
+    () => active.filter((c) => c.__followUp?.kind === "scheduled").length,
+    [active]
+  );
+  const followUpCompletedCount = useMemo(
+    () => active.filter((c) => c.__followUp?.kind === "completed").length,
+    [active]
+  );
   const noteCount = useMemo(() => active.filter((c) => Boolean(c.__hasInternalNote)).length, [active]);
 
   const sortPinnedThenLast = (arr) =>
@@ -653,13 +707,29 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
     if (view === "unread") return unreadItems;
     if (view === "favorites") return favItems;
     if (view === "archived") return archivedItems;
+    if (view === "followup_today") {
+      return sortPinnedThenLast(active.filter((c) => c.__followUp?.kind === "today"));
+    }
+    if (view === "followup_overdue") {
+      return sortPinnedThenLast(active.filter((c) => c.__followUp?.kind === "overdue"));
+    }
+    if (view === "followup_future") {
+      return sortPinnedThenLast(active.filter((c) => c.__followUp?.kind === "scheduled"));
+    }
+    if (view === "followup_completed") {
+      return sortPinnedThenLast(active.filter((c) => c.__followUp?.kind === "completed"));
+    }
     return inboxItems;
-  }, [view, inboxItems, unreadItems, favItems, archivedItems]);
+  }, [view, inboxItems, unreadItems, favItems, archivedItems, active]);
 
   const viewTitle = useMemo(() => {
     if (view === "unread") return "No leídos";
     if (view === "favorites") return "Favoritos";
     if (view === "archived") return "Archivados";
+    if (view === "followup_today") return "Seguimientos de hoy";
+    if (view === "followup_overdue") return "Seguimientos vencidos";
+    if (view === "followup_future") return "Seguimientos futuros";
+    if (view === "followup_completed") return "Seguimientos realizados";
     return "Todos";
   }, [view]);
 
@@ -961,6 +1031,11 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
       return "No tenés chats archivados.";
     }
 
+    if (view === "followup_today") return "No hay seguimientos programados para hoy.";
+    if (view === "followup_overdue") return "No hay seguimientos vencidos.";
+    if (view === "followup_future") return "No hay seguimientos futuros.";
+    if (view === "followup_completed") return "No hay seguimientos realizados.";
+
     if (hasSearch || hasLabel) return "No se encontraron conversaciones con esos filtros.";
     return "No hay conversaciones asignadas en esta bandeja.";
   }, [view, search, filterLabel]);
@@ -989,15 +1064,7 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--crm-elevated)] px-3 text-[13px] font-medium text-[var(--crm-soft)] transition hover:bg-[var(--crm-hover)] hover:text-[var(--crm-text)]"
-              onClick={() => setRemarketingOpen(true)}
-              title="Abrir campaña por plantilla"
-            >
-              <span>📣</span>
-              <span className="hidden sm:inline">Campaña</span>
-            </button>
+            
 
             <button
               type="button"
@@ -1054,6 +1121,18 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
           <ViewChip value="archived" count={archivedCount} disabled={archivedCount === 0}>
             Archivados
           </ViewChip>
+          <ViewChip value="followup_today" count={followUpTodayCount} disabled={followUpTodayCount === 0}>
+            Hoy
+          </ViewChip>
+          <ViewChip value="followup_overdue" count={followUpOverdueCount} disabled={followUpOverdueCount === 0}>
+            Vencidos
+          </ViewChip>
+          <ViewChip value="followup_future" count={followUpFutureCount} disabled={followUpFutureCount === 0}>
+            Futuros
+          </ViewChip>
+          <ViewChip value="followup_completed" count={followUpCompletedCount} disabled={followUpCompletedCount === 0}>
+            Realizados
+          </ViewChip>
         </div>
 
         <div className="mt-3">
@@ -1091,13 +1170,6 @@ const [remarketingOpen, setRemarketingOpen] = useState(false);
         {!loading ? <ul>{itemsByView.map((c) => renderRow(c))}</ul> : null}
         <div className="h-3" />
       </div>
-      <RemarketingInboxModal
-        open={remarketingOpen}
-        onClose={() => setRemarketingOpen(false)}
-        provinciaId={provinciaId}
-        myEmail={myEmail}
-        preselectedConvId={selectedConvId}
-      />
 
       {toast ? (
         <div className="pointer-events-none absolute bottom-4 left-1/2 z-[80] -translate-x-1/2 px-4">

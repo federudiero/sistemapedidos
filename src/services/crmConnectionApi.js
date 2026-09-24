@@ -87,3 +87,7 @@ export async function completeManualWhatsAppConnection({ provinciaId, phoneNumbe
 export async function disconnectWhatsAppConnection({ provinciaId, clearToken = true }) {
   return authRequest("/crm/connection/disconnect", { provinciaId, clearToken });
 }
+
+export async function getAdminWhatsAppConnectionStatuses({ provinciaId }) {
+  return authRequest("/crm/connection/admin-statuses", { provinciaId });
+}

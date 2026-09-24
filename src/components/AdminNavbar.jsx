@@ -63,7 +63,6 @@ const SECTION_ICON_MAP = {
   auditoriaProductos: ShieldEllipsis,
   preCargaProductos: Package,
   crmPanel: FolderKanban,
-  crmRemarketing: Users,
   usuarios: Users,
   permisos: ShieldCheck,
   configuracion: Settings,
@@ -129,7 +128,7 @@ const NAV_GROUPS = [
     label: "CRM",
     description: "Panel comercial y conversaciones",
     icon: Users,
-    sections: [ADMIN_SECTIONS.CRM_PANEL, ADMIN_SECTIONS.CRM_REMARKETING],
+    sections: [ADMIN_SECTIONS.CRM_PANEL],
   },
 ];
 

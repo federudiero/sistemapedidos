@@ -65,100 +65,6 @@ function buildMetaRequestError(error, fallbackMessage) {
   return err;
 }
 
-async function sendWhatsAppMessage({
-  phoneNumberId,
-  token,
-  payload,
-  timeout = 20000,
-}) {
-  const response = await axios.post(
-    graphUrl(`${phoneNumberId}/messages`),
-    payload,
-    {
-      headers: graphJsonHeaders(token),
-      timeout,
-    }
-  );
-
-  return {
-    raw: response?.data || null,
-    waMsgId: response?.data?.messages?.[0]?.id || null,
-  };
-}
-
-async function uploadMediaToMeta({
-  phoneNumberId,
-  token,
-  buffer,
-  mimeType,
-  filename,
-  timeout = 60000,
-}) {
-  const form = new FormData();
-  const cleanMimeType = String(mimeType || "application/octet-stream").trim();
-  const cleanFilename =
-    String(filename || "archivo.bin").trim() || "archivo.bin";
-
-  form.append("messaging_product", "whatsapp");
-  form.append("type", cleanMimeType);
-  form.append(
-    "file",
-    new Blob([buffer], { type: cleanMimeType }),
-    cleanFilename
-  );
-
-  const response = await fetch(graphUrl(`${phoneNumberId}/media`), {
-    method: "POST",
-    headers: graphHeaders(token),
-    body: form,
-    signal: AbortSignal.timeout(timeout),
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok || !data?.id) {
-    const err = new Error(
-      data?.error?.message || `Meta media upload failed (${response.status})`
-    );
-    err.status = response.status;
-    err.response = data;
-    throw err;
-  }
-
-  return {
-    raw: data,
-    mediaId: data.id,
-  };
-}
-
-async function listAllMessageTemplates({ wabaId, token }) {
-  const rows = [];
-  let after = null;
-  let loops = 0;
-
-  do {
-    const response = await axios.get(graphUrl(`${wabaId}/message_templates`), {
-      headers: graphHeaders(token),
-      params: {
-        limit: 100,
-        fields: "id,name,language,status,category,quality_score,components",
-        ...(after ? { after } : {}),
-      },
-      timeout: 20000,
-    });
-
-    const pageRows = Array.isArray(response?.data?.data)
-      ? response.data.data
-      : [];
-
-    rows.push(...pageRows);
-    after = response?.data?.paging?.cursors?.after || null;
-    loops += 1;
-  } while (after && loops < 20);
-
-  return rows;
-}
-
 async function getMediaMetadata({ mediaId, token }) {
   const response = await axios.get(graphUrl(`${mediaId}`), {
     headers: graphHeaders(token),
@@ -364,6 +270,50 @@ async function listWabaPhoneNumbers({ wabaId, token }) {
   }
 }
 
+
+async function subscribeAppToWaba({ wabaId, token }) {
+  const id = String(wabaId || "").trim();
+  const accessToken = String(token || "").trim();
+
+  if (!id) {
+    throw new Error("wabaId requerido para suscribir los webhooks.");
+  }
+
+  if (!accessToken) {
+    throw new Error("Token requerido para suscribir los webhooks del WABA.");
+  }
+
+  try {
+    const response = await axios.post(
+      graphUrl(`${id}/subscribed_apps`),
+      {},
+      {
+        headers: graphJsonHeaders(accessToken),
+        timeout: 20000,
+      }
+    );
+
+    if (response?.data?.success !== true) {
+      const err = new Error(
+        "Meta no confirmó la suscripción de la aplicación a los webhooks del WABA."
+      );
+      err.metaResponse = response?.data || null;
+      throw err;
+    }
+
+    return response.data;
+  } catch (error) {
+    if (error?.metaResponse && !error?.response) {
+      throw error;
+    }
+
+    throw buildMetaRequestError(
+      error,
+      "Meta no permitió suscribir la aplicación a los webhooks del WABA."
+    );
+  }
+}
+
 async function debugMetaAccessToken({ token }) {
   const { appId, appSecret } = metaAppConfig();
   const appAccessToken = `${appId}|${appSecret}`;
@@ -379,7 +329,8 @@ async function debugMetaAccessToken({ token }) {
   return response?.data?.data || null;
 }
 
-async function discoverWabaPhoneNumberFromToken({ token }) {
+async function discoverWabaPhoneNumberFromToken({ token, phoneNumberId }) {
+  const expectedPhoneNumberId = String(phoneNumberId || "").trim();
   let debug = null;
 
   try {
@@ -417,11 +368,19 @@ async function discoverWabaPhoneNumberFromToken({ token }) {
         token,
       });
 
-      if (numbers.length === 1) {
+      const matchedNumber = expectedPhoneNumberId
+        ? numbers.find(
+            (number) => String(number?.id || "").trim() === expectedPhoneNumberId
+          )
+        : numbers.length === 1
+        ? numbers[0]
+        : null;
+
+      if (matchedNumber) {
         return {
           wabaId: possibleWabaId,
-          phoneNumberId: String(numbers[0]?.id || ""),
-          phoneMeta: numbers[0] || null,
+          phoneNumberId: String(matchedNumber?.id || ""),
+          phoneMeta: matchedNumber || null,
         };
       }
     } catch (err) {
@@ -439,10 +398,8 @@ module.exports = {
   exchangeEmbeddedSignupCode,
   getWhatsAppPhoneNumber,
   listWabaPhoneNumbers,
+  subscribeAppToWaba,
   discoverWabaPhoneNumberFromToken,
-  sendWhatsAppMessage,
-  uploadMediaToMeta,
-  listAllMessageTemplates,
   getMediaMetadata,
   downloadMediaBinary,
   downloadMetaMedia,

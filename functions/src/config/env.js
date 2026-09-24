@@ -9,7 +9,6 @@ const STORAGE_BUCKET =
     .replace(/^https?:\/\/storage\.googleapis\.com\//, "")
     .replace(/\/+$/, "") || DEFAULT_STORAGE_BUCKET;
 
-const MAX_WA_TEXT_LEN = Number(process.env.MAX_WA_TEXT_LEN || 4096);
 
 const DEFAULT_PROV = String(process.env.DEFAULT_PROV_ID || "BA")
   .trim()
@@ -37,7 +36,6 @@ function buildCorsOrigin() {
 module.exports = {
   DEFAULT_STORAGE_BUCKET,
   STORAGE_BUCKET,
-  MAX_WA_TEXT_LEN,
   DEFAULT_PROV,
   META_WA_API_VERSION,
   buildCorsOrigin,

@@ -188,6 +188,51 @@ function isFinishEvent(eventName, normalized) {
 
 let facebookSdkPromise = null;
 
+// React StrictMode monta el componente dos veces en desarrollo. Esta caché
+// comparte la misma preparación de Embedded Signup entre ambas instancias para
+// evitar generar dos `state` distintos en el backend.
+const connectionPreparationCache = new Map();
+const CONNECTION_PREPARATION_TTL_MS = 5 * 60 * 1000;
+
+function getConnectionPreparationKey(provinciaId, email) {
+  return `${clean(provinciaId)}:${clean(email).toLowerCase()}`;
+}
+
+function clearConnectionPreparation(cacheKey) {
+  if (cacheKey) connectionPreparationCache.delete(cacheKey);
+}
+
+function getOrCreateConnectionPreparation({ cacheKey, provinciaId }) {
+  const now = Date.now();
+  const cached = connectionPreparationCache.get(cacheKey);
+
+  if (cached && now - cached.createdAt < CONNECTION_PREPARATION_TTL_MS) {
+    debugLog("PREPARE_CONNECTION_REUSED", { provinciaId });
+    return cached.promise;
+  }
+
+  if (cached) connectionPreparationCache.delete(cacheKey);
+
+  debugLog("PREPARE_CONNECTION_START", { provinciaId });
+
+  const promise = startWhatsAppConnection({ provinciaId })
+    .then((result) => {
+      debugLog("PREPARE_CONNECTION_RESULT", { result });
+      return result;
+    })
+    .catch((error) => {
+      clearConnectionPreparation(cacheKey);
+      throw error;
+    });
+
+  connectionPreparationCache.set(cacheKey, {
+    createdAt: now,
+    promise,
+  });
+
+  return promise;
+}
+
 function loadFacebookSdk({ appId, graphVersion }) {
   const cleanAppId = clean(appId);
   const version = clean(graphVersion) || "v20.0";
@@ -430,6 +475,9 @@ export default function ConnectWhatsAppBusinessButton({
     token: "",
   });
   const [embeddedConfig, setEmbeddedConfig] = useState(null);
+  const [sdkReady, setSdkReady] = useState(
+    () => typeof window !== "undefined" && Boolean(window.FB)
+  );
 
   const signupEventRef = useRef(null);
   const signupWaitersRef = useRef([]);
@@ -437,6 +485,10 @@ export default function ConnectWhatsAppBusinessButton({
 
   const currentStatus = connection?.connectionStatus || "pending";
   const connected = Boolean(connection?.connected);
+  const connectionPreparationKey = useMemo(
+    () => getConnectionPreparationKey(provinciaId, email),
+    [email, provinciaId]
+  );
 
   useEffect(() => {
     debugLog("COMPONENT_MOUNT", {
@@ -447,7 +499,6 @@ export default function ConnectWhatsAppBusinessButton({
       connection: {
         exists: connection?.exists,
         connected: connection?.connected,
-        canSendFromCrm: connection?.canSendFromCrm,
         connectionStatus: connection?.connectionStatus,
         connectionMode: connection?.connectionMode,
         hasToken: connection?.hasToken,
@@ -620,15 +671,16 @@ export default function ConnectWhatsAppBusinessButton({
 
     setPreparing(true);
 
-    debugLog("PREPARE_CONNECTION_START", { provinciaId });
-
     try {
-      const result = await startWhatsAppConnection({ provinciaId });
+      const result = await getOrCreateConnectionPreparation({
+        cacheKey: connectionPreparationKey,
+        provinciaId,
+      });
 
-      debugLog("PREPARE_CONNECTION_RESULT", { result });
       setEmbeddedConfig(result);
 
       if (!result?.embeddedSignupConfigured) {
+        clearConnectionPreparation(connectionPreparationKey);
         setNotice({
           kind: "warn",
           message:
@@ -640,6 +692,7 @@ export default function ConnectWhatsAppBusinessButton({
       }
 
       if (!result?.state) {
+        clearConnectionPreparation(connectionPreparationKey);
         throw new Error(
           "Falta state de conexión en la respuesta del backend. Reintentá desde el botón Conectar WhatsApp Business."
         );
@@ -649,8 +702,12 @@ export default function ConnectWhatsAppBusinessButton({
     } finally {
       setPreparing(false);
     }
-  }, [connected, provinciaId]);
+  }, [connected, connectionPreparationKey, provinciaId]);
 
+  // 1) Prepara la configuración en backend.
+  // Este efecto no carga el SDK porque prepareOfficialConnection() actualiza
+  // embeddedConfig; si ambas tareas viven en el mismo efecto, ese cambio de
+  // dependencia ejecuta el cleanup y puede dejar preparing=true para siempre.
   useEffect(() => {
     if (!provinciaId || connected || embeddedConfig?.state) return;
 
@@ -665,22 +722,67 @@ export default function ConnectWhatsAppBusinessButton({
         const result = await prepareOfficialConnection();
         if (cancelled || !result?.embeddedSignupConfigured) return;
 
-        setPreparing(true);
-        await loadFacebookSdk({
-          appId: result.appId,
-          graphVersion: result.graphVersion,
-        });
-
-        if (cancelled) return;
-
-        debugLog("AUTO_PREPARE_READY", {
+        debugLog("AUTO_PREPARE_CONFIG_READY", {
           provinciaId,
           hasState: Boolean(result?.state),
-          hasFB: Boolean(window.FB),
         });
       } catch (err) {
         autoPrepareKeyRef.current = "";
         debugWarn("AUTO_PREPARE_FAILED", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, email, embeddedConfig?.state, prepareOfficialConnection, provinciaId]);
+
+  // 2) Cuando embeddedConfig ya quedó guardado, precarga Facebook SDK en un
+  // efecto separado. Así el cambio de embeddedConfig no cancela su propia carga
+  // ni deja el botón bloqueado en "Preparando Meta...".
+  useEffect(() => {
+    if (
+      connected ||
+      !embeddedConfig?.embeddedSignupConfigured ||
+      !embeddedConfig?.state ||
+      !embeddedConfig?.appId ||
+      sdkReady
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setPreparing(true);
+
+    (async () => {
+      try {
+        await loadFacebookSdk({
+          appId: embeddedConfig.appId,
+          graphVersion: embeddedConfig.graphVersion,
+        });
+
+        if (cancelled) return;
+
+        const ready = Boolean(window.FB);
+        setSdkReady(ready);
+
+        debugLog("AUTO_PREPARE_READY", {
+          provinciaId,
+          hasState: Boolean(embeddedConfig?.state),
+          hasFB: ready,
+        });
+      } catch (err) {
+        if (cancelled) return;
+
+        setSdkReady(Boolean(window.FB));
+        autoPrepareKeyRef.current = "";
+        debugWarn("AUTO_PREPARE_SDK_FAILED", err);
+        setNotice({
+          kind: "error",
+          message:
+            err?.message ||
+            "No se pudo preparar Meta. Reintentá desde el botón de conexión.",
+        });
       } finally {
         if (!cancelled) setPreparing(false);
       }
@@ -689,7 +791,15 @@ export default function ConnectWhatsAppBusinessButton({
     return () => {
       cancelled = true;
     };
-  }, [connected, email, embeddedConfig?.state, prepareOfficialConnection, provinciaId]);
+  }, [
+    connected,
+    embeddedConfig?.appId,
+    embeddedConfig?.embeddedSignupConfigured,
+    embeddedConfig?.graphVersion,
+    embeddedConfig?.state,
+    provinciaId,
+    sdkReady,
+  ]);
 
   const handleStart = async () => {
     const preparedConfig =
@@ -731,6 +841,7 @@ export default function ConnectWhatsAppBusinessButton({
           appId: result.appId,
           graphVersion: result.graphVersion,
         });
+        setSdkReady(Boolean(window.FB));
 
         setNotice({
           kind: "info",
@@ -739,6 +850,31 @@ export default function ConnectWhatsAppBusinessButton({
         });
         return;
       }
+
+      // Puede ocurrir que el backend ya haya devuelto state/configuración pero
+      // Facebook SDK todavía no haya terminado de cargar. En ese caso no
+      // intentamos FB.login: terminamos de preparar el SDK y pedimos un nuevo
+      // click, preservando la apertura sincrónica requerida por Safari/iPhone.
+      if (!window.FB) {
+        setPreparing(true);
+        try {
+          await loadFacebookSdk({
+            appId: result.appId,
+            graphVersion: result.graphVersion,
+          });
+          setSdkReady(Boolean(window.FB));
+          setNotice({
+            kind: "info",
+            message:
+              "Meta ya está preparada. Tocá nuevamente Abrir conexión oficial.",
+          });
+        } finally {
+          setPreparing(false);
+        }
+        return;
+      }
+
+      setSdkReady(true);
 
       const state = clean(result.state);
 
@@ -854,6 +990,8 @@ export default function ConnectWhatsAppBusinessButton({
       });
 
       debugLog("HANDLE_START_COMPLETE_CONNECTION_RESULT", { completed });
+      clearConnectionPreparation(connectionPreparationKey);
+      setEmbeddedConfig(null);
 
       setNotice({
         kind: "success",
@@ -906,6 +1044,9 @@ export default function ConnectWhatsAppBusinessButton({
         token: clean(form.token),
       });
 
+      clearConnectionPreparation(connectionPreparationKey);
+      setEmbeddedConfig(null);
+
       setNotice({
         kind: "success",
         message: "WhatsApp conectado. Ya podés entrar al CRM.",
@@ -935,6 +1076,7 @@ export default function ConnectWhatsAppBusinessButton({
     try {
       await disconnectWhatsAppConnection({ provinciaId, clearToken: true });
 
+      clearConnectionPreparation(connectionPreparationKey);
       setEmbeddedConfig(null);
       setNotice({ kind: "success", message: "Casilla desconectada." });
 
@@ -953,16 +1095,17 @@ export default function ConnectWhatsAppBusinessButton({
     embeddedConfig?.embeddedSignupConfigured && embeddedConfig?.state
   );
 
-  const primaryButtonDisabled =
-    busy || connected || (preparing && !hasPreparedConnection);
+  const primaryButtonDisabled = busy || connected || preparing;
 
   const primaryButtonLabel = busy
     ? "Procesando..."
-    : hasPreparedConnection
-      ? "Abrir conexión oficial"
-      : preparing
-        ? "Preparando Meta..."
-        : "Iniciar conexión oficial";
+    : preparing
+      ? "Preparando Meta..."
+      : hasPreparedConnection && sdkReady
+        ? "Abrir conexión oficial"
+        : hasPreparedConnection
+          ? "Finalizar preparación de Meta"
+          : "Iniciar conexión oficial";
 
   return (
     <div className="min-h-screen bg-[var(--crm-app)] text-[var(--crm-text)] flex items-center justify-center p-4">

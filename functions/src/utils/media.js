@@ -53,21 +53,6 @@ function buildMediaPlaceholder(kind, filename) {
   return "Adjunto";
 }
 
-function normalizeOutboundMediaKind(kind, mimeType) {
-  const rawKind = safeStr(kind).toLowerCase();
-  if (["image", "video", "audio", "document"].includes(rawKind)) {
-    return rawKind;
-  }
-
-  const mime = safeStr(mimeType).toLowerCase();
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("video/")) return "video";
-  if (mime.startsWith("audio/")) return "audio";
-  if (mime) return "document";
-
-  return null;
-}
-
 function buildInboundMediaDescriptor(msg) {
   const type = safeStr(msg?.type).toLowerCase();
 
@@ -201,7 +186,6 @@ module.exports = {
   sanitizeFileName,
   extensionFromMime,
   buildMediaPlaceholder,
-  normalizeOutboundMediaKind,
   buildInboundMediaDescriptor,
   getStorageBucket,
   uploadInboundMediaToStorage,

@@ -682,175 +682,275 @@ export default function LiquidacionesComisiones() {
   };
 
   const gridCategoria =
-    "grid-cols-[minmax(110px,1fr)_minmax(70px,auto)_minmax(120px,auto)_minmax(100px,auto)_minmax(140px,auto)_minmax(105px,auto)_minmax(135px,auto)] gap-x-4 items-center";
+    "grid-cols-[minmax(130px,1.2fr)_70px_minmax(105px,1fr)_minmax(90px,0.8fr)_minmax(115px,1fr)_100px_minmax(115px,1fr)] gap-x-3 items-center";
   const gridRep =
     "grid-cols-[minmax(240px,1fr)_minmax(80px,auto)_minmax(160px,auto)] gap-x-4 items-center";
-  const numClass = "text-right font-mono tabular-nums";
+  const numClass = "text-right font-mono tabular-nums whitespace-nowrap";
 
   const renderFilaCategoria = (r, categoriaKey, label) => {
     const categoria = r[categoriaKey];
 
     return (
-      <div
-        className={`grid grid-cols-2 gap-2 py-3 border-t md:grid ${gridCategoria} border-base-300`}
-      >
-        <div className="font-semibold">{label}</div>
-        <div className={numClass}>
-          <span className="mr-1 text-xs opacity-60 md:hidden">Pedidos:</span>
-          {categoria.pedidos}
+      <>
+        <div className="p-3 border rounded-xl bg-base-200/60 border-base-300 lg:hidden">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="font-bold">{label}</div>
+            <div className="px-2 py-1 text-xs font-semibold rounded-full bg-base-300/70">
+              {categoria.pedidos} {categoria.pedidos === 1 ? "pedido" : "pedidos"}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0 p-2 rounded-lg bg-base-100">
+              <div className="text-[11px] uppercase opacity-60">Facturado</div>
+              <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                ${f2(categoria.total)}
+              </div>
+            </div>
+
+            <div className="min-w-0 p-2 rounded-lg bg-base-100">
+              <div className="text-[11px] uppercase opacity-60">Envío</div>
+              <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                ${f2(categoria.envio)}
+              </div>
+            </div>
+
+            <div className="min-w-0 p-2 rounded-lg bg-base-100">
+              <div className="text-[11px] uppercase opacity-60">Base comisión</div>
+              <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                ${f2(categoria.baseComisionable)}
+              </div>
+            </div>
+
+            <div className="min-w-0 p-2 rounded-lg bg-base-100">
+              <div className="text-[11px] uppercase opacity-60">Comisión</div>
+              <div className="mt-1 font-mono text-sm font-bold break-all tabular-nums text-primary">
+                ${f2(categoria.comision)}
+              </div>
+            </div>
+          </div>
+
+          <label className="flex items-center justify-between gap-3 pt-3 mt-3 border-t border-base-300">
+            <span className="text-sm font-semibold">% de comisión</span>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={categoria.pct}
+              onChange={(e) =>
+                handlePctVendChange(r.keyEmail, categoriaKey, e.target.value)
+              }
+              className="text-right w-28 input input-bordered input-sm"
+              aria-label={`Porcentaje de comisión ${label.toLowerCase()} para ${r.displayName}`}
+            />
+          </label>
         </div>
-        <div className={numClass}>
-          <span className="mr-1 text-xs opacity-60 md:hidden">Facturado:</span>
-          {f2(categoria.total)}
+
+        <div className={`hidden py-3 border-t lg:grid ${gridCategoria} border-base-300`}>
+          <div className="font-semibold">{label}</div>
+          <div className={numClass}>{categoria.pedidos}</div>
+          <div className={numClass}>${f2(categoria.total)}</div>
+          <div className={numClass}>${f2(categoria.envio)}</div>
+          <div className={numClass}>${f2(categoria.baseComisionable)}</div>
+          <div className="flex items-center justify-end">
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={categoria.pct}
+              onChange={(e) =>
+                handlePctVendChange(r.keyEmail, categoriaKey, e.target.value)
+              }
+              className="w-24 text-sm text-right input input-bordered input-sm"
+              aria-label={`Porcentaje de comisión ${label.toLowerCase()} para ${r.displayName}`}
+            />
+          </div>
+          <div className={numClass}>${f2(categoria.comision)}</div>
         </div>
-        <div className={numClass}>
-          <span className="mr-1 text-xs opacity-60 md:hidden">Envío:</span>
-          {f2(categoria.envio)}
-        </div>
-        <div className={numClass}>
-          <span className="mr-1 text-xs opacity-60 md:hidden">Base:</span>
-          {f2(categoria.baseComisionable)}
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          <span className="text-xs opacity-60 md:hidden">%:</span>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={categoria.pct}
-            onChange={(e) =>
-              handlePctVendChange(r.keyEmail, categoriaKey, e.target.value)
-            }
-            className="w-24 text-xs text-right md:text-sm input input-bordered input-xs md:input-sm"
-            aria-label={`Porcentaje de comisión ${label.toLowerCase()} para ${r.displayName}`}
-          />
-        </div>
-        <div className={numClass}>
-          <span className="mr-1 text-xs opacity-60 md:hidden">Comisión:</span>
-          {f2(categoria.comision)}
-        </div>
-      </div>
+      </>
     );
   };
 
   return (
-    <div className="px-4 pt-6 pb-10 mx-auto max-w-7xl">
+    <div className="w-full px-3 pt-4 pb-10 mx-auto overflow-x-hidden max-w-7xl sm:px-4 lg:px-6">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
         <AdminNavbar />
       </div>
       <div className="h-16" />
 
-      <div className="flex flex-wrap items-end gap-4 mb-6">
-        <div>
-          <label className="block mb-1 text-sm font-semibold md:text-base">Desde</label>
-          <DatePicker
-            selected={desde}
-            onChange={(d) => setDesde(d)}
-            className="w-full max-w-[150px] input input-bordered input-sm md:input-md"
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1 text-sm font-semibold md:text-base">Hasta</label>
-          <DatePicker
-            selected={hasta}
-            onChange={(d) => setHasta(d)}
-            className="w-full max-w-[150px] input input-bordered input-sm md:input-md"
-          />
-        </div>
-
-        <div className="form-control">
-          <label className="gap-2 cursor-pointer label">
-            <span className="text-sm label-text md:text-base">Solo entregados</span>
-            <input
-              type="checkbox"
-              className="toggle toggle-sm md:toggle-md"
-              checked={soloEntregados}
-              onChange={(e) => setSoloEntregados(e.target.checked)}
-            />
-          </label>
-        </div>
-
-        <div>
-          <label className="block mb-1 text-sm font-semibold md:text-base">
-            % por menor
-          </label>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={pctGlobalPorMenor}
-            onChange={(e) => setPctGlobalPorMenor(Math.max(0, Number(e.target.value || 0)))}
-            className="w-24 text-sm md:text-lg input input-bordered input-sm md:input-md"
-          />
-        </div>
-
-        <div>
-          <label className="block mb-1 text-sm font-semibold md:text-base">
-            % por mayor
-          </label>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={pctGlobalPorMayor}
-            onChange={(e) => setPctGlobalPorMayor(Math.max(0, Number(e.target.value || 0)))}
-            className="w-24 text-sm md:text-lg input input-bordered input-sm md:input-md"
-          />
-        </div>
-
-        <button
-          type="button"
-          className="mt-2 md:mt-0 btn btn-outline btn-sm md:btn-md lg:btn-lg"
-          onClick={exportarExcel}
-          disabled={loading}
-        >
-          📤 Exportar Excel
-        </button>
+      <div className="mb-5">
+        <h1 className="text-xl font-extrabold sm:text-2xl">Liquidación de comisiones</h1>
+        <p className="mt-1 text-xs opacity-70 sm:text-sm">
+          Filtrá el período, revisá las ventas y ajustá los porcentajes por vendedor.
+        </p>
       </div>
 
-      <p className="mb-5 text-xs opacity-70 sm:text-sm">
-        Los pedidos anteriores o sin tipo guardado se consideran automáticamente por menor. El envío no integra la base comisionable.
+      <div className="p-3 mb-4 border shadow-sm rounded-2xl bg-base-200 border-base-300 sm:p-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6 xl:items-end">
+          <div className="min-w-0">
+            <label className="block mb-1 text-xs font-semibold sm:text-sm">Desde</label>
+            <DatePicker
+              selected={desde}
+              onChange={(d) => setDesde(d)}
+              wrapperClassName="w-full"
+              popperPlacement="bottom-start"
+              className="w-full min-w-0 input input-bordered input-sm sm:input-md"
+            />
+          </div>
+
+          <div className="min-w-0">
+            <label className="block mb-1 text-xs font-semibold sm:text-sm">Hasta</label>
+            <DatePicker
+              selected={hasta}
+              onChange={(d) => setHasta(d)}
+              wrapperClassName="w-full"
+              popperPlacement="bottom-start"
+              className="w-full min-w-0 input input-bordered input-sm sm:input-md"
+            />
+          </div>
+
+          <div className="flex items-center col-span-2 px-3 border rounded-xl min-h-12 border-base-300 bg-base-100 md:col-span-2 xl:col-span-1">
+            <label className="flex items-center justify-between w-full gap-3 cursor-pointer">
+              <span className="text-sm font-semibold">Solo entregados</span>
+              <input
+                type="checkbox"
+                className="toggle toggle-sm"
+                checked={soloEntregados}
+                onChange={(e) => setSoloEntregados(e.target.checked)}
+              />
+            </label>
+          </div>
+
+          <div className="min-w-0">
+            <label className="block mb-1 text-xs font-semibold sm:text-sm">
+              % por menor
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={pctGlobalPorMenor}
+              onChange={(e) =>
+                setPctGlobalPorMenor(Math.max(0, Number(e.target.value || 0)))
+              }
+              className="w-full min-w-0 text-right input input-bordered input-sm sm:input-md"
+            />
+          </div>
+
+          <div className="min-w-0">
+            <label className="block mb-1 text-xs font-semibold sm:text-sm">
+              % por mayor
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={pctGlobalPorMayor}
+              onChange={(e) =>
+                setPctGlobalPorMayor(Math.max(0, Number(e.target.value || 0)))
+              }
+              className="w-full min-w-0 text-right input input-bordered input-sm sm:input-md"
+            />
+          </div>
+
+          <button
+            type="button"
+            className="col-span-2 btn btn-outline btn-sm sm:btn-md md:col-span-2 xl:col-span-1"
+            onClick={exportarExcel}
+            disabled={loading}
+          >
+            📤 Exportar Excel
+          </button>
+        </div>
+      </div>
+
+      <p className="px-1 mb-5 text-xs leading-relaxed opacity-70 sm:text-sm">
+        Los pedidos anteriores o sin tipo guardado se consideran automáticamente por menor.
+        El envío no integra la base comisionable.
       </p>
 
       {loading ? (
-        <p className="opacity-70">Cargando…</p>
+        <div className="flex items-center justify-center min-h-40">
+          <span className="loading loading-spinner loading-md" aria-label="Cargando" />
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-8">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="p-4 border rounded-2xl bg-base-200 border-base-300">
+        <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="p-4 border shadow-sm rounded-2xl bg-base-200 border-base-300">
               <div className="text-sm font-bold text-primary">Pedidos por menor</div>
-              <div className="mt-2 text-2xl font-extrabold">{totales.porMenor.pedidos}</div>
-              <div className="mt-2 text-xs opacity-70">
-                Base: ${f2(totales.porMenor.baseComisionable)} · Comisión: ${f2(totales.porMenor.comision)}
+              <div className="mt-2 text-3xl font-extrabold tabular-nums">
+                {totales.porMenor.pedidos}
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                <div className="p-2 rounded-lg bg-base-100">
+                  <div className="text-[11px] uppercase opacity-60">Base</div>
+                  <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                    ${f2(totales.porMenor.baseComisionable)}
+                  </div>
+                </div>
+                <div className="p-2 rounded-lg bg-base-100">
+                  <div className="text-[11px] uppercase opacity-60">Comisión</div>
+                  <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                    ${f2(totales.porMenor.comision)}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="p-4 border rounded-2xl bg-base-200 border-base-300">
+            <div className="p-4 border shadow-sm rounded-2xl bg-base-200 border-base-300">
               <div className="text-sm font-bold text-secondary">Pedidos por mayor</div>
-              <div className="mt-2 text-2xl font-extrabold">{totales.porMayor.pedidos}</div>
-              <div className="mt-2 text-xs opacity-70">
-                Base: ${f2(totales.porMayor.baseComisionable)} · Comisión: ${f2(totales.porMayor.comision)}
+              <div className="mt-2 text-3xl font-extrabold tabular-nums">
+                {totales.porMayor.pedidos}
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                <div className="p-2 rounded-lg bg-base-100">
+                  <div className="text-[11px] uppercase opacity-60">Base</div>
+                  <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                    ${f2(totales.porMayor.baseComisionable)}
+                  </div>
+                </div>
+                <div className="p-2 rounded-lg bg-base-100">
+                  <div className="text-[11px] uppercase opacity-60">Comisión</div>
+                  <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                    ${f2(totales.porMayor.comision)}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="p-4 border rounded-2xl bg-base-200 border-base-300">
+            <div className="p-4 border shadow-sm rounded-2xl bg-base-200 border-base-300 sm:col-span-2 xl:col-span-1">
               <div className="text-sm font-bold">Total general</div>
-              <div className="mt-2 text-2xl font-extrabold">{totales.totalPedidos}</div>
-              <div className="mt-2 text-xs opacity-70">
-                Facturado: ${f2(totales.totalVentas)} · Comisiones: ${f2(totales.totalComisiones)}
+              <div className="mt-2 text-3xl font-extrabold tabular-nums">
+                {totales.totalPedidos}
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                <div className="p-2 rounded-lg bg-base-100">
+                  <div className="text-[11px] uppercase opacity-60">Facturado</div>
+                  <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                    ${f2(totales.totalVentas)}
+                  </div>
+                </div>
+                <div className="p-2 rounded-lg bg-base-100">
+                  <div className="text-[11px] uppercase opacity-60">Comisiones</div>
+                  <div className="mt-1 font-mono text-sm font-semibold break-all tabular-nums">
+                    ${f2(totales.totalComisiones)}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="p-4 border shadow sm:p-6 rounded-2xl bg-base-200 border-base-300">
-            <h3 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">💼 Vendedores</h3>
-            <p className="mb-4 text-xs opacity-70 sm:text-sm">
-              Cada vendedor muestra por separado sus pedidos por menor y por mayor, con porcentajes editables independientes.
+          <section className="p-3 border shadow rounded-2xl bg-base-200 border-base-300 sm:p-5 lg:p-6">
+            <h2 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">
+              💼 Vendedores
+            </h2>
+            <p className="mb-4 text-xs leading-relaxed opacity-70 sm:text-sm">
+              Cada vendedor muestra por separado sus pedidos por menor y por mayor, con
+              porcentajes editables independientes.
             </p>
 
             <div
-              className={`hidden px-3 pb-2 text-[11px] font-bold uppercase opacity-70 md:grid ${gridCategoria}`}
+              className={`hidden px-3 pb-2 text-[11px] font-bold uppercase opacity-70 lg:grid ${gridCategoria}`}
             >
               <div>Tipo</div>
               <div className="text-right">Pedidos</div>
@@ -862,84 +962,144 @@ export default function LiquidacionesComisiones() {
             </div>
 
             {filasVendedores.length === 0 ? (
-              <div className="opacity-70">Sin datos</div>
+              <div className="p-4 text-center rounded-xl bg-base-100 opacity-70">
+                Sin datos
+              </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {filasVendedores.map((r) => (
-                  <div
+                  <article
                     key={r.keyEmail || "sin-vendedor"}
-                    className="p-3 border rounded-xl bg-base-100 border-base-300"
+                    className="p-3 border rounded-xl bg-base-100 border-base-300 sm:p-4"
                   >
-                    <div className="flex flex-col gap-1 pb-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="pb-3 lg:flex lg:items-end lg:justify-between lg:gap-4">
                       <div className="min-w-0">
-                        <div className="font-bold truncate">{r.displayName}</div>
-                        {r.email && <div className="text-xs truncate opacity-60">{r.email}</div>}
+                        <div className="font-bold break-words">{r.displayName}</div>
+                        {r.email && (
+                          <div className="mt-0.5 text-xs break-all opacity-60 sm:truncate">
+                            {r.email}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs opacity-70 sm:text-right">
+
+                      <div className="grid grid-cols-3 gap-2 mt-3 lg:hidden">
+                        <div className="p-2 text-center rounded-lg bg-base-200">
+                          <div className="text-[10px] uppercase opacity-60">Pedidos</div>
+                          <div className="mt-1 text-sm font-bold tabular-nums">{r.pedidos}</div>
+                        </div>
+                        <div className="min-w-0 p-2 text-center rounded-lg bg-base-200">
+                          <div className="text-[10px] uppercase opacity-60">Base</div>
+                          <div className="mt-1 font-mono text-xs font-bold break-all tabular-nums">
+                            ${f2(r.baseComisionable)}
+                          </div>
+                        </div>
+                        <div className="min-w-0 p-2 text-center rounded-lg bg-base-200">
+                          <div className="text-[10px] uppercase opacity-60">Comisión</div>
+                          <div className="mt-1 font-mono text-xs font-bold break-all tabular-nums">
+                            ${f2(r.comision)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="hidden text-xs opacity-70 lg:block lg:text-right">
                         Total: {r.pedidos} pedidos · Base ${f2(r.baseComisionable)} · Comisión ${f2(r.comision)}
                       </div>
                     </div>
 
-                    {renderFilaCategoria(r, KEY_POR_MENOR, "Por menor")}
-                    {renderFilaCategoria(r, KEY_POR_MAYOR, "Por mayor")}
-                  </div>
+                    <div className="grid gap-3 lg:block">
+                      {renderFilaCategoria(r, KEY_POR_MENOR, "Por menor")}
+                      {renderFilaCategoria(r, KEY_POR_MAYOR, "Por mayor")}
+                    </div>
+                  </article>
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="p-4 border shadow sm:p-6 rounded-2xl bg-base-200 border-base-300">
-            <h3 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">
-              🛵 Repartidores (Paga por días)
-            </h3>
-            <p className="mb-4 text-xs opacity-70 sm:text-sm">
+          <section className="p-3 border shadow rounded-2xl bg-base-200 border-base-300 sm:p-5 lg:p-6">
+            <h2 className="mb-1 text-lg font-extrabold text-primary sm:text-xl">
+              🛵 Repartidores (paga por días)
+            </h2>
+            <p className="mb-4 text-xs leading-relaxed opacity-70 sm:text-sm">
               Resumen de días trabajados y paga total por repartidor.
             </p>
 
-            <div className="overflow-x-auto">
-              <div
-                className={`hidden md:grid ${gridRep} text-[11px] md:text-xs font-bold uppercase opacity-70`}
-              >
-                <div>Repartidor</div>
-                <div className="text-right">Días</div>
-                <div className="text-right">Paga</div>
+            {filasRepartidores.length === 0 ? (
+              <div className="p-4 text-center rounded-xl bg-base-100 opacity-70">
+                Sin datos
               </div>
-
-              <div className="my-3 divider" />
-
-              {filasRepartidores.length === 0 ? (
-                <div className="opacity-70">Sin datos</div>
-              ) : (
-                filasRepartidores.map((r, i) => (
-                  <div
-                    key={`${r.email}-${i}`}
-                    className="py-3 text-sm border-b border-base-300 last:border-b-0 md:text-base"
-                  >
-                    <div className={`flex flex-col gap-1 md:grid ${gridRep}`}>
-                      <div>
-                        <div className="font-semibold truncate">{r.email}</div>
-                        <div className="mt-1 text-xs opacity-70 md:hidden">
-                          Días: <span className="font-mono">{r.dias}</span> · Paga:{" "}
-                          <span className="font-mono">{f2(r.repartidor)}</span>
+            ) : (
+              <>
+                <div className="grid gap-3 lg:hidden">
+                  {filasRepartidores.map((r, i) => (
+                    <article
+                      key={`${r.email}-${i}`}
+                      className="p-3 border rounded-xl bg-base-100 border-base-300"
+                    >
+                      <div className="text-sm font-semibold break-all">{r.email}</div>
+                      <div className="grid grid-cols-2 gap-2 mt-3">
+                        <div className="p-2 rounded-lg bg-base-200">
+                          <div className="text-[11px] uppercase opacity-60">Días</div>
+                          <div className="mt-1 font-mono font-bold tabular-nums">{r.dias}</div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-base-200">
+                          <div className="text-[11px] uppercase opacity-60">Paga</div>
+                          <div className="mt-1 font-mono font-bold break-all tabular-nums">
+                            ${f2(r.repartidor)}
+                          </div>
                         </div>
                       </div>
+                    </article>
+                  ))}
 
-                      <div className={`hidden md:block ${numClass}`}>{r.dias}</div>
-                      <div className={numClass}>{f2(r.repartidor)}</div>
+                  <div className="p-3 border rounded-xl bg-base-100 border-base-300">
+                    <div className="font-bold">Total</div>
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      <div className="p-2 rounded-lg bg-base-200">
+                        <div className="text-[11px] uppercase opacity-60">Días</div>
+                        <div className="mt-1 font-mono font-bold tabular-nums">{totalDias}</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-base-200">
+                        <div className="text-[11px] uppercase opacity-60">Paga total</div>
+                        <div className="mt-1 font-mono font-bold break-all tabular-nums text-primary">
+                          ${f2(totalPagaRepartidores)}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
+                </div>
 
-              <div className="my-3 divider" />
+                <div className="hidden lg:block">
+                  <div className={`grid ${gridRep} text-xs font-bold uppercase opacity-70`}>
+                    <div>Repartidor</div>
+                    <div className="text-right">Días</div>
+                    <div className="text-right">Paga</div>
+                  </div>
 
-              <div className={`flex flex-col gap-2 md:grid ${gridRep} text-sm md:text-base font-semibold`}>
-                <div>Total</div>
-                <div className={`hidden md:block ${numClass}`}>{totalDias}</div>
-                <div className={numClass}>{f2(totalPagaRepartidores)}</div>
-              </div>
-            </div>
-          </div>
+                  <div className="my-3 divider" />
+
+                  {filasRepartidores.map((r, i) => (
+                    <div
+                      key={`${r.email}-${i}`}
+                      className={`grid ${gridRep} py-3 text-base border-b border-base-300 last:border-b-0`}
+                    >
+                      <div className="font-semibold truncate">{r.email}</div>
+                      <div className={numClass}>{r.dias}</div>
+                      <div className={numClass}>${f2(r.repartidor)}</div>
+                    </div>
+                  ))}
+
+                  <div className="my-3 divider" />
+
+                  <div className={`grid ${gridRep} text-base font-semibold`}>
+                    <div>Total</div>
+                    <div className={numClass}>{totalDias}</div>
+                    <div className={numClass}>${f2(totalPagaRepartidores)}</div>
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
         </div>
       )}
     </div>

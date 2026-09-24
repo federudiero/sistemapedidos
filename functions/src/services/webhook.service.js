@@ -24,24 +24,60 @@ const {
 const { getCrmVendorContext } = require("./vendor.service");
 const { mergeCrmVendor } = require("../repositories/vendor.repository");
 const { downloadMetaMedia } = require("./meta.service");
+const { admin } = require("../config/firebase");
+const {
+  addGestionEvent,
+  incrementDailyStats,
+  dayIdFromDate,
+} = require("./crm-stats.service");
 
 function parseWhatsAppWebhook(body) {
-  const entry = body?.entry?.[0];
-  const change = entry?.changes?.[0];
-  const value = change?.value;
-
-  if (!value) return null;
-
-  return {
-    value,
-    msg: value?.messages?.[0] || null,
-    status: value?.statuses?.[0] || null,
-  };
+  const events = [];
+  for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
+    for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+      const value = change?.value || {};
+      if (change?.field === "smb_message_echoes") {
+        for (const echo of Array.isArray(value?.message_echoes) ? value.message_echoes : []) {
+          events.push({ kind: "echo", value, payload: echo });
+        }
+        continue;
+      }
+      for (const msg of Array.isArray(value?.messages) ? value.messages : []) events.push({ kind: "message", value, payload: msg });
+      for (const status of Array.isArray(value?.statuses) ? value.statuses : []) events.push({ kind: "status", value, payload: status });
+    }
+  }
+  return events;
 }
 
 function normalizePhoneId(value) {
   const v = safeStr(value);
   return v ? String(v).trim() : null;
+}
+
+function limitedString(value, maxLength = 500) {
+  const normalized = safeStr(value);
+  return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function normalizeReferral(referral) {
+  if (!referral || typeof referral !== "object" || Array.isArray(referral)) {
+    return null;
+  }
+
+  const normalized = {
+    sourceType: limitedString(referral.source_type, 80),
+    sourceId: limitedString(referral.source_id, 200),
+    sourceUrl: limitedString(referral.source_url, 2000),
+    headline: limitedString(referral.headline, 500),
+    body: limitedString(referral.body, 1000),
+    mediaType: limitedString(referral.media_type, 80),
+    imageUrl: limitedString(referral.image_url, 2000),
+    videoUrl: limitedString(referral.video_url, 2000),
+    thumbnailUrl: limitedString(referral.thumbnail_url, 2000),
+    ctwaClid: limitedString(referral.ctwa_clid, 500),
+  };
+
+  return Object.values(normalized).some(Boolean) ? normalized : null;
 }
 
 function buildLegacyConvId(customerWaId) {
@@ -204,6 +240,8 @@ function parseInboundMessage(value, msg) {
   const toPhoneNumberId = value?.metadata?.phone_number_id || null;
   const toDisplayPhoneNumber = value?.metadata?.display_phone_number || null;
   const contextWaMessageId = safeStr(msg?.context?.id) || null;
+  const occurredAt = toEventDate(msg?.timestamp);
+  const referral = normalizeReferral(msg?.referral);
 
   let text = "";
   let normalizedType = "text";
@@ -245,6 +283,7 @@ function parseInboundMessage(value, msg) {
     toPhoneNumberId,
     toDisplayPhoneNumber,
     contextWaMessageId,
+    referral,
     rawType: msg.type || "unknown",
     normalizedType,
     media,
@@ -257,6 +296,7 @@ function parseInboundMessage(value, msg) {
             address: msg.location?.address || null,
           }
         : null,
+    occurredAt,
   };
 }
 
@@ -376,6 +416,184 @@ async function fetchAndStoreInboundMedia({
   throw lastError || new Error("No se pudo descargar la media");
 }
 
+
+function toEventDate(timestampValue) {
+  const seconds = Number(timestampValue);
+  if (!Number.isFinite(seconds) || seconds <= 0) return new Date();
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function firestoreTimestampToDate(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseMessageEcho(value, echo) {
+  if (!echo) return null;
+
+  const phoneNumberId = normalizePhoneId(
+    value?.metadata?.phone_number_id || echo?.phone_number_id
+  );
+  const customerWaId = normalizeWaId(
+    echo?.to || echo?.recipient_id || echo?.recipient?.wa_id
+  );
+  const waMessageId = safeStr(echo?.id || echo?.message_id);
+  const rawType = safeStr(echo?.type || "text").toLowerCase() || "text";
+  const text = safeStr(
+    echo?.text?.body || echo?.body || echo?.caption || ""
+  );
+
+  return {
+    phoneNumberId,
+    customerWaId,
+    waMessageId,
+    rawType,
+    text,
+    occurredAt: toEventDate(echo?.timestamp),
+    raw: echo,
+  };
+}
+
+async function processMessageEcho({ prov, echo }) {
+  const {
+    phoneNumberId,
+    customerWaId,
+    waMessageId,
+    rawType,
+    text,
+    occurredAt,
+  } = echo;
+
+  if (!phoneNumberId || !customerWaId || !waMessageId) {
+    return { ok: true, ignored: true, reason: "invalid echo" };
+  }
+
+  const convId = buildScopedConvId({ customerWaId, phoneNumberId });
+  if (!convId) {
+    return { ok: true, ignored: true, reason: "invalid conversation" };
+  }
+
+  const convSnap = await getConversationSnap(prov, convId);
+  if (!convSnap.exists) {
+    return { ok: true, ignored: true, reason: "conversation not found" };
+  }
+
+  if (await findMessageByWaMessageId(prov, convId, waMessageId)) {
+    return { ok: true, ignored: true, duplicate: true };
+  }
+
+  const data = convSnap.data() || {};
+  const now = nowTs();
+  const responseTs = admin.firestore.Timestamp.fromDate(occurredAt);
+  const pendingDate = firestoreTimestampToDate(data.pendingSinceAt);
+  const lastResponseDate = firestoreTimestampToDate(data.lastSellerResponseAt);
+  const hasOpenPendingCycle = Boolean(
+    pendingDate &&
+      (!lastResponseDate || pendingDate.getTime() > lastResponseDate.getTime())
+  );
+  const responseSec = hasOpenPendingCycle
+    ? Math.max(0, Math.floor((occurredAt.getTime() - pendingDate.getTime()) / 1000))
+    : null;
+
+  const preview = text || (rawType && rawType !== "text" ? `[${rawType}]` : "Mensaje enviado desde WhatsApp Business");
+
+  await addMessage(prov, convId, {
+    direction: "out",
+    from: "agent",
+    type: rawType || "text",
+    text: text || "",
+    timestamp: responseTs,
+    ts: responseTs,
+    status: "sent",
+    waMessageId,
+    waPhoneNumberId: phoneNumberId,
+    clienteWaId: customerWaId,
+    source: "whatsapp_business_app",
+    rawType: rawType || "text",
+    preview,
+  });
+
+  const update = {
+    lastSellerResponseAt: responseTs,
+    responseSource: "whatsapp_business_app",
+    responseConfirmation: "automatic",
+    gestionEstado: "atendido",
+    gestionEstadoUpdatedAt: now,
+    gestionEstadoUpdatedBy: "system:webhook",
+    updatedAt: now,
+  };
+
+  // El echo es actividad real de la conversación. Sólo pisa el "último mensaje"
+  // si cronológicamente es igual o posterior al que ya conocemos, para no
+  // retroceder la conversación si Meta entrega webhooks fuera de orden.
+  const currentLastMessageDate = firestoreTimestampToDate(data.lastMessageAt);
+  if (!currentLastMessageDate || occurredAt.getTime() >= currentLastMessageDate.getTime()) {
+    update.lastMessageAt = responseTs;
+    update.lastMessageText = preview;
+    update.lastFrom = "agent";
+  }
+
+  if (hasOpenPendingCycle) {
+    update.firstSellerResponseAt = responseTs;
+    update.responseTimeSec = responseSec;
+
+    if (!data.firstEverSellerResponseAt) {
+      const firstInboundDate = firestoreTimestampToDate(data.firstInboundAt);
+      update.firstEverSellerResponseAt = responseTs;
+      update.firstEverResponseTimeSec = firstInboundDate
+        ? Math.max(0, Math.floor((occurredAt.getTime() - firstInboundDate.getTime()) / 1000))
+        : responseSec;
+    }
+  }
+
+  await mergeConversation(prov, convId, update);
+  await addGestionEvent({
+    prov,
+    convId,
+    payload: {
+      type: "seller_response_detected",
+      actorEmail: data.assignedToEmail || null,
+      source: "whatsapp_business_app",
+      waMessageId,
+      responseTimeSec: responseSec,
+      preview,
+    },
+  });
+
+  await incrementDailyStats({
+    prov,
+    vendorEmail: data.assignedToEmail,
+    fields: {
+      attendedContacts:
+        data.gestionEstado !== "atendido" || hasOpenPendingCycle ? 1 : 0,
+      automaticReplies: 1,
+      responseCount: hasOpenPendingCycle ? 1 : 0,
+      responseTotalSec: hasOpenPendingCycle ? responseSec : 0,
+      responseUnder5m: hasOpenPendingCycle && responseSec < 300 ? 1 : 0,
+      response5To15m:
+        hasOpenPendingCycle && responseSec >= 300 && responseSec < 900 ? 1 : 0,
+      response15To60m:
+        hasOpenPendingCycle && responseSec >= 900 && responseSec < 3600 ? 1 : 0,
+      responseOver60m: hasOpenPendingCycle && responseSec >= 3600 ? 1 : 0,
+    },
+    eventKey: `echo_${waMessageId}`,
+    occurredAt,
+    metadata: { convId, waMessageId, source: "smb_message_echoes" },
+  });
+
+  return {
+    ok: true,
+    prov,
+    convId,
+    automatic: true,
+    responseTimeSec: responseSec,
+    hasOpenPendingCycle,
+  };
+}
+
 async function processInboundMessage({ prov, inbound }) {
   const {
     fromWaId,
@@ -389,6 +607,8 @@ async function processInboundMessage({ prov, inbound }) {
     location,
     media,
     contextWaMessageId,
+    referral,
+    occurredAt,
   } = inbound;
 
   const clientWaId = normalizeWaId(fromWaId);
@@ -507,8 +727,21 @@ async function processInboundMessage({ prov, inbound }) {
 
   const telefonoE164 = toDisplayE164(clientWaId);
   const tsNow = nowTs();
+  const inboundTs = admin.firestore.Timestamp.fromDate(occurredAt || new Date());
+  const isNewConversation = !seedSnap?.exists;
+  const previousGestionEstado = safeStr(seedData?.gestionEstado || "nuevo");
+  const startsNewPendingCycle =
+    isNewConversation ||
+    ["atendido", "vendido", "no_interesa", "no_contesto", "numero_incorrecto"].includes(
+      previousGestionEstado
+    );
+  const nextGestionEstado = isNewConversation
+    ? "nuevo"
+    : startsNewPendingCycle
+      ? "pendiente"
+      : previousGestionEstado || "nuevo";
 
-  await mergeConversation(prov, convId, {
+  const conversationUpdate = {
     telefonoE164,
     nombre: profileName || seedData?.nombre || null,
     assignedToEmail: normalizeEmail(assignedToEmail),
@@ -518,18 +751,44 @@ async function processInboundMessage({ prov, inbound }) {
       : seedData?.waDisplayPhoneNumber || null,
     lastInboundPhoneId: phoneKey,
     status: seedData?.status || "open",
-    lastMessageAt: tsNow,
+    lastMessageAt: inboundTs,
     lastMessageText:
       text || (media ? buildMediaPlaceholder(media.kind, media.filename) : ""),
     lastFrom: "client",
-    lastInboundAt: tsNow,
+    firstInboundAt: seedData?.firstInboundAt || inboundTs,
+    lastInboundAt: inboundTs,
+    pendingSinceAt: startsNewPendingCycle
+      ? inboundTs
+      : seedData?.pendingSinceAt || inboundTs,
+    inboundMessagesCount: admin.firestore.FieldValue.increment(1),
+    lastInboundType: rawType || "text",
+    lastInboundPreview:
+      text || (media ? buildMediaPlaceholder(media.kind, media.filename) : "Mensaje"),
+    gestionEstado: nextGestionEstado,
+    gestionEstadoUpdatedAt: startsNewPendingCycle ? tsNow : seedData?.gestionEstadoUpdatedAt || null,
+    gestionEstadoUpdatedBy: startsNewPendingCycle ? "system:webhook" : seedData?.gestionEstadoUpdatedBy || null,
     updatedAt: tsNow,
     createdAt: seedData?.createdAt || tsNow,
     convKeyVersion: 2,
     clienteWaId: clientWaId,
     scopedPhoneNumberId: phoneKey,
     legacyConvId: legacyConvId || null,
-  });
+    leadSourceType:
+      seedData?.leadSourceType || referral?.sourceType || (isNewConversation ? "organic" : null),
+    leadSourceId: seedData?.leadSourceId || referral?.sourceId || null,
+    leadSourceHeadline: seedData?.leadSourceHeadline || referral?.headline || null,
+    firstReferral: seedData?.firstReferral || referral || null,
+    lastReferral: referral || seedData?.lastReferral || null,
+  };
+
+  if (startsNewPendingCycle) {
+    conversationUpdate.firstSellerResponseAt = null;
+    conversationUpdate.responseTimeSec = null;
+    conversationUpdate.responseSource = null;
+    conversationUpdate.responseConfirmation = null;
+  }
+
+  await mergeConversation(prov, convId, conversationUpdate);
 
   const replyTo = await resolveReplyMetaForInbound({
     prov,
@@ -542,13 +801,14 @@ async function processInboundMessage({ prov, inbound }) {
     direction: "in",
     from: "client",
     text: text || "",
-    timestamp: tsNow,
-    ts: tsNow,
+    timestamp: inboundTs,
+    ts: inboundTs,
     status: "delivered",
     waMessageId: waMessageId || null,
     waPhoneNumberId: phoneKey,
     rawType: rawType || "text",
     clienteWaId: clientWaId,
+    ...(referral ? { referral } : {}),
     ...(replyTo ? { replyTo } : {}),
   };
 
@@ -697,6 +957,66 @@ async function processInboundMessage({ prov, inbound }) {
 
   await addMessage(prov, convId, msgPayload);
 
+  await addGestionEvent({
+    prov,
+    convId,
+    payload: {
+      type: isNewConversation ? "contact_received" : "inbound_received",
+      actorEmail: null,
+      waMessageId: waMessageId || null,
+      sourceType: referral?.sourceType || null,
+      sourceId: referral?.sourceId || null,
+    },
+  });
+  // 1) Métrica por MENSAJE: cada inbound suma mensajes y, si corresponde,
+  // abre un nuevo ciclo pendiente de atención.
+  await incrementDailyStats({
+    prov,
+    vendorEmail: assignedToEmail,
+    fields: {
+      inboundMessages: 1,
+      // Se conserva el conteo histórico de Nuevo en el primer inbound para que
+      // el deploy sea compatible con los días ya iniciados y no duplique nuevos.
+      newContacts: isNewConversation ? 1 : 0,
+      pendingContacts: startsNewPendingCycle ? 1 : 0,
+    },
+    eventKey: `in_${waMessageId || `${convId}_${occurredAt.getTime()}`}`,
+    occurredAt,
+    metadata: {
+      convId,
+      waMessageId: waMessageId || null,
+      source: "webhook",
+      sourceType: referral?.sourceType || null,
+      sourceId: referral?.sourceId || null,
+    },
+  });
+
+  // 2) Recurrente por CONTACTO/DÍA: si el primer ingreso histórico fue un día
+  // anterior, el contacto cuenta una sola vez en la jornada actual. Si nació
+  // hoy, sigue siendo Nuevo durante todo el día y no se reclasifica.
+  const activityDay = dayIdFromDate(occurredAt);
+  const firstInboundForClassification =
+    firestoreTimestampToDate(seedData?.firstInboundAt) || occurredAt;
+  const firstInboundDay = dayIdFromDate(firstInboundForClassification);
+
+  if (firstInboundDay !== activityDay) {
+    await incrementDailyStats({
+      prov,
+      vendorEmail: assignedToEmail,
+      fields: { recurrentContacts: 1 },
+      // La clave no depende del mensaje: el segundo, tercero, etc. inbound del
+      // mismo contacto en el mismo día queda deduplicado automáticamente.
+      eventKey: `contact_day_${activityDay}_${convId}`,
+      occurredAt,
+      metadata: {
+        convId,
+        waMessageId: waMessageId || null,
+        source: "webhook_contact_day",
+        contactType: "recurrent",
+      },
+    });
+  }
+
   await markUnreadForAssignedUser({
     prov,
     convId,
@@ -806,6 +1126,8 @@ module.exports = {
   parseWhatsAppWebhook,
   parseInboundMessage,
   parseStatusEvent,
+  parseMessageEcho,
   processInboundMessage,
   processStatusEvent,
+  processMessageEcho,
 };

@@ -4,10 +4,13 @@ const { DEFAULT_PROV, META_WA_API_VERSION } = require("../config/env");
 const { normProv, normalizeEmail, safeStr, nowTs } = require("../utils/common");
 const {
   getCrmVendorSnap,
+  getCrmVendedoresSnap,
   mergeCrmVendor,
 } = require("../repositories/vendor.repository");
 const {
   assertVendorListedProv,
+  getUsuariosConfig,
+  isAdminProv,
   resolveConnectionStatusFromData,
   normalizePhoneNumberId,
 } = require("./vendor.service");
@@ -15,6 +18,7 @@ const {
   exchangeEmbeddedSignupCode,
   getWhatsAppPhoneNumber,
   listWabaPhoneNumbers,
+  subscribeAppToWaba,
   discoverWabaPhoneNumberFromToken,
 } = require("./meta.service");
 
@@ -250,7 +254,6 @@ function publicConnectionFromSnap({ snap, email }) {
     exists,
     email,
     connected,
-    canSendFromCrm: connected,
     connectionStatus: status,
     connectionMode:
       safeStr(data.connectionMode || "business_app_coexistence") ||
@@ -280,6 +283,51 @@ async function readOwnConnection({ prov, email }) {
   await assertVendorListedProv({ prov, email });
   const snap = await getCrmVendorSnap(prov, email);
   return publicConnectionFromSnap({ snap, email });
+}
+
+
+async function getAdminWhatsAppConnectionStatuses(req) {
+  const payload = reqPayload(req);
+  const prov = reqProv(req, payload);
+  const email = reqEmail(req);
+
+  if (!email || !(await isAdminProv({ prov, email }))) {
+    const error = new Error("Acceso reservado a administradores de la provincia");
+    error.status = 403;
+    throw error;
+  }
+
+  const [usuarios, vendorsSnap] = await Promise.all([
+    getUsuariosConfig(prov),
+    getCrmVendedoresSnap(prov),
+  ]);
+
+  const docsByEmail = new Map();
+  vendorsSnap.forEach((docSnap) => {
+    docsByEmail.set(normalizeEmail(docSnap.id), docSnap);
+  });
+
+  const vendors = (usuarios.vendedores || []).map((vendorEmail) => {
+    const cleanEmail = normalizeEmail(vendorEmail);
+    const snap = docsByEmail.get(cleanEmail) || null;
+    const connection = publicConnectionFromSnap({ snap, email: cleanEmail });
+
+    return {
+      email: cleanEmail,
+      connected: connection.connected,
+      connectionStatus: connection.connectionStatus,
+      displayPhoneNumber: connection.displayPhoneNumber,
+      phoneNumberIdMasked: connection.phoneNumberIdMasked,
+      connectionMode: connection.connectionMode,
+      connectionError: connection.connectionError,
+      connectedAt: connection.connectedAt,
+      disconnectedAt: connection.disconnectedAt,
+      lastWebhookAt: connection.lastWebhookAt,
+      lastConnectionCheckAt: connection.lastConnectionCheckAt,
+    };
+  });
+
+  return { ok: true, prov, vendors };
 }
 
 async function getWhatsAppConnectionStatus(req) {
@@ -583,13 +631,22 @@ async function completeEmbeddedWhatsAppConnection(req) {
     }
   }
 
-  if (!phoneNumberId && !wabaId) {
-    const discovered = await discoverWabaPhoneNumberFromToken({ token });
+  if (!wabaId) {
+    const discovered = await discoverWabaPhoneNumberFromToken({
+      token,
+      phoneNumberId,
+    });
 
-    if (discovered?.phoneNumberId) {
+    if (discovered?.wabaId) {
+      wabaId = safeStr(discovered.wabaId || "");
+    }
+
+    if (!phoneNumberId && discovered?.phoneNumberId) {
       phoneNumberId = normalizePhoneNumberId(discovered.phoneNumberId);
-      phoneMeta = discovered.phoneMeta || null;
-      wabaId = wabaId || safeStr(discovered.wabaId || "");
+    }
+
+    if (!phoneMeta && discovered?.phoneMeta) {
+      phoneMeta = discovered.phoneMeta;
     }
   }
 
@@ -599,9 +656,19 @@ async function completeEmbeddedWhatsAppConnection(req) {
     );
   }
 
+  if (!wabaId) {
+    throw new Error(
+      "Meta no devolvió waba_id y no se pudo resolver desde el token. La conexión no se marcará como completada porque no sería posible suscribir los webhooks."
+    );
+  }
+
   if (!phoneMeta) {
     phoneMeta = await getWhatsAppPhoneNumber({ phoneNumberId, token });
   }
+
+  await subscribeAppToWaba({ wabaId, token });
+
+  const webhookSubscribedAt = nowTs();
 
   const displayPhoneNumber = safeStr(
     phoneMeta?.display_phone_number ||
@@ -645,6 +712,9 @@ async function completeEmbeddedWhatsAppConnection(req) {
 
     embeddedSignupEvent: safeStr(signup.event || "") || null,
     embeddedSignupCompletedAt: nowTs(),
+
+    webhookSubscriptionStatus: "subscribed",
+    webhookSubscribedAt,
 
     connectedAt: nowTs(),
     connectedBy: email,
@@ -780,6 +850,7 @@ async function disconnectWhatsAppConnection(req) {
 }
 
 module.exports = {
+  getAdminWhatsAppConnectionStatuses,
   getWhatsAppConnectionStatus,
   startWhatsAppConnection,
   completeEmbeddedWhatsAppConnection,
