@@ -1,0 +1,95 @@
+{
+  "requestId": "zRCa6r7cLuS8KdsimDTD",
+  "found": true,
+  "receivedAt": "2026-10-02T10:56:28.855Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 657,
+  "rawSha256": "05128086490ed91c34bffa517e8ad113cc6c34dbb3129dc682f9598c44f392d0",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzMDc2ODE5NRUCABIYIEFDRDBBRUNBQjk2QkZENEM1Q0VDMTA1MzQ1NTc3MzREAA=="
+    ],
+    "senderWaIds": [
+      "5491130768195"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "EL NEGRO MAURO N°12 💣🗡️🗡️💣"
+                  },
+                  "wa_id": "5491130768195",
+                  "user_id": "AR.1452968300301459"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491130768195",
+                  "from_user_id": "AR.1452968300301459",
+                  "id": "wamid.HBgNNTQ5MTEzMDc2ODE5NRUCABIYIEFDRDBBRUNBQjk2QkZENEM1Q0VDMTA1MzQ1NTc3MzREAA==",
+                  "timestamp": "1790938588",
+                  "text": {
+                    "body": "Hola buenos días"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

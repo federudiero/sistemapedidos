@@ -1,0 +1,110 @@
+{
+  "requestId": "KtymmXHYgGuvW1KBS0Um",
+  "found": true,
+  "receivedAt": "2026-10-02T15:17:11.196Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 1347,
+  "rawSha256": "208f9f77d4339874d3d3b83b587be1e70198a5e251fe28b0bb2e99fd851e1935",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 1,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzMzgxNTg1NxUCABIYIEFDNTY1RjQ3RDhEOEYzMTkxNUY4MEU4NDgyRkZBRUNDAA=="
+    ],
+    "senderWaIds": [
+      "5491133815857"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [
+      "120246188593050242"
+    ],
+    "referralSourceTypes": [
+      "ad"
+    ],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "el pola"
+                  },
+                  "wa_id": "5491133815857",
+                  "user_id": "AR.1079280398315206"
+                }
+              ],
+              "messages": [
+                {
+                  "referral": {
+                    "source_url": "https://wa.me/wamo/status/preview/5491124959496/120255326682300242",
+                    "source_id": "120246188593050242",
+                    "source_type": "ad",
+                    "headline": "Anuncio en estados",
+                    "media_type": "video",
+                    "thumbnail_url": "https://scontent.xx.fbcdn.net/v/t15.5256-10/706473884_1307748741422752_3705094154126796716_n.jpg?stp=dst-jpg_p180x540_tt6&_nc_cat=106&ccb=1-7&_nc_sid=40cf1a&_nc_ohc=KxD5VDzJq2IQ7kNvwGYfsZx&_nc_oc=Adr1ZORiYQ0peJTg5Y7GhRghsYl0JtufJ4XNtVLDsuFgWKBWHHMpPEl0ASz7KUbWqz4&_nc_zt=23&_nc_ht=scontent.xx&_nc_gid=_1s2AtPbm9aCcR5ydydsUw&_nc_ss=7f3ba&oh=00_AQPSSU1yPlH5QwOg2NVqvVPI6HO4lfjXQRQDntZwiiJTPw&oe=6AC5A91B",
+                    "welcome_message": {
+                      "text": "¡Hola! ¿Queres más información sobre membranas?"
+                    }
+                  },
+                  "from": "5491133815857",
+                  "from_user_id": "AR.1079280398315206",
+                  "id": "wamid.HBgNNTQ5MTEzMzgxNTg1NxUCABIYIEFDNTY1RjQ3RDhEOEYzMTkxNUY4MEU4NDgyRkZBRUNDAA==",
+                  "timestamp": "1790954230",
+                  "text": {
+                    "body": "¡Hola! Quiero más información sobre membranas"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -624,7 +624,7 @@ function AdminDashboard() {
   }, [pedidos, productos, remitos, cierres, fechaStr]);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-base-100 text-base-content">
+    <div className="min-h-screen overflow-x-hidden paint-admin-redesign bg-base-100 text-base-content">
       <div className="fixed top-0 left-0 z-50 w-full shadow-md bg-base-100">
         <AdminNavbar />
       </div>

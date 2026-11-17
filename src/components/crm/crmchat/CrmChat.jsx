@@ -565,11 +565,17 @@ export default function CrmChat({ provinciaId, meEmail, convId, onBack }) {
                   <br />
                   {conversation.leadSourceType === "ad"
                     ? "Anuncio de Meta"
+                    : conversation.leadSourceType === "marketplace"
+                      ? "Facebook Marketplace"
+                    : conversation.leadSourceType === "facebook_content"
+                      ? "Facebook · contenido compartido"
                     : conversation.leadSourceType === "post"
                       ? "Publicación de Meta"
+                      : conversation.leadSourceType === "meta_entry"
+                        ? "Entrada Meta confirmada"
                       : conversation.leadSourceType === "organic"
                         ? "WhatsApp orgánico"
-                        : "No informado"}
+                        : "Sin identificar"}
                 </div>
                 <div>
                   <span className="opacity-60">Publicación/anuncio:</span>

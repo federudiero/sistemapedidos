@@ -1,0 +1,95 @@
+{
+  "requestId": "pYPrXCVB8ihdRuzGKnWq",
+  "found": true,
+  "receivedAt": "2026-10-02T13:49:58.011Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 597,
+  "rawSha256": "b1d12b61a970fd590f1a550bc239c397e3c9346f2e25f95bfae39b74f0aa6311",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNTQ3NTkzOBUCABIYIEFDRkNEMjI4NzFERDNGNUZCMzhBQTE4NkYzN0E5M0Y5AA=="
+    ],
+    "senderWaIds": [
+      "5491125475938"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Mai González"
+                  },
+                  "wa_id": "5491125475938",
+                  "user_id": "AR.1802350297444303"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491125475938",
+                  "from_user_id": "AR.1802350297444303",
+                  "id": "wamid.HBgNNTQ5MTEyNTQ3NTkzOBUCABIYIEFDRkNEMjI4NzFERDNGNUZCMzhBQTE4NkYzN0E5M0Y5AA==",
+                  "timestamp": "1790948997",
+                  "text": {
+                    "body": "Soy del km 41 virrey del pino"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

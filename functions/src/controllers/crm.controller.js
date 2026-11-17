@@ -1,4 +1,5 @@
 const crmService = require("../services/crm.service");
+const crmAdminActivityService = require("../services/crm-admin-activity.service");
 
 function errorResponse(res, error, fallback) {
   const status = Number(error?.status) || 500;
@@ -25,9 +26,22 @@ async function handleWebhook(req, res) {
     const data = await crmService.handleWebhook(req);
     return res.status(200).json(data);
   } catch (error) {
-    // Meta reintenta respuestas no 2xx. Se responde 200 y se registra el error
-    // para no generar una tormenta de reintentos sobre el mismo evento.
     console.error("WEBHOOK ERROR:", error);
+
+    // Si ni siquiera pudimos persistir el request crudo, se responde no-2xx
+    // para que Meta pueda reintentarlo. No se procesa el CRM antes de esa
+    // persistencia, por lo que este caso no genera duplicados por sí mismo.
+    if (error?.retryWebhook === true) {
+      return res.status(Number(error?.status) || 503).json({
+        ok: false,
+        retry: true,
+        error: error?.message || "Webhook audit capture error",
+      });
+    }
+
+    // Para errores posteriores se mantiene el comportamiento existente: el
+    // request crudo ya quedó auditado y puede revisarse/reprocesarse sin
+    // provocar una tormenta automática de reintentos.
     return res.status(200).json({
       ok: false,
       error: error?.message || "Webhook error",
@@ -118,6 +132,20 @@ async function removeSellerPersonalLabel(req, res) {
       res,
       error,
       "No se pudo quitar la etiqueta personal"
+    );
+  }
+}
+
+
+async function getAdminDailyActivity(req, res) {
+  try {
+    return res.json(await crmAdminActivityService.getAdminDailyActivity(req));
+  } catch (error) {
+    console.error("ADMIN DAILY ACTIVITY ERROR:", error);
+    return errorResponse(
+      res,
+      error,
+      "No se pudo cargar la actividad diaria del CRM"
     );
   }
 }
@@ -215,6 +243,7 @@ module.exports = {
   deleteSellerPersonalLabel,
   addSellerPersonalLabel,
   removeSellerPersonalLabel,
+  getAdminDailyActivity,
   getAdminWhatsAppConnectionStatuses,
   getWhatsAppConnectionStatus,
   startWhatsAppConnection,

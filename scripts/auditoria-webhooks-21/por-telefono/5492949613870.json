@@ -1,0 +1,18 @@
+{
+  "phone": "+5492949613870",
+  "customerWaId": "5492949613870",
+  "eventCount": 0,
+  "messageCount": 0,
+  "statusCount": 0,
+  "echoCount": 0,
+  "referralEventCount": 0,
+  "adReferralEventCount": 0,
+  "referralConversionCount": 0,
+  "unsupportedCount": 0,
+  "error131060Count": 0,
+  "sourceIds": [],
+  "ctwaClids": [],
+  "phoneNumberIds": [],
+  "requestIds": [],
+  "events": []
+}

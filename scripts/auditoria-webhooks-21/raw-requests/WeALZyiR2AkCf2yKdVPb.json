@@ -1,0 +1,99 @@
+{
+  "requestId": "WeALZyiR2AkCf2yKdVPb",
+  "found": true,
+  "receivedAt": "2026-10-02T11:35:51.055Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 734,
+  "rawSha256": "ef93bd6f369c786837f03d7dd97a575d5504e1ba2f78c207a18cb66c4bdd648f",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyMjg0MzkwOBUCABIYIEE1NzM3RjhDQ0E5NzM2OEZDNjc5NUU2ODA0RTM3MzBEAA=="
+    ],
+    "senderWaIds": [
+      "5491122843908"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Maty tv digital prepaga"
+                  },
+                  "wa_id": "5491122843908",
+                  "user_id": "AR.1480696620552708"
+                }
+              ],
+              "messages": [
+                {
+                  "context": {
+                    "from": "5491124959496",
+                    "id": "wamid.HBgTQVIuMTQ4MDY5NjYyMDU1MjcwOBUUABEYIEE1NjZEMzc3NTQ5ODQ5NEQzOTIxNzZCMTVGMDlBMEU0AA=="
+                  },
+                  "from": "5491122843908",
+                  "from_user_id": "AR.1480696620552708",
+                  "id": "wamid.HBgNNTQ5MTEyMjg0MzkwOBUCABIYIEE1NzM3RjhDQ0E5NzM2OEZDNjc5NUU2ODA0RTM3MzBEAA==",
+                  "timestamp": "1790940950",
+                  "text": {
+                    "body": "José c.paz  zona norte"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

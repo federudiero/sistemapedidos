@@ -1,0 +1,89 @@
+{
+  "requestId": "Wq0OL4NgUOCD6dSzQkJv",
+  "found": true,
+  "receivedAt": "2026-10-02T15:28:22.937Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 678,
+  "rawSha256": "22e0d0d0a8c4e89c1bb46086938729be09be5e07aed37658fcc36eb6f9cec26b",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTA3OTI4MDM5ODMxNTIwNhUUABEYIEE1QUNCOThBNTBFNTAyMjM1ODkxMkUzNTJCODFEN0NCAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491133815857",
+                  "user_id": "AR.1079280398315206"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491124959496",
+                  "to": "5491133815857",
+                  "id": "wamid.HBgTQVIuMTA3OTI4MDM5ODMxNTIwNhUUABEYIEE1QUNCOThBNTBFNTAyMjM1ODkxMkUzNTJCODFEN0NCAA==",
+                  "to_user_id": "AR.1079280398315206",
+                  "timestamp": "1790954902",
+                  "text": {
+                    "body": "buenísimo mañana tenemos reparto, el envío es de $4.000, abonas todo al recibir el producto"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

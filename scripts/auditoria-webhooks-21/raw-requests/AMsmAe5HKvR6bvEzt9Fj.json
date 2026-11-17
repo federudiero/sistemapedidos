@@ -1,0 +1,95 @@
+{
+  "requestId": "AMsmAe5HKvR6bvEzt9Fj",
+  "found": true,
+  "receivedAt": "2026-10-02T15:54:56.919Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 578,
+  "rawSha256": "acb18cc86ef81714395de3a7420ea4d62a2c96a1cf3960a84aa2d77a534160c0",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNDk1MzM3NhUCABIYIEFDODM3RUI1QzYxQjYyNUM2RTA4MkVFMTk2RjcwQTM0AA=="
+    ],
+    "senderWaIds": [
+      "5491124953376"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Henry Patiño"
+                  },
+                  "wa_id": "5491124953376",
+                  "user_id": "AR.1540740611428961"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491124953376",
+                  "from_user_id": "AR.1540740611428961",
+                  "id": "wamid.HBgNNTQ5MTEyNDk1MzM3NhUCABIYIEFDODM3RUI1QzYxQjYyNUM2RTA4MkVFMTk2RjcwQTM0AA==",
+                  "timestamp": "1790956495",
+                  "text": {
+                    "body": "Látex"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

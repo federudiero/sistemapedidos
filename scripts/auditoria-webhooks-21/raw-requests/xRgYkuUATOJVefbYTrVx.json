@@ -1,0 +1,96 @@
+{
+  "requestId": "xRgYkuUATOJVefbYTrVx",
+  "found": true,
+  "receivedAt": "2026-10-02T14:13:22.011Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 1012,
+  "rawSha256": "104da60fea0439a9eb1c3413988ad6cc18341b232644d197f7ed0afa0f07ab62",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTA1OTE5OTMzNzExMjQ3ORUUABEYIEE1QjA1QTgxOUM2MEVDODMyNDZFNUZFOUQwMTdENDRFAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491161210785",
+                  "user_id": "AR.1059199337112479"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491161210785",
+                  "id": "wamid.HBgTQVIuMTA1OTE5OTMzNzExMjQ3ORUUABEYIEE1QjA1QTgxOUM2MEVDODMyNDZFNUZFOUQwMTdENDRFAA==",
+                  "to_user_id": "AR.1059199337112479",
+                  "timestamp": "1790950401",
+                  "interactive": {
+                    "product": {
+                      "title": "COMBO MEMBRANA LÍQUIDA BLANCA X 20L",
+                      "description": "• COMBO MEMBRANA LÍQUIDA BLANCA X 20L \n• INCLUYE: RODILLO Y VENDA.\n\n• IDEAL PARA LOZA, PAREDES DE MATERIAL.\n• IDEAL PARA PRIMERA COLOCACIÓN!\n• SE ADAPTA A CUALQUIER TEMPERATURA.\n\nRendimiento: 25 a 30 mts² las 3 manos.",
+                      "currency_code": "ARS",
+                      "price_amount": 51150000,
+                      "sale_price_amount": 46500000
+                    },
+                    "type": "product"
+                  },
+                  "type": "interactive"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

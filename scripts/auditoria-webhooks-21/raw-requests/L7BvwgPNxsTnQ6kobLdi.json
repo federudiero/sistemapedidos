@@ -1,0 +1,99 @@
+{
+  "requestId": "L7BvwgPNxsTnQ6kobLdi",
+  "found": true,
+  "receivedAt": "2026-10-02T15:34:56.993Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 740,
+  "rawSha256": "ae098e2a7430886ff3c2d479adff83fed8ee8d0de50a3722992f361967811b1c",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDQTU0RTFGRjdGMTlBQjhCN0EzQTFCM0FFQkU4RDlDAA=="
+    ],
+    "senderWaIds": [
+      "5491166305177"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Leonardo Aguilera"
+                  },
+                  "wa_id": "5491166305177",
+                  "user_id": "AR.4629358760620705"
+                }
+              ],
+              "messages": [
+                {
+                  "context": {
+                    "from": "5491124959496",
+                    "id": "wamid.HBgTQVIuNDYyOTM1ODc2MDYyMDcwNRUUABEYIEE1MTI5RUQ5MzYwM0Q1NzY3NDNFQTEzMzc5REM5RDlDAA=="
+                  },
+                  "from": "5491166305177",
+                  "from_user_id": "AR.4629358760620705",
+                  "id": "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDQTU0RTFGRjdGMTlBQjhCN0EzQTFCM0FFQkU4RDlDAA==",
+                  "timestamp": "1790955296",
+                  "text": {
+                    "body": "Rivadavia 2274 entre Viamonte y tacuari"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

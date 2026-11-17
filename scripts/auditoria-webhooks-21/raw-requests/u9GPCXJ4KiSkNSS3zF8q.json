@@ -1,0 +1,95 @@
+{
+  "requestId": "u9GPCXJ4KiSkNSS3zF8q",
+  "found": true,
+  "receivedAt": "2026-10-02T13:11:22.705Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 580,
+  "rawSha256": "9b6d5aa8dcf46d13c2876512abf28906871081f874b0cf9e0367546e4cb9ec76",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNTQ3NTkzOBUCABIYIEFDMjIyODQ1OEREMUI5MzFDQzA0RDU4RDdEMUIxQjRBAA=="
+    ],
+    "senderWaIds": [
+      "5491125475938"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Mai González"
+                  },
+                  "wa_id": "5491125475938",
+                  "user_id": "AR.1802350297444303"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491125475938",
+                  "from_user_id": "AR.1802350297444303",
+                  "id": "wamid.HBgNNTQ5MTEyNTQ3NTkzOBUCABIYIEFDMjIyODQ1OEREMUI5MzFDQzA0RDU4RDdEMUIxQjRBAA==",
+                  "timestamp": "1790946681",
+                  "text": {
+                    "body": "Hola que tal"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

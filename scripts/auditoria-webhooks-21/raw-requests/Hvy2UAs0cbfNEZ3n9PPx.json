@@ -1,0 +1,99 @@
+{
+  "requestId": "Hvy2UAs0cbfNEZ3n9PPx",
+  "found": true,
+  "receivedAt": "2026-10-02T16:04:06.398Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 729,
+  "rawSha256": "70ebb2ffcad0c8cbc0cf48108b51ee9771419090ec77bc444cade7c7ad7f9813",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE0MDI2NzU2NhUCABIYIEFDNTk1Njg5RjJBOEE1MTAyMkJEM0EwNDlBOUE2QzM0AA=="
+    ],
+    "senderWaIds": [
+      "5491140267566"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Alegre Elizabeth"
+                  },
+                  "wa_id": "5491140267566",
+                  "user_id": "AR.1078351875009255"
+                }
+              ],
+              "messages": [
+                {
+                  "context": {
+                    "from": "5491169730249",
+                    "id": "wamid.HBgTQVIuMTA3ODM1MTg3NTAwOTI1NRUUABEYIEE1QTkwODM4MUFENDkxMzhEMEE3M0YwNTc3RDgyMjE3AA=="
+                  },
+                  "from": "5491140267566",
+                  "from_user_id": "AR.1078351875009255",
+                  "id": "wamid.HBgNNTQ5MTE0MDI2NzU2NhUCABIYIEFDNTk1Njg5RjJBOEE1MTAyMkJEM0EwNDlBOUE2QzM0AA==",
+                  "timestamp": "1790957045",
+                  "text": {
+                    "body": "Soy de Marcos Paz bueno Aires"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "requestId": "pnPS2TUD5Jvob29a18lj",
+  "found": true,
+  "receivedAt": "2026-10-02T09:31:11.213Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 2143,
+  "rawSha256": "98213f636dea4375753aa3d51f9fb09ce2b6b46b36eb18e3419fa2071eefc001",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 1,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyMjg0MzkwOBUCABIYIEE1M0EzNDYyMjcxNDg5RDNFOUI4RDFFRjZGQTc5RkFGAA=="
+    ],
+    "senderWaIds": [
+      "5491122843908"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [
+      "120246230670190242"
+    ],
+    "referralSourceTypes": [
+      "ad"
+    ],
+    "referralCtwaClids": [
+      "AfhgGTATIyVJGN-o5Kr3LFTIFs6448XEPFy7-k_SMqGF0yFpomZ-dhvDhOdmHBNcmWWE4kclD-sq7KRAhYVSUTRJlmRN4muS43DDZdCp54-ikbBKZ3pKMjoFI5Tt1PCUAKa9auSNYQ"
+    ]
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Maty tv digital prepaga"
+                  },
+                  "wa_id": "5491122843908",
+                  "user_id": "AR.1480696620552708"
+                }
+              ],
+              "messages": [
+                {
+                  "referral": {
+                    "source_url": "https://fb.me/7rOlWjX2h",
+                    "source_id": "120246230670190242",
+                    "source_type": "ad",
+                    "body": "🏭 SOMOS FÁBRICA\n🎨✨ ¡Dejá tus paredes como nuevas! ✨🎨\n\n🪣 LÁTEX BLANCO 20 L\nIncluye todo lo que necesitás para pintar sin vueltas:\n🖌️ Rodillo\n🧱 Enduido\n\n💪 Excelente cobertura\n🏠 Ideal para interiores y exteriores\n🎯 Rendimiento profesional\n\n🚀 Pintá fácil, rápido y con resultados increíbles\n📩 Consultanos y llevátelo hoy mismo",
+                    "headline": "Chatea con nosotros",
+                    "media_type": "video",
+                    "video_url": "https://www.facebook.com/story.php?story_fbid=1575896580851353&id=61566624063743",
+                    "thumbnail_url": "https://scontent-gru1-2.xx.fbcdn.net/v/t15.5256-10/706078977_27479599121625784_3186017717290810976_n.jpg?stp=cp0_dst-jpg_e48_fr_q65_tt6&cstp=mx1080x1920&ctp=s540x540&_nc_cat=100&ccb=1-7&_nc_sid=40cf1a&_nc_ohc=TWkyT8HUUC0Q7kNvwEJHR87&_nc_oc=AdqDPwTlvORCswGl6MBUiW4A0uNycrFRHg-Ug_gnt1KywivlB3qqee2RGmlAxVt4sDQ&_nc_ad=z-m&_nc_cid=0&_nc_zt=23&_nc_ht=scontent-gru1-2.xx&_nc_ss=7a3ba&oh=00_AQNw9ZXP-MPz6JfupcQ4UB_bd48N21YGDhmbCKfu4U6_fg&oe=6AC54385",
+                    "ctwa_clid": "AfhgGTATIyVJGN-o5Kr3LFTIFs6448XEPFy7-k_SMqGF0yFpomZ-dhvDhOdmHBNcmWWE4kclD-sq7KRAhYVSUTRJlmRN4muS43DDZdCp54-ikbBKZ3pKMjoFI5Tt1PCUAKa9auSNYQ",
+                    "welcome_message": {
+                      "text": "¡Hola! ¿Queres mas información sobre Nuestras Pinturas?"
+                    }
+                  },
+                  "from": "5491122843908",
+                  "from_user_id": "AR.1480696620552708",
+                  "id": "wamid.HBgNNTQ5MTEyMjg0MzkwOBUCABIYIEE1M0EzNDYyMjcxNDg5RDNFOUI4RDFFRjZGQTc5RkFGAA==",
+                  "timestamp": "1790933469",
+                  "text": {
+                    "body": "¡Hola! Quiero más información Sobre pinturas."
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

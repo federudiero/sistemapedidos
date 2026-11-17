@@ -1,0 +1,101 @@
+{
+  "requestId": "7nnL7OUCVNVlf6gJw2ta",
+  "found": true,
+  "receivedAt": "2026-10-02T16:08:14.020Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 679,
+  "rawSha256": "85a7314278461d97b03c8220ccc82121b697eadccadc62b092576afd070ea4c0",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNDk1MzM3NhUCABIYIEFDOEY2M0Q0RTNCQTJDRUZCNjhCQUYyRkZGQjFGMkU1AA=="
+    ],
+    "senderWaIds": [
+      "5491124953376"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Henry Patiño"
+                  },
+                  "wa_id": "5491124953376",
+                  "user_id": "AR.1540740611428961"
+                }
+              ],
+              "messages": [
+                {
+                  "context": {
+                    "referred_product": {
+                      "catalog_id": "1406801774315377",
+                      "product_retailer_id": "xu0bzy3a0v"
+                    }
+                  },
+                  "from": "5491124953376",
+                  "from_user_id": "AR.1540740611428961",
+                  "id": "wamid.HBgNNTQ5MTEyNDk1MzM3NhUCABIYIEFDOEY2M0Q0RTNCQTJDRUZCNjhCQUYyRkZGQjFGMkU1AA==",
+                  "timestamp": "1790957292",
+                  "text": {
+                    "body": "Hasen envio"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

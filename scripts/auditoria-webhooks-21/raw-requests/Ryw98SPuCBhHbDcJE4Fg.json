@@ -1,0 +1,96 @@
+{
+  "requestId": "Ryw98SPuCBhHbDcJE4Fg",
+  "found": true,
+  "receivedAt": "2026-10-02T16:06:58.358Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 957,
+  "rawSha256": "5b039160b7471f53ce3a02bd83751f619756828ea5f2fd6e39b2f64a26cc57a0",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTU0MDc0MDYxMTQyODk2MRUUABEYIEE1Mjk0NjY0NUMwODMxOEEzNzlDMjgyOEM2OUYwODUxAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491124953376",
+                  "user_id": "AR.1540740611428961"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491124953376",
+                  "id": "wamid.HBgTQVIuMTU0MDc0MDYxMTQyODk2MRUUABEYIEE1Mjk0NjY0NUMwODMxOEEzNzlDMjgyOEM2OUYwODUxAA==",
+                  "to_user_id": "AR.1540740611428961",
+                  "timestamp": "1790957216",
+                  "interactive": {
+                    "product": {
+                      "title": "COMBO LÁTEX LAVABLE BLANCO X 20L",
+                      "description": "• COMBO LATEX LAVABLE INTERIOR/ EXTERIOR X 20L.\n• INCLUYE:\n• RODILLO \n• ENDUIDO.\n\n• Buen rendimiento. buen espesor.\n• lavable.\n\nRendimiento: 10 a 12 mts² x litro x mano",
+                      "currency_code": "ARS",
+                      "price_amount": 58850000,
+                      "sale_price_amount": 53500000
+                    },
+                    "type": "product"
+                  },
+                  "type": "interactive"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "requestId": "YUG7Q97CioUET61AqDf2",
+  "found": true,
+  "receivedAt": "2026-10-02T15:27:39.934Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 735,
+  "rawSha256": "b531a9288cf569fc15926c93a936908f896dfd980ba8a886d3d334d08532318b",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDQThFNjA2QjE1QUJEQkM3Q0EyQjVGMzQwQ0I4NTUwAA=="
+    ],
+    "senderWaIds": [
+      "5491166305177"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Leonardo Aguilera"
+                  },
+                  "wa_id": "5491166305177",
+                  "user_id": "AR.4629358760620705"
+                }
+              ],
+              "messages": [
+                {
+                  "context": {
+                    "from": "5491124959496",
+                    "id": "wamid.HBgTQVIuNDYyOTM1ODc2MDYyMDcwNRUUABEYIEE1RUNGNTFGMDZGQ0FCMTU3NzI5OTBBM0E4MzZGNEVDAA=="
+                  },
+                  "from": "5491166305177",
+                  "from_user_id": "AR.4629358760620705",
+                  "id": "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDQThFNjA2QjE1QUJEQkM3Q0EyQjVGMzQwQ0I4NTUwAA==",
+                  "timestamp": "1790954859",
+                  "text": {
+                    "body": "Quería pedir para mañana"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

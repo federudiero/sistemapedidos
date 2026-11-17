@@ -1,0 +1,95 @@
+{
+  "requestId": "gsaRDI7IX27wBGJkZ5Dy",
+  "found": true,
+  "receivedAt": "2026-10-02T15:42:26.283Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 573,
+  "rawSha256": "6471777e1ff2f9c00810049aa7212763dc26d98b4a63498dffd91f1ec5ce4458",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDMDA1NDRFMTE3NkU3RDc2RDY3OUEyOUNEQUU1N0U4AA=="
+    ],
+    "senderWaIds": [
+      "5491166305177"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Leonardo Aguilera"
+                  },
+                  "wa_id": "5491166305177",
+                  "user_id": "AR.4629358760620705"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491166305177",
+                  "from_user_id": "AR.4629358760620705",
+                  "id": "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDMDA1NDRFMTE3NkU3RDc2RDY3OUEyOUNEQUU1N0U4AA==",
+                  "timestamp": "1790955745",
+                  "text": {
+                    "body": "Lanus"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

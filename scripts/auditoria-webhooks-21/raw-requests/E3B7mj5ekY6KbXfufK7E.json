@@ -1,0 +1,95 @@
+{
+  "requestId": "E3B7mj5ekY6KbXfufK7E",
+  "found": true,
+  "receivedAt": "2026-10-02T15:33:33.732Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 588,
+  "rawSha256": "9604d1d1827e44542b2908637be689c04a235d2f7b838e77fe60890f999b8ba7",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDMzg5MEU1NkVGRDczRkZFNTBEMkVCQ0Y5MjY4RjE0AA=="
+    ],
+    "senderWaIds": [
+      "5491166305177"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Leonardo Aguilera"
+                  },
+                  "wa_id": "5491166305177",
+                  "user_id": "AR.4629358760620705"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491166305177",
+                  "from_user_id": "AR.4629358760620705",
+                  "id": "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDMzg5MEU1NkVGRDczRkZFNTBEMkVCQ0Y5MjY4RjE0AA==",
+                  "timestamp": "1790955212",
+                  "text": {
+                    "body": "Y un enduido de 4lts"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

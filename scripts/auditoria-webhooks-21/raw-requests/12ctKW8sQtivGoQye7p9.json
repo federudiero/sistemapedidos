@@ -1,0 +1,96 @@
+{
+  "requestId": "12ctKW8sQtivGoQye7p9",
+  "found": true,
+  "receivedAt": "2026-10-02T16:06:56.187Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 908,
+  "rawSha256": "1d8f2c380e67b1648680c94d7407ee61560b3b7a8ee99e7541da2729b969cbdd",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTU0MDc0MDYxMTQyODk2MRUUABEYIEE1QTk4OUMyRjE5MjhBNDAwNjAwNTU5MjExMTZFMzUzAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491124953376",
+                  "user_id": "AR.1540740611428961"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491124953376",
+                  "id": "wamid.HBgTQVIuMTU0MDc0MDYxMTQyODk2MRUUABEYIEE1QTk4OUMyRjE5MjhBNDAwNjAwNTU5MjExMTZFMzUzAA==",
+                  "to_user_id": "AR.1540740611428961",
+                  "timestamp": "1790957215",
+                  "interactive": {
+                    "product": {
+                      "title": "LÁTEX LAVABLE BLANCO X 20L",
+                      "description": "• Látex interior/ exterior lavable BLANCO x 20L\n\n• Fácil de limpiar \n• gran rendimiento \n\nRendimiento: de 10 a 12 mts² x litro x mano",
+                      "currency_code": "ARS",
+                      "price_amount": 54450000,
+                      "sale_price_amount": 49500000
+                    },
+                    "type": "product"
+                  },
+                  "type": "interactive"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

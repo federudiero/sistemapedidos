@@ -1,21 +1,30 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  Timestamp,
-  collection,
   doc,
   getDoc,
-  getDocs,
-  orderBy,
-  query,
-  where,
+  serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import AdminNavbar from "../components/AdminNavbar";
+import AdminCrmAnalytics from "../components/crm/AdminCrmAnalytics";
+import AdminCrmDailyActivity from "../components/crm/AdminCrmDailyActivity";
+import { CrmLoadingBanner, CrmMetricValue, CrmSkeletonLine } from "../components/crm/CrmLoadingState";
+import {
+  clearAdminCrmAttributionCache,
+  loadAdminCrmAttributionHistory,
+} from "../components/crm/adminCrmAttributionCache";
 import { resolveVendedorNombre } from "../components/vendedoresMap";
 import { auth, db } from "../firebase/firebase";
 import { useProvincia } from "../hooks/useProvincia";
 import { getAdminWhatsAppConnectionStatuses } from "../services/crmConnectionApi";
+import {
+  clearAdminCrmDataCache,
+  loadAdminCrmConversationsForRange,
+  loadAdminCrmSalesData,
+  loadAdminCrmStatsByActors,
+} from "../services/adminCrmDataService";
 
 const CRM_TAGS = [
   ["todos", "Todas las etiquetas"],
@@ -32,6 +41,8 @@ const CRM_TAG_VALUES = new Set(CRM_TAGS.filter(([value]) => value !== "todos").m
 
 const RESPONSE_TARGET_MINUTES = 15;
 const FIRST_RESPONSE_ALERT_MINUTES = 30;
+const DEFAULT_CONVERSION_TARGET_PERCENT = 30;
+const CRM_SALES_GOAL_SETTINGS_DOC = "crmSalesGoal";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -182,6 +193,24 @@ function isAdvertisingLead(conversation) {
   return leadSourceType(conversation) === "ad";
 }
 
+function isMarketplaceLead(conversation) {
+  return leadSourceType(conversation) === "marketplace";
+}
+
+function isFacebookContentLead(conversation) {
+  return leadSourceType(conversation) === "facebook_content";
+}
+
+function isMetaEntryLead(conversation) {
+  return ["meta_entry", "post"].includes(leadSourceType(conversation));
+}
+
+function isUnattributedLead(conversation) {
+  const type = leadSourceType(conversation);
+  const status = String(conversation?.leadSourceStatus || "").trim().toLowerCase();
+  return !type || type === "unknown" || status === "unattributed";
+}
+
 function safeHttpUrl(value) {
   const raw = String(value || "").trim();
   return /^https?:\/\//i.test(raw) ? raw : "";
@@ -191,6 +220,106 @@ function truncateText(value, maxLength = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return "—";
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+function LeadOriginCell({ conversation }) {
+  if (isMarketplaceLead(conversation)) {
+    const attribution = conversation?.firstAttribution || {};
+    const sourceId = String(attribution?.sourceId || conversation?.leadSourceId || "").trim();
+    const sourceUrl = safeHttpUrl(attribution?.sourceUrl);
+
+    return (
+      <div className="min-w-[210px] space-y-1">
+        <span className="badge badge-sm badge-accent whitespace-nowrap">Facebook Marketplace</span>
+        {sourceId ? <div className="font-mono text-[10px] opacity-60">Item: {sourceId}</div> : null}
+        {sourceUrl ? (
+          <a className="text-xs link link-primary" href={sourceUrl} target="_blank" rel="noreferrer">
+            Ver publicación
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (isFacebookContentLead(conversation)) {
+    const sourceUrl = safeHttpUrl(conversation?.firstAttribution?.sourceUrl);
+    return (
+      <div className="min-w-[220px] space-y-1">
+        <span className="badge badge-sm badge-primary whitespace-nowrap">Facebook contenido</span>
+        <div className="max-w-[300px] text-[11px] opacity-70">
+          Reel / publicación compartida al iniciar la conversación.
+        </div>
+        {sourceUrl ? (
+          <a className="text-xs link link-primary" href={sourceUrl} target="_blank" rel="noreferrer">
+            Ver contenido
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (isMetaEntryLead(conversation)) {
+    const type = leadSourceType(conversation);
+    const method = String(conversation?.leadSourceMethod || "").trim();
+    return (
+      <div className="min-w-[220px] space-y-1">
+        <span className="badge badge-sm badge-secondary whitespace-nowrap">
+          {type === "post" ? "Publicación Meta" : "Entrada Meta confirmada"}
+        </span>
+        <div className="max-w-[320px] text-[11px] opacity-70">
+          {type === "post"
+            ? "Meta informó una publicación como origen."
+            : "Meta informó referral_conversion: puede ser un anuncio Click-to-WhatsApp o un CTA de Facebook."}
+        </div>
+        {method ? <div className="font-mono text-[10px] opacity-50">{method}</div> : null}
+      </div>
+    );
+  }
+
+  if (!isAdvertisingLead(conversation)) {
+    const unattributed = isUnattributedLead(conversation);
+    return (
+      <div className="min-w-[190px]">
+        <span className={`badge badge-sm whitespace-nowrap ${unattributed ? "badge-warning" : "badge-ghost"}`}>
+          {unattributed ? "Sin identificar" : "Sin publicidad registrada"}
+        </span>
+      </div>
+    );
+  }
+
+  const referral = firstReferralOf(conversation);
+  const sourceId = String(
+    referral?.sourceId || conversation?.leadSourceId || ""
+  ).trim();
+  const headline = String(
+    referral?.headline || conversation?.leadSourceHeadline || ""
+  ).trim();
+  const body = String(referral?.body || "").trim();
+  const destinationUrl =
+    safeHttpUrl(referral?.videoUrl) || safeHttpUrl(referral?.sourceUrl);
+
+  return (
+    <div className="min-w-[240px] space-y-1">
+      <span className="badge badge-sm badge-info whitespace-nowrap">Publicidad Meta</span>
+      <div className="text-xs font-medium">
+        {headline || "Publicidad sin título informado por Meta"}
+      </div>
+      {body ? (
+        <div className="max-w-[320px] text-[11px] opacity-70">{truncateText(body, 90)}</div>
+      ) : null}
+      <div className="font-mono text-[10px] opacity-60">ID: {sourceId || "sin ID"}</div>
+      {destinationUrl ? (
+        <a
+          className="text-xs link link-primary"
+          href={destinationUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Ver publicidad
+        </a>
+      ) : null}
+    </div>
+  );
 }
 
 function getFirstAttentionState(conversation, nowMs) {
@@ -504,6 +633,61 @@ function getPedidoSeller(pedido) {
   return normalizeEmail(pedido?.vendedorEmail);
 }
 
+// Normaliza teléfonos con el mismo criterio que usa la carga de pedidos para
+// vincular un pedido con su conversación CRM. Esto se usa únicamente como
+// respaldo de lectura para métricas históricas cuando un pedido todavía no
+// tiene crmConversationId persistido.
+function phoneToCrmDigits(raw) {
+  if (!raw) return "";
+
+  const original = String(raw).trim();
+  if (!original) return "";
+
+  if (original.startsWith("+")) return original.slice(1).replace(/\D/g, "");
+  if (original.startsWith("00")) return original.slice(2).replace(/\D/g, "");
+
+  let digits = original.replace(/\D/g, "");
+  if (!digits) return "";
+
+  if (digits.startsWith("54")) digits = digits.slice(2);
+
+  let hadTrunkZero = false;
+  if (digits.startsWith("0")) {
+    hadTrunkZero = true;
+    digits = digits.slice(1);
+  }
+
+  if (hadTrunkZero) {
+    digits = digits
+      .replace(/^(\d{4})15(\d{5,7})$/, "$1$2")
+      .replace(/^(\d{3})15(\d{6,8})$/, "$1$2")
+      .replace(/^(\d{2})15(\d{7,8})$/, "$1$2");
+  }
+
+  if (!digits.startsWith("9")) digits = `9${digits}`;
+  return `54${digits}`;
+}
+
+function conversationPhoneDigits(conversation) {
+  return Array.from(
+    new Set(
+      [conversation?.clienteWaId, conversation?.telefonoE164]
+        .map(phoneToCrmDigits)
+        .filter(Boolean)
+    )
+  );
+}
+
+function pedidoPhoneDigits(pedido) {
+  return Array.from(
+    new Set(
+      [pedido?.crmTelefonoE164, pedido?.telefono, pedido?.telefonoAlt]
+        .map(phoneToCrmDigits)
+        .filter(Boolean)
+    )
+  );
+}
+
 function buildClosedOrderIdSet(cierres = []) {
   const set = new Set();
   for (const cierre of cierres) {
@@ -567,6 +751,548 @@ function computeSalesSummary({ pedidos = [], cierres = [], range, seller = "_all
   };
 }
 
+function buildLeadCountsByDay(conversations = []) {
+  const counts = new Map();
+
+  for (const conversation of conversations) {
+    const inbound = firstInboundDate(conversation);
+    if (!inbound) continue;
+    const key = toDateInput(inbound);
+    counts.set(key, Number(counts.get(key) || 0) + 1);
+  }
+
+  return counts;
+}
+
+function mergeSalesDailyWithLeadCounts({ dailySales = [], conversations = [] }) {
+  const leadCounts = buildLeadCountsByDay(conversations);
+  const rows = new Map();
+
+  for (const row of dailySales) {
+    rows.set(row.date, {
+      date: row.date,
+      leads: Number(leadCounts.get(row.date) || 0),
+      sold: Number(row.sold || 0),
+      pending: Number(row.pending || 0),
+    });
+  }
+
+  for (const [date, leads] of leadCounts.entries()) {
+    if (rows.has(date)) continue;
+    rows.set(date, { date, leads, sold: 0, pending: 0 });
+  }
+
+  return Array.from(rows.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function _computeLeadCohortConversion({
+  conversations = [],
+  pedidos = [],
+  cierres = [],
+  seller = "_all",
+}) {
+  const closedIds = buildClosedOrderIdSet(cierres);
+  const filteredConversations = conversations.filter((conversation) => {
+    if (seller === "_all") return true;
+    return normalizeEmail(conversation?.assignedToEmail) === seller;
+  });
+
+  const conversationById = new Map(
+    filteredConversations
+      .map((conversation) => [String(conversation.id || "").trim(), conversation])
+      .filter(([id]) => Boolean(id))
+  );
+
+  // Respaldo para pedidos históricos que todavía no tengan crmConversationId.
+  // La clave incluye vendedor + teléfono para no adjudicar una venta a otro vendedor.
+  const conversationsBySellerPhone = new Map();
+  const conversationByLegacyPedidoId = new Map();
+
+  for (const [conversationId, conversation] of conversationById.entries()) {
+    const assignedSeller = normalizeEmail(conversation?.assignedToEmail);
+    for (const phone of conversationPhoneDigits(conversation)) {
+      const key = `${assignedSeller}|${phone}`;
+      if (!conversationsBySellerPhone.has(key)) conversationsBySellerPhone.set(key, []);
+      conversationsBySellerPhone.get(key).push({ id: conversationId, conversation });
+    }
+
+    const legacyPedidoId = String(conversation?.crmPedidoId || "").trim();
+    if (legacyPedidoId) conversationByLegacyPedidoId.set(legacyPedidoId, conversationId);
+  }
+
+  const pedidosByConversation = new Map();
+
+  for (const pedido of pedidos) {
+    const pedidoSeller = getPedidoSeller(pedido);
+    if (seller !== "_all" && pedidoSeller !== seller) continue;
+
+    const pedidoId = getPedidoId(pedido);
+    const deliveryDate = String(pedido?.fechaStr || "").trim();
+    if (!pedidoId || !deliveryDate) continue;
+
+    let conversationId = String(pedido?.crmConversationId || "").trim();
+
+    // Si el pedido ya quedó vinculado explícitamente a otra conversación CRM,
+    // no se lo reasigna por teléfono a la cohorte seleccionada. Esto evita
+    // atribuir como lead actual una venta que en realidad pertenece a una
+    // conversación anterior del mismo cliente.
+    if (conversationId && !conversationById.has(conversationId)) continue;
+
+    if (!conversationId) {
+      const legacyConversationId = conversationByLegacyPedidoId.get(pedidoId);
+      if (legacyConversationId && conversationById.has(legacyConversationId)) {
+        conversationId = legacyConversationId;
+      }
+    }
+
+    if (!conversationId && pedidoSeller) {
+      const fallbackCandidates = new Map();
+      for (const phone of pedidoPhoneDigits(pedido)) {
+        const key = `${pedidoSeller}|${phone}`;
+        for (const candidate of conversationsBySellerPhone.get(key) || []) {
+          fallbackCandidates.set(candidate.id, candidate.conversation);
+        }
+      }
+
+      // Si hubo más de una conversación del mismo número/vendedor, se elige la
+      // más reciente que ya existía cuando se generó el pedido. Así una venta
+      // futura no se mezcla con una cohorte posterior.
+      const closestConversation = Array.from(fallbackCandidates.entries())
+        .map(([id, conversation]) => ({
+          id,
+          conversation,
+          leadDate: firstInboundDate(conversation),
+        }))
+        .filter((item) => item.leadDate && toDateInput(item.leadDate) <= deliveryDate)
+        .sort((left, right) => right.leadDate.getTime() - left.leadDate.getTime())[0];
+
+      if (closestConversation?.id) conversationId = closestConversation.id;
+    }
+
+    if (!conversationId) continue;
+    if (!pedidosByConversation.has(conversationId)) pedidosByConversation.set(conversationId, []);
+    pedidosByConversation.get(conversationId).push(pedido);
+  }
+
+  const grouped = new Map();
+
+  for (const [conversationId, conversation] of conversationById.entries()) {
+    const inbound = firstInboundDate(conversation);
+    if (!inbound) continue;
+
+    const leadDate = toDateInput(inbound);
+    if (!grouped.has(leadDate)) {
+      grouped.set(leadDate, {
+        leadDate,
+        leads: 0,
+        converted: 0,
+        sold: 0,
+        pending: 0,
+        deliveryDates: new Map(),
+      });
+    }
+
+    const cohort = grouped.get(leadDate);
+    cohort.leads += 1;
+
+    // Un lead puede generar varios pedidos, pero para conversión se contabiliza
+    // una sola vez: su primer pedido desde el día en que ingresó el lead.
+    const firstOrder = (pedidosByConversation.get(conversationId) || [])
+      .filter((pedido) => {
+        const deliveryDate = String(pedido?.fechaStr || "").trim();
+        return deliveryDate && deliveryDate >= leadDate;
+      })
+      .sort((left, right) => {
+        const leftDate = String(left?.fechaStr || "");
+        const rightDate = String(right?.fechaStr || "");
+        if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
+        return getPedidoId(left).localeCompare(getPedidoId(right));
+      })[0];
+
+    if (!firstOrder) continue;
+
+    const pedidoId = getPedidoId(firstOrder);
+    const deliveryDate = String(firstOrder?.fechaStr || "").trim();
+    if (!pedidoId || !deliveryDate) continue;
+
+    const isSold = closedIds.has(pedidoId);
+    cohort.converted += 1;
+    if (isSold) cohort.sold += 1;
+    else cohort.pending += 1;
+
+    if (!cohort.deliveryDates.has(deliveryDate)) {
+      cohort.deliveryDates.set(deliveryDate, {
+        date: deliveryDate,
+        count: 0,
+        sold: 0,
+        pending: 0,
+      });
+    }
+
+    const delivery = cohort.deliveryDates.get(deliveryDate);
+    delivery.count += 1;
+    if (isSold) delivery.sold += 1;
+    else delivery.pending += 1;
+  }
+
+  return Array.from(grouped.values())
+    .map((cohort) => ({
+      leadDate: cohort.leadDate,
+      leads: cohort.leads,
+      converted: cohort.converted,
+      sold: cohort.sold,
+      pending: cohort.pending,
+      unconverted: Math.max(0, cohort.leads - cohort.converted),
+      conversionRate: cohort.leads ? (cohort.converted / cohort.leads) * 100 : 0,
+      soldRate: cohort.leads ? (cohort.sold / cohort.leads) * 100 : 0,
+      pendingRate: cohort.leads ? (cohort.pending / cohort.leads) * 100 : 0,
+      unconvertedRate: cohort.leads
+        ? (Math.max(0, cohort.leads - cohort.converted) / cohort.leads) * 100
+        : 0,
+      deliveryDates: Array.from(cohort.deliveryDates.values())
+        .map((delivery) => ({
+          ...delivery,
+          rate: cohort.leads ? (delivery.count / cohort.leads) * 100 : 0,
+          soldRate: cohort.leads ? (delivery.sold / cohort.leads) * 100 : 0,
+          pendingRate: cohort.leads ? (delivery.pending / cohort.leads) * 100 : 0,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .sort((a, b) => a.leadDate.localeCompare(b.leadDate));
+
+}
+
+function salesAttributionCustomerName(pedido, conversation) {
+  return String(
+    pedido?.nombre
+      || pedido?.clienteNombre
+      || pedido?.cliente
+      || conversation?.nombre
+      || "Sin nombre"
+  ).trim() || "Sin nombre";
+}
+
+function salesAttributionPhone(pedido, conversation) {
+  return String(
+    pedido?.telefono
+      || pedido?.crmTelefonoE164
+      || pedido?.telefonoAlt
+      || conversation?.telefonoE164
+      || conversation?.clienteWaId
+      || ""
+  ).trim() || "—";
+}
+
+function salesAttributionSource(conversation) {
+  if (!conversation) return { type: "unknown", label: "Sin conversación CRM", sourceId: "", headline: "" };
+
+  if (isMarketplaceLead(conversation)) {
+    const attribution = conversation?.firstAttribution || {};
+    const sourceId = String(attribution?.sourceId || conversation?.leadSourceId || "").trim();
+    return {
+      type: "marketplace",
+      label: sourceId ? `Facebook Marketplace · item ${sourceId}` : "Facebook Marketplace",
+      sourceId,
+      headline: "Facebook Marketplace",
+    };
+  }
+
+  if (isFacebookContentLead(conversation)) {
+    return {
+      type: "facebook_content",
+      label: "Facebook · contenido compartido",
+      sourceId: "",
+      headline: "Facebook contenido",
+    };
+  }
+
+  if (isMetaEntryLead(conversation)) {
+    const type = leadSourceType(conversation);
+    return {
+      type: "meta_entry",
+      label: type === "post"
+        ? "Publicación Meta"
+        : "Entrada Meta confirmada · anuncio o CTA",
+      sourceId: "",
+      headline: "",
+    };
+  }
+
+  if (!isAdvertisingLead(conversation)) {
+    if (isUnattributedLead(conversation)) {
+      return { type: "unknown", label: "Sin identificar", sourceId: "", headline: "" };
+    }
+    return {
+      type: "organic",
+      label: "Sin publicidad registrada",
+      sourceId: "",
+      headline: "",
+    };
+  }
+
+  const referral = firstReferralOf(conversation);
+  const sourceId = String(referral?.sourceId || conversation?.leadSourceId || "").trim();
+  const headline = String(referral?.headline || conversation?.leadSourceHeadline || "").trim();
+  return {
+    type: "ad",
+    label: `Publicidad · ${headline || sourceId || "sin identificar"}`,
+    sourceId,
+    headline,
+  };
+}
+
+function _computeSalesAttributionByOrderDate({
+  cohortConversations = [],
+  allConversations = [],
+  historicalPedidos = [],
+  pedidos = [],
+  seller = "_all",
+  startDate = "",
+  cohortStartDate = "",
+  cohortEndDate = "",
+}) {
+  const cohortById = new Map(
+    cohortConversations
+      .map((conversation) => [String(conversation?.id || "").trim(), conversation])
+      .filter(([id]) => Boolean(id))
+  );
+
+  const allById = new Map(
+    allConversations
+      .map((conversation) => [String(conversation?.id || "").trim(), conversation])
+      .filter(([id]) => Boolean(id))
+  );
+
+  // Asegura que la cohorte actual esté disponible aunque el historial todavía
+  // no contenga alguno de esos documentos por una actualización reciente.
+  for (const [id, conversation] of cohortById.entries()) {
+    if (!allById.has(id)) allById.set(id, conversation);
+  }
+
+  const conversationByLegacyPedidoId = new Map();
+  const conversationsBySellerPhone = new Map();
+  const ordersBySellerPhone = new Map();
+
+  const allOrdersForHistory = new Map();
+  for (const pedido of [...historicalPedidos, ...pedidos]) {
+    const pedidoId = getPedidoId(pedido);
+    if (pedidoId) allOrdersForHistory.set(pedidoId, pedido);
+  }
+
+  for (const pedido of allOrdersForHistory.values()) {
+    const pedidoSeller = getPedidoSeller(pedido);
+    const pedidoId = getPedidoId(pedido);
+    const orderDate = String(pedido?.fechaStr || "").trim();
+    if (!pedidoSeller || !pedidoId || !orderDate) continue;
+
+    for (const phone of pedidoPhoneDigits(pedido)) {
+      const key = `${pedidoSeller}|${phone}`;
+      if (!ordersBySellerPhone.has(key)) ordersBySellerPhone.set(key, []);
+      ordersBySellerPhone.get(key).push({ pedidoId, orderDate });
+    }
+  }
+
+  for (const [conversationId, conversation] of allById.entries()) {
+    const conversationSeller = normalizeEmail(conversation?.assignedToEmail);
+    const legacyPedidoId = String(conversation?.crmPedidoId || "").trim();
+    if (legacyPedidoId && !conversationByLegacyPedidoId.has(legacyPedidoId)) {
+      conversationByLegacyPedidoId.set(legacyPedidoId, { id: conversationId, conversation });
+    }
+
+    for (const phone of conversationPhoneDigits(conversation)) {
+      const key = `${conversationSeller}|${phone}`;
+      if (!conversationsBySellerPhone.has(key)) conversationsBySellerPhone.set(key, []);
+      conversationsBySellerPhone.get(key).push({ id: conversationId, conversation });
+    }
+  }
+
+  const resolveConversationForPedido = (pedido, pedidoSeller, pedidoId, orderDate) => {
+    const explicitConversationId = String(pedido?.crmConversationId || "").trim();
+    if (explicitConversationId) {
+      const explicitConversation = allById.get(explicitConversationId);
+      if (explicitConversation) {
+        return { id: explicitConversationId, conversation: explicitConversation, linkType: "crmConversationId" };
+      }
+      // Si existe un vínculo explícito pero no podemos leer esa conversación,
+      // no reasignamos el pedido por teléfono a otra conversación.
+      return null;
+    }
+
+    const legacy = conversationByLegacyPedidoId.get(pedidoId);
+    if (legacy) return { ...legacy, linkType: "crmPedidoId" };
+
+    if (!pedidoSeller) return null;
+
+    const candidates = new Map();
+    for (const phone of pedidoPhoneDigits(pedido)) {
+      const key = `${pedidoSeller}|${phone}`;
+      for (const candidate of conversationsBySellerPhone.get(key) || []) {
+        candidates.set(candidate.id, candidate.conversation);
+      }
+    }
+
+    const closest = Array.from(candidates.entries())
+      .map(([id, conversation]) => ({
+        id,
+        conversation,
+        leadDateObject: firstInboundDate(conversation),
+      }))
+      .filter((item) => item.leadDateObject && toDateInput(item.leadDateObject) <= orderDate)
+      .sort((left, right) => right.leadDateObject.getTime() - left.leadDateObject.getTime())[0];
+
+    return closest
+      ? { id: closest.id, conversation: closest.conversation, linkType: "telefono" }
+      : null;
+  };
+
+  const hasPreviousOrder = (pedido, conversation, pedidoSeller, pedidoId, orderDate) => {
+    if (!pedidoSeller) return false;
+
+    const phones = new Set([
+      ...pedidoPhoneDigits(pedido),
+      ...conversationPhoneDigits(conversation),
+    ]);
+
+    for (const phone of phones) {
+      const key = `${pedidoSeller}|${phone}`;
+      const priorOrders = ordersBySellerPhone.get(key) || [];
+      if (priorOrders.some((item) => item.pedidoId !== pedidoId && item.orderDate < orderDate)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const rows = new Map();
+
+  for (const pedido of pedidos) {
+    const pedidoSeller = getPedidoSeller(pedido);
+    if (seller !== "_all" && pedidoSeller !== seller) continue;
+
+    const pedidoId = getPedidoId(pedido);
+    const date = String(pedido?.fechaStr || "").trim();
+    if (!pedidoId || !date) continue;
+    if (startDate && date < startDate) continue;
+
+    const resolved = resolveConversationForPedido(pedido, pedidoSeller, pedidoId, date);
+    const conversation = resolved?.conversation || null;
+    const conversationId = resolved?.id || "";
+    const leadDateObject = firstInboundDate(conversation);
+    const leadDate = leadDateObject ? toDateInput(leadDateObject) : "";
+    const source = salesAttributionSource(conversation);
+    const previousOrder = conversation
+      ? hasPreviousOrder(pedido, conversation, pedidoSeller, pedidoId, date)
+      : false;
+
+    let category = "unidentified";
+
+    if (conversation) {
+      const linkedSeller = normalizeEmail(conversation?.assignedToEmail);
+      const sellerMatches = !pedidoSeller || !linkedSeller || pedidoSeller === linkedSeller;
+      const belongsToSelectedCohort = sellerMatches && (
+        cohortById.has(conversationId)
+        || (
+          source.type === "ad"
+          && leadDate
+          && (!cohortStartDate || leadDate >= cohortStartDate)
+          && (!cohortEndDate || leadDate < cohortEndDate)
+        )
+      );
+
+      if (belongsToSelectedCohort) {
+        category = "selected";
+      } else if (source.type === "ad") {
+        category = previousOrder ? "recurrentAd" : "previousLead";
+      } else if (source.type === "meta_entry") {
+        category = "metaEntry";
+      } else if (source.type === "marketplace") {
+        category = "marketplace";
+      } else if (source.type === "facebook_content") {
+        category = "facebookContent";
+      } else if (source.type === "unknown") {
+        category = "unidentified";
+      } else {
+        category = "organic";
+      }
+    }
+
+    const detail = {
+      pedidoId,
+      date,
+      seller: pedidoSeller,
+      customerName: salesAttributionCustomerName(pedido, conversation),
+      phone: salesAttributionPhone(pedido, conversation),
+      conversationId,
+      leadDate,
+      sourceType: source.type,
+      sourceLabel: source.label,
+      sourceId: source.sourceId,
+      sourceHeadline: source.headline,
+      linkType: resolved?.linkType || "",
+      hasPreviousOrder: previousOrder,
+    };
+
+    if (!rows.has(date)) {
+      rows.set(date, {
+        date,
+        selectedLeadSales: 0,
+        previousLeadSales: 0,
+        recurrentAdSales: 0,
+        metaEntrySales: 0,
+        marketplaceSales: 0,
+        facebookContentSales: 0,
+        organicSales: 0,
+        unidentifiedSales: 0,
+        total: 0,
+        selectedLeadItems: [],
+        previousLeadItems: [],
+        recurrentAdItems: [],
+        metaEntryItems: [],
+        marketplaceItems: [],
+        facebookContentItems: [],
+        organicItems: [],
+        unidentifiedItems: [],
+        totalItems: [],
+      });
+    }
+
+    const row = rows.get(date);
+    row.total += 1;
+    row.totalItems.push(detail);
+
+    if (category === "selected") {
+      row.selectedLeadSales += 1;
+      row.selectedLeadItems.push(detail);
+    } else if (category === "previousLead") {
+      row.previousLeadSales += 1;
+      row.previousLeadItems.push(detail);
+    } else if (category === "recurrentAd") {
+      row.recurrentAdSales += 1;
+      row.recurrentAdItems.push(detail);
+    } else if (category === "metaEntry") {
+      row.metaEntrySales += 1;
+      row.metaEntryItems.push(detail);
+    } else if (category === "marketplace") {
+      row.marketplaceSales += 1;
+      row.marketplaceItems.push(detail);
+    } else if (category === "facebookContent") {
+      row.facebookContentSales += 1;
+      row.facebookContentItems.push(detail);
+    } else if (category === "organic") {
+      row.organicSales += 1;
+      row.organicItems.push(detail);
+    } else {
+      row.unidentifiedSales += 1;
+      row.unidentifiedItems.push(detail);
+    }
+  }
+
+  return Array.from(rows.values())
+    .filter((row) => row.total > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function MetricHelp({ measure, formula, terms = [], result }) {
   return (
     <div className="space-y-2">
@@ -600,18 +1326,18 @@ function MetricHelp({ measure, formula, terms = [], result }) {
   );
 }
 
-function MetricCard({ label, value, detail }) {
+function MetricCard({ label, value, detail, loading = false, loadingLabel = "Calculando…" }) {
   return (
-    <article className="relative min-h-[108px] rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
+    <article className="relative min-h-[116px]  rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="text-xs tracking-wide uppercase opacity-60">{label}</div>
 
-        {detail ? (
+        {detail && !loading ? (
           <div className="relative group/help shrink-0">
             <button
               type="button"
               aria-label={`Información sobre ${label}`}
-              className="flex items-center justify-center w-6 h-6 text-xs font-semibold transition border rounded-full border-base-300 opacity-60 hover:bg-base-200 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="flex items-center justify-center w-6 h-6 text-xs font-semibold transition-all duration-200 border rounded-full border-base-300 opacity-60 hover:border-primary/40 hover:bg-primary/5 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               i
             </button>
@@ -625,7 +1351,7 @@ function MetricCard({ label, value, detail }) {
         ) : null}
       </div>
 
-      <div className="mt-3 text-2xl font-semibold">{value}</div>
+      <CrmMetricValue loading={loading} value={value} loadingLabel={loadingLabel} />
     </article>
   );
 }
@@ -710,9 +1436,9 @@ export default function AdminCRMPanel() {
   const [contactPage, setContactPage] = useState(1);
   const [contactPageSize, setContactPageSize] = useState(25);
   const [salesDayPage, setSalesDayPage] = useState(1);
-  const [salesDayPageSize, setSalesDayPageSize] = useState(10);
+  const [salesDayPageSize] = useState(10);
   const [futureSalesPage, setFutureSalesPage] = useState(1);
-  const [futureSalesPageSize, setFutureSalesPageSize] = useState(10);
+  const [futureSalesPageSize] = useState(10);
   const [salesVendorPage, setSalesVendorPage] = useState(1);
   const [salesVendorPageSize, setSalesVendorPageSize] = useState(10);
   const [activityPage, setActivityPage] = useState(1);
@@ -726,22 +1452,120 @@ export default function AdminCRMPanel() {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [conversations, setConversations] = useState([]);
+  const [attributionConversations, setAttributionConversations] = useState([]);
+  const [attributionHistoricalOrders, setAttributionHistoricalOrders] = useState([]);
+  const [attributionHistoryLoading, setAttributionHistoryLoading] = useState(false);
+  const [attributionHistoryLoaded, setAttributionHistoryLoaded] = useState(false);
+  const [attributionHistoryError, setAttributionHistoryError] = useState("");
+  const [salesAttributionDetail, setSalesAttributionDetail] = useState(null);
   const [salesOrders, setSalesOrders] = useState([]);
   const [salesClosures, setSalesClosures] = useState([]);
+  const [salesDataLoading, setSalesDataLoading] = useState(false);
+  const [workerLeadCohortRows, setWorkerLeadCohortRows] = useState([]);
+  const [workerSalesByVendor, setWorkerSalesByVendor] = useState([]);
+  const [workerSalesAttributionRows, setWorkerSalesAttributionRows] = useState([]);
+  const [salesConversionLoading, setSalesConversionLoading] = useState(false);
+  const [salesConversionStage, setSalesConversionStage] = useState("");
+  const [salesConversionError, setSalesConversionError] = useState("");
+  const [salesAttributionProcessing, setSalesAttributionProcessing] = useState(false);
+  const [salesAttributionStage, setSalesAttributionStage] = useState("");
   const [statsByActor, setStatsByActor] = useState({});
+  const [statsLoading, setStatsLoading] = useState(false);
   const [connectionByVendor, setConnectionByVendor] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [conversionTargetPercent, setConversionTargetPercent] = useState(DEFAULT_CONVERSION_TARGET_PERCENT);
+  const [conversionTargetDraft, setConversionTargetDraft] = useState(String(DEFAULT_CONVERSION_TARGET_PERCENT));
+  const [conversionTargetSaving, setConversionTargetSaving] = useState(false);
+  const [conversionTargetMessage, setConversionTargetMessage] = useState("");
+
+  const salesWorkerRef = useRef(null);
+  const salesConversionJobRef = useRef(0);
+  const salesAttributionJobRef = useRef(0);
+  const salesDataKeyRef = useRef("");
 
   const range = useMemo(
     () => computeRange(periodMode, anchorDate, customStart, customEnd),
     [periodMode, anchorDate, customStart, customEnd]
   );
 
+  const expectedSalesDataKey = `${provinciaId}|${toDateInput(range.start)}|${refreshKey}`;
+  const salesInitialPending = activeAdminSection === "ventas"
+    && !loadError
+    && salesDataKeyRef.current !== expectedSalesDataKey;
+  const salesResultsPending = activeAdminSection === "ventas"
+    && (salesInitialPending || salesDataLoading || salesConversionLoading);
+
+  const needsPanelConversations = !["analitica", "actividad"].includes(activeAdminSection);
+  const needsSalesData = activeAdminSection === "ventas" || activeAdminSection === "vendedores";
+  const needsStatsData = activeAdminSection === "resumen" || activeAdminSection === "vendedores";
+  const needsAllVendorStats = activeAdminSection === "vendedores" && selectedVendor === "_all";
+
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 60 * 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const worker = new Worker(new URL("../workers/crmSales.worker.js", import.meta.url), { type: "module" });
+    salesWorkerRef.current = worker;
+
+    worker.onmessage = (event) => {
+      const message = event?.data || {};
+      const { type, scope, jobId } = message;
+
+      if (type === "progress") {
+        if (scope === "conversion" && jobId === salesConversionJobRef.current) {
+          setSalesConversionStage(message.stage || "Procesando conversión…");
+        }
+        if (scope === "attribution" && jobId === salesAttributionJobRef.current) {
+          setSalesAttributionStage(message.stage || "Clasificando ventas…");
+        }
+        return;
+      }
+
+      if (type === "conversionResult" && jobId === salesConversionJobRef.current) {
+        setWorkerLeadCohortRows(Array.isArray(message.leadCohortRows) ? message.leadCohortRows : []);
+        setWorkerSalesByVendor(Array.isArray(message.salesByVendor) ? message.salesByVendor : []);
+        setSalesConversionLoading(false);
+        setSalesConversionStage("");
+        return;
+      }
+
+      if (type === "attributionResult" && jobId === salesAttributionJobRef.current) {
+        setWorkerSalesAttributionRows(Array.isArray(message.rows) ? message.rows : []);
+        setSalesAttributionProcessing(false);
+        setSalesAttributionStage("");
+        return;
+      }
+
+      if (type === "workerError") {
+        if (scope === "attribution" && jobId === salesAttributionJobRef.current) {
+          setSalesAttributionProcessing(false);
+          setSalesAttributionStage("");
+          setAttributionHistoryError(message.message || "No se pudo clasificar el origen de las ventas.");
+          return;
+        }
+        if (scope === "conversion" && jobId === salesConversionJobRef.current) {
+          setSalesConversionLoading(false);
+          setSalesConversionStage("");
+          setSalesConversionError(message.message || "No se pudo calcular la conversión comercial.");
+        }
+      }
+    };
+
+    worker.onerror = (error) => {
+      console.error("CRM sales worker error:", error);
+      setSalesConversionLoading(false);
+      setSalesAttributionProcessing(false);
+      setSalesConversionError("No se pudo iniciar el procesamiento en segundo plano.");
+    };
+
+    return () => {
+      worker.terminate();
+      salesWorkerRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -808,6 +1632,70 @@ export default function AdminCRMPanel() {
     if (!isAdmin || !provinciaId) return;
 
     let cancelled = false;
+    setConversionTargetMessage("");
+
+    (async () => {
+      try {
+        const snapshot = await getDoc(
+          doc(db, "provincias", provinciaId, "settings", CRM_SALES_GOAL_SETTINGS_DOC)
+        );
+        const stored = Number(snapshot.exists() ? snapshot.data()?.conversionTargetPercent : NaN);
+        const target = Number.isFinite(stored) && stored >= 1 && stored <= 100
+          ? stored
+          : DEFAULT_CONVERSION_TARGET_PERCENT;
+
+        if (cancelled) return;
+        setConversionTargetPercent(target);
+        setConversionTargetDraft(String(target));
+      } catch (error) {
+        console.error("CRM conversion target load error:", error);
+        if (!cancelled) {
+          setConversionTargetPercent(DEFAULT_CONVERSION_TARGET_PERCENT);
+          setConversionTargetDraft(String(DEFAULT_CONVERSION_TARGET_PERCENT));
+          setConversionTargetMessage("No se pudo leer el objetivo guardado. Se usa 30% temporalmente.");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, provinciaId]);
+
+  const saveConversionTarget = async () => {
+    const nextTarget = Number(String(conversionTargetDraft).replace(",", "."));
+    if (!Number.isFinite(nextTarget) || nextTarget < 1 || nextTarget > 100) {
+      setConversionTargetMessage("Ingresá un objetivo válido entre 1% y 100%.");
+      return;
+    }
+
+    setConversionTargetSaving(true);
+    setConversionTargetMessage("");
+    try {
+      await setDoc(
+        doc(db, "provincias", provinciaId, "settings", CRM_SALES_GOAL_SETTINGS_DOC),
+        {
+          conversionTargetPercent: nextTarget,
+          updatedAt: serverTimestamp(),
+          updatedBy: email,
+        },
+        { merge: true }
+      );
+      setConversionTargetPercent(nextTarget);
+      setConversionTargetDraft(String(nextTarget));
+      setConversionTargetMessage(`Objetivo actualizado a ${nextTarget}%.`);
+    } catch (error) {
+      console.error("CRM conversion target save error:", error);
+      setConversionTargetMessage(error?.message || "No se pudo guardar el objetivo.");
+    } finally {
+      setConversionTargetSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAdmin || !provinciaId) return;
+
+    let cancelled = false;
     getAdminWhatsAppConnectionStatuses({ provinciaId })
       .then((result) => {
         if (cancelled) return;
@@ -847,123 +1735,183 @@ export default function AdminCRMPanel() {
   }, [selectedVendor, connectionByVendor]);
 
   useEffect(() => {
-    if (!isAdmin || !provinciaId) return;
+    if (!isAdmin || !provinciaId || !needsPanelConversations) return;
 
     let cancelled = false;
     setLoading(true);
     setLoadError("");
 
-    (async () => {
-      try {
-        const conversationsRef = collection(db, "provincias", provinciaId, "conversaciones");
-        const snapshot = await getDocs(
-          query(
-            conversationsRef,
-            where("firstInboundAt", ">=", Timestamp.fromDate(range.start)),
-            where("firstInboundAt", "<", Timestamp.fromDate(range.end)),
-            orderBy("firstInboundAt", "desc")
-          )
-        );
-
-        if (cancelled) return;
-        setConversations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-      } catch (error) {
+    loadAdminCrmConversationsForRange({
+      provinciaId,
+      start: range.start,
+      end: range.end,
+    })
+      .then((rows) => {
+        if (!cancelled) setConversations(rows);
+      })
+      .catch((error) => {
         console.error("CRM admin data loading error:", error);
         if (!cancelled) {
           setConversations([]);
           setLoadError(error?.message || "No se pudieron cargar los contactos del CRM.");
         }
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setLoading(false);
-      }
-    })();
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, provinciaId, range, refreshKey]);
+  }, [isAdmin, provinciaId, range, refreshKey, needsPanelConversations]);
 
+  // La atribución histórica se carga sólo al abrir Ventas por fecha. Usa un
+  // caché compartido para no releer el mismo historial al entrar/salir de la
+  // sección o al abrir Analítica comercial. La tabla básica aparece antes;
+  // estas lecturas sólo completan la clasificación por origen.
   useEffect(() => {
-    if (!isAdmin || !provinciaId) return;
+    if (
+      !isAdmin
+      || !provinciaId
+      || activeAdminSection !== "ventas"
+      || salesDataLoading
+      || loading
+    ) return;
 
     let cancelled = false;
+    setAttributionHistoryLoading(true);
+    setAttributionHistoryLoaded(false);
+    setAttributionHistoryError("");
+
+    loadAdminCrmAttributionHistory({
+      provinciaId,
+      seller: selectedVendor,
+      startKey: toDateInput(range.start),
+      orders: salesOrders,
+      seedConversations: conversations,
+    })
+      .then(({ conversations: rows, historicalOrders }) => {
+        if (cancelled) return;
+        setAttributionConversations(rows);
+        setAttributionHistoricalOrders(historicalOrders);
+        setAttributionHistoryLoaded(true);
+      })
+      .catch((error) => {
+        console.error("CRM sales attribution history load error:", error);
+        if (!cancelled) {
+          setAttributionConversations([]);
+          setAttributionHistoricalOrders([]);
+          setAttributionHistoryLoaded(false);
+          setAttributionHistoryError(
+            error?.message || "No se pudo cargar el historial necesario para atribuir las ventas."
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAttributionHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAdmin,
+    provinciaId,
+    activeAdminSection,
+    selectedVendor,
+    range,
+    refreshKey,
+    salesDataLoading,
+    salesOrders,
+    conversations,
+    loading,
+  ]);
+
+  useEffect(() => {
+    if (!isAdmin || !provinciaId || !needsSalesData) return;
+
+    const startKey = toDateInput(range.start);
+    const dataKey = `${provinciaId}|${startKey}|${refreshKey}`;
+    if (salesDataKeyRef.current === dataKey) return;
+
+    let cancelled = false;
+    setSalesDataLoading(true);
 
     (async () => {
       try {
-        const startKey = toDateInput(range.start);
-        const [pedidosSnapshot, cierresSnapshot] = await Promise.all([
-          getDocs(
-            query(
-              collection(db, "provincias", provinciaId, "pedidos"),
-              where("fechaStr", ">=", startKey),
-              orderBy("fechaStr", "asc")
-            )
-          ),
-          getDocs(
-            query(
-              collection(db, "provincias", provinciaId, "cierresRepartidor"),
-              where("fechaStr", ">=", startKey),
-              orderBy("fechaStr", "asc")
-            )
-          ),
-        ]);
+        const { orders, closures } = await loadAdminCrmSalesData({
+          provinciaId,
+          startKey,
+        });
 
         if (cancelled) return;
-        setSalesOrders(pedidosSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-        setSalesClosures(cierresSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+        setSalesOrders(orders);
+        setSalesClosures(closures);
+        salesDataKeyRef.current = dataKey;
       } catch (error) {
         console.error("CRM sales summary load error:", error);
         if (!cancelled) {
           setSalesOrders([]);
           setSalesClosures([]);
+          salesDataKeyRef.current = "";
           setLoadError((current) => current || error?.message || "No se pudieron cargar las ventas del CRM.");
         }
+      } finally {
+        if (!cancelled) setSalesDataLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, provinciaId, range, refreshKey]);
+  }, [isAdmin, provinciaId, range, refreshKey, needsSalesData]);
 
   useEffect(() => {
-    if (!isAdmin || !provinciaId) return;
+    if (!isAdmin || !provinciaId || !needsStatsData) return;
 
     let cancelled = false;
+    setStatsLoading(true);
 
     (async () => {
       try {
-        const actors = Array.from(new Set(["_all", ...vendors].filter(Boolean)));
-        const entries = await Promise.all(
-          actors.map(async (actor) => {
-            const snapshot = await getDocs(
-              collection(
-                db,
-                "provincias",
-                provinciaId,
-                "crmAdminStats",
-                actor,
-                "days"
-              )
-            );
-            return [actor, snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))];
-          })
-        );
+        const startKey = toDateInput(range.start);
+        const endKey = toDateInput(addDays(range.end, -1));
+        const actors = needsAllVendorStats
+          ? Array.from(new Set(["_all", ...vendors].filter(Boolean)))
+          : [selectedVendor];
 
-        if (!cancelled) setStatsByActor(Object.fromEntries(entries));
+        const rowsByActor = await loadAdminCrmStatsByActors({
+          provinciaId,
+          actors,
+          startKey,
+          endKey,
+        });
+
+        if (!cancelled) setStatsByActor(rowsByActor);
       } catch (error) {
         console.error("CRM daily stats load error:", error);
         if (!cancelled) {
           setStatsByActor({});
           setLoadError((current) => current || error?.message || "No se pudieron cargar las métricas diarias del CRM.");
         }
+      } finally {
+        if (!cancelled) setStatsLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, provinciaId, vendors, refreshKey]);
+  }, [
+    isAdmin,
+    provinciaId,
+    vendors,
+    refreshKey,
+    needsStatsData,
+    needsAllVendorStats,
+    selectedVendor,
+    range,
+  ]);
 
   const selectedRows = useMemo(() => {
     if (selectedVendor === "_all") return conversations;
@@ -972,50 +1920,203 @@ export default function AdminCRMPanel() {
     );
   }, [conversations, selectedVendor]);
 
-  const metrics = useMemo(() => computeMetrics(selectedRows), [selectedRows]);
-  const dailyFirstAttention = useMemo(
-    () => computeDailyFirstAttention(selectedRows, nowMs),
-    [selectedRows, nowMs]
+  // Este panel concentra siete vistas. Evitamos ejecutar cálculos de secciones
+  // ocultas cada vez que cambia vendedor/período: era trabajo de CPU innecesario
+  // que se notaba especialmente con cientos o miles de leads.
+  const metrics = useMemo(
+    () => (activeAdminSection === "resumen" || activeAdminSection === "ventas"
+      ? computeMetrics(selectedRows)
+      : computeMetrics([])),
+    [activeAdminSection, selectedRows]
   );
-  const adPerformance = useMemo(() => computeAdPerformance(selectedRows), [selectedRows]);
+  const dailyFirstAttention = useMemo(
+    () => (activeAdminSection === "vendedores"
+      ? computeDailyFirstAttention(selectedRows, nowMs)
+      : []),
+    [activeAdminSection, selectedRows, nowMs]
+  );
+  const adPerformance = useMemo(
+    () => (activeAdminSection === "publicidad"
+      ? computeAdPerformance(selectedRows)
+      : { totalLeads: 0, items: [], top: null }),
+    [activeAdminSection, selectedRows]
+  );
+  // La conversión comercial de "Ventas por fecha" usa exactamente la misma
+  // cohorte que "Publicidad / Leads": solo contactos cuyo primer origen fue un anuncio.
+  // El total general de contactos (orgánicos + publicidad) permanece intacto en el resto del CRM.
+  const selectedAdvertisingRows = useMemo(
+    () => (activeAdminSection === "ventas" ? selectedRows.filter(isAdvertisingLead) : []),
+    [activeAdminSection, selectedRows]
+  );
 
   const selectedActivityRows = useMemo(
-    () => filterStatsRowsByRange(statsByActor[selectedVendor] || [], range),
-    [statsByActor, selectedVendor, range]
+    () => (activeAdminSection === "resumen"
+      ? filterStatsRowsByRange(statsByActor[selectedVendor] || [], range)
+      : []),
+    [activeAdminSection, statsByActor, selectedVendor, range]
   );
   const contactActivity = useMemo(
-    () => sumDailyContactStats(selectedActivityRows),
-    [selectedActivityRows]
+    () => (activeAdminSection === "resumen"
+      ? sumDailyContactStats(selectedActivityRows)
+      : { newContacts: 0, recurrentContacts: 0 }),
+    [activeAdminSection, selectedActivityRows]
   );
   const activeContacts = contactActivity.newContacts + contactActivity.recurrentContacts;
 
   const salesSummary = useMemo(
-    () => computeSalesSummary({
-      pedidos: salesOrders,
-      cierres: salesClosures,
-      range,
-      seller: selectedVendor,
-    }),
-    [salesOrders, salesClosures, range, selectedVendor]
-  );
-
-  const salesByVendor = useMemo(() => {
-    return vendors
-      .map((vendor) => ({
-        vendor,
-        alias: vendorNames[vendor] || resolveVendedorNombre(vendor),
-        ...computeSalesSummary({
+    () => (activeAdminSection === "ventas"
+      ? computeSalesSummary({
           pedidos: salesOrders,
           cierres: salesClosures,
           range,
-          seller: vendor,
-        }),
+          seller: selectedVendor,
+        })
+      : { sold: 0, pending: 0, futurePending: 0, committed: 0, daily: [], futureDaily: [] }),
+    [activeAdminSection, salesOrders, salesClosures, range, selectedVendor]
+  );
+
+  const salesDailyRows = useMemo(
+    () => (activeAdminSection === "ventas"
+      ? mergeSalesDailyWithLeadCounts({
+          dailySales: salesSummary.daily,
+          conversations: selectedRows,
+        })
+      : []),
+    [activeAdminSection, salesSummary.daily, selectedRows]
+  );
+
+  const salesAttributionByOrderDate = workerSalesAttributionRows;
+
+  useEffect(() => {
+    if (activeAdminSection !== "ventas" || !attributionHistoryLoaded || salesDataLoading) return;
+    const worker = salesWorkerRef.current;
+    if (!worker) return;
+
+    const jobId = salesAttributionJobRef.current + 1;
+    salesAttributionJobRef.current = jobId;
+    setWorkerSalesAttributionRows([]);
+    setSalesAttributionProcessing(true);
+    setSalesAttributionStage("Preparando clasificación de ventas…");
+
+    const timer = window.setTimeout(() => {
+      worker.postMessage({
+        type: "computeAttribution",
+        jobId,
+        payload: {
+          selectedAdvertisingRows,
+          attributionConversations,
+          attributionHistoricalOrders,
+          salesOrders,
+          selectedVendor,
+          startDate: toDateInput(range.start),
+          cohortStartDate: toDateInput(range.start),
+          cohortEndDate: toDateInput(range.end),
+        },
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeAdminSection,
+    attributionHistoryLoaded,
+    attributionConversations,
+    attributionHistoricalOrders,
+    selectedAdvertisingRows,
+    salesOrders,
+    selectedVendor,
+    range,
+    salesDataLoading,
+  ]);
+
+  const salesAttributionBaseRows = useMemo(() => {
+    if (activeAdminSection !== "ventas") return [];
+    const startKey = toDateInput(range.start);
+    const rows = new Map();
+
+    for (const pedido of salesOrders) {
+      const pedidoSeller = getPedidoSeller(pedido);
+      if (selectedVendor !== "_all" && pedidoSeller !== selectedVendor) continue;
+      const date = String(pedido?.fechaStr || "").trim();
+      if (!date || date < startKey) continue;
+      rows.set(date, Number(rows.get(date) || 0) + 1);
+    }
+
+    return Array.from(rows.entries())
+      .map(([date, total]) => ({ date, total }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [activeAdminSection, salesOrders, selectedVendor, range]);
+
+  const leadCohortRows = workerLeadCohortRows;
+
+  useEffect(() => {
+    if (activeAdminSection !== "ventas" || salesDataLoading || loading) return;
+    const worker = salesWorkerRef.current;
+    if (!worker) return;
+
+    const jobId = salesConversionJobRef.current + 1;
+    salesConversionJobRef.current = jobId;
+    setWorkerLeadCohortRows([]);
+    setWorkerSalesByVendor([]);
+    setSalesConversionError("");
+    setSalesConversionLoading(true);
+    setSalesConversionStage("Preparando análisis de conversión…");
+
+    const timer = window.setTimeout(() => {
+      worker.postMessage({
+        type: "computeConversion",
+        jobId,
+        payload: {
+          selectedAdvertisingRows,
+          salesOrders,
+          salesClosures,
+          selectedVendor,
+          vendors,
+          conversations,
+          conversionTargetPercent,
+        },
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeAdminSection,
+    selectedAdvertisingRows,
+    salesOrders,
+    salesClosures,
+    selectedVendor,
+    vendors,
+    conversations,
+    conversionTargetPercent,
+    salesDataLoading,
+    loading,
+  ]);
+
+  const salesConversionSummary = useMemo(() => {
+    const leads = leadCohortRows.reduce((total, row) => total + Number(row.leads || 0), 0);
+    const converted = leadCohortRows.reduce((total, row) => total + Number(row.converted || 0), 0);
+    const conversionRate = leads ? (converted / leads) * 100 : 0;
+
+    return {
+      leads,
+      converted,
+      conversionRate,
+      remainingToGoal: Math.max(0, Math.ceil(leads * (conversionTargetPercent / 100)) - converted),
+      goalReached: leads > 0 && conversionRate >= conversionTargetPercent,
+    };
+  }, [leadCohortRows, conversionTargetPercent]);
+
+  const salesByVendor = useMemo(
+    () => workerSalesByVendor
+      .map((row) => ({
+        ...row,
+        alias: vendorNames[row.vendor] || resolveVendedorNombre(row.vendor),
       }))
-      .filter((row) => row.sold || row.pending || row.futurePending)
-      .sort((a, b) => String(a.alias || a.vendor).localeCompare(String(b.alias || b.vendor), "es"));
-  }, [vendors, vendorNames, salesOrders, salesClosures, range]);
+      .sort((a, b) => String(a.alias || a.vendor).localeCompare(String(b.alias || b.vendor), "es")),
+    [workerSalesByVendor, vendorNames]
+  );
 
   const filteredRows = useMemo(() => {
+    if (activeAdminSection !== "contactos") return [];
     const normalizedSearch = search.trim().toLowerCase();
 
     return selectedRows.filter((conversation) => {
@@ -1036,7 +2137,7 @@ export default function AdminCRMPanel() {
 
       return haystack.includes(normalizedSearch);
     });
-  }, [selectedRows, tagFilter, search]);
+  }, [activeAdminSection, selectedRows, tagFilter, search]);
 
   const totalContactPages = Math.max(1, Math.ceil(filteredRows.length / contactPageSize));
 
@@ -1054,6 +2155,7 @@ export default function AdminCRMPanel() {
   }, [totalContactPages]);
 
   const sellerRows = useMemo(() => {
+    if (activeAdminSection !== "vendedores") return [];
     return vendors
       // En la comparación solo mostramos vendedores con WhatsApp Business conectado.
       .filter((vendor) => Boolean(connectionByVendor[vendor]?.connected))
@@ -1081,11 +2183,11 @@ export default function AdminCRMPanel() {
       .sort((a, b) =>
         String(a.alias || a.vendor).localeCompare(String(b.alias || b.vendor), "es")
       );
-  }, [vendors, conversations, connectionByVendor, vendorNames, statsByActor, range, salesOrders, salesClosures]);
+  }, [activeAdminSection, vendors, conversations, connectionByVendor, vendorNames, statsByActor, range, salesOrders, salesClosures]);
 
   const salesDayPagination = useMemo(
-    () => paginateRows(salesSummary.daily, salesDayPage, salesDayPageSize),
-    [salesSummary.daily, salesDayPage, salesDayPageSize]
+    () => paginateRows(salesDailyRows, salesDayPage, salesDayPageSize),
+    [salesDailyRows, salesDayPage, salesDayPageSize]
   );
   const futureSalesPagination = useMemo(
     () => paginateRows(salesSummary.futureDaily, futureSalesPage, futureSalesPageSize),
@@ -1185,80 +2287,103 @@ export default function AdminCRMPanel() {
               Ventas pendientes/vendidas por fecha, contactos nuevos/recurrentes y control comercial por vendedor.
             </p>
           </div>
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => setRefreshKey((value) => value + 1)}
-            disabled={loading}
-          >
-            Actualizar datos
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => navigate("/admin/AdminCRMPanel/chatbot")}
+              type="button"
+            >
+              Mensajes Chatbot
+            </button>
+            {activeAdminSection !== "analitica" ? (
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => {
+                  clearAdminCrmAttributionCache(provinciaId);
+                  clearAdminCrmDataCache(provinciaId);
+                  salesDataKeyRef.current = "";
+                  setRefreshKey((value) => value + 1);
+                }}
+                disabled={loading}
+                type="button"
+              >
+                Actualizar datos
+              </button>
+            ) : null}
+          </div>
         </div>
 
+        {activeAdminSection !== "analitica" ? (
         <section className="p-4 border rounded-2xl border-base-300 bg-base-100">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <select
-              className="select select-bordered"
-              value={periodMode}
-              onChange={(event) => setPeriodMode(event.target.value)}
-            >
-              <option value="day">Día</option>
-              <option value="week">Semana</option>
-              <option value="month">Mes</option>
-              <option value="range">Rango específico</option>
-            </select>
-
-            {periodMode !== "range" ? (
-              <input
-                className="input input-bordered"
-                type="date"
-                value={toDateInput(anchorDate)}
-                onChange={(event) => setAnchorDate(fromDateInput(event.target.value) || new Date())}
-              />
-            ) : (
-              <>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <select
+                className="select select-bordered"
+                value={periodMode}
+                onChange={(event) => setPeriodMode(event.target.value)}
+              >
+                <option value="day">Día</option>
+                <option value="week">Semana</option>
+                <option value="month">Mes</option>
+                <option value="range">Rango específico</option>
+              </select>
+  
+              {periodMode !== "range" ? (
                 <input
                   className="input input-bordered"
                   type="date"
-                  value={toDateInput(customStart)}
-                  onChange={(event) => setCustomStart(fromDateInput(event.target.value) || new Date())}
+                  value={toDateInput(anchorDate)}
+                  onChange={(event) => setAnchorDate(fromDateInput(event.target.value) || new Date())}
                 />
-                <input
-                  className="input input-bordered"
-                  type="date"
-                  value={toDateInput(customEnd)}
-                  onChange={(event) => setCustomEnd(fromDateInput(event.target.value) || new Date())}
-                />
-              </>
-            )}
-
-            <select
-              className="select select-bordered"
-              value={selectedVendor}
-              onChange={(event) => setSelectedVendor(event.target.value)}
-            >
-              <option value="_all">Todos los vendedores</option>
-              {connectedVendors.map((vendor) => (
-                <option key={vendor} value={vendor}>
-                  {vendorNames[vendor] || resolveVendedorNombre(vendor)} — {vendor}
-                </option>
-              ))}
-            </select>
-
-            <div className="flex items-center px-3 text-sm border rounded-xl border-base-300 xl:col-span-2">
-              {toDateInput(range.start)} → {toDateInput(addDays(range.end, -1))}
+              ) : (
+                <>
+                  <input
+                    className="input input-bordered"
+                    type="date"
+                    value={toDateInput(customStart)}
+                    onChange={(event) => setCustomStart(fromDateInput(event.target.value) || new Date())}
+                  />
+                  <input
+                    className="input input-bordered"
+                    type="date"
+                    value={toDateInput(customEnd)}
+                    onChange={(event) => setCustomEnd(fromDateInput(event.target.value) || new Date())}
+                  />
+                </>
+              )}
+  
+              <select
+                className="select select-bordered"
+                value={selectedVendor}
+                onChange={(event) => setSelectedVendor(event.target.value)}
+              >
+                <option value="_all">Todos los vendedores</option>
+                {connectedVendors.map((vendor) => (
+                  <option key={vendor} value={vendor}>
+                    {vendorNames[vendor] || resolveVendedorNombre(vendor)} — {vendor}
+                  </option>
+                ))}
+              </select>
+  
+              <div className="flex items-center px-3 text-sm border rounded-xl border-base-300 xl:col-span-2">
+                {toDateInput(range.start)} → {toDateInput(addDays(range.end, -1))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
-        {loadError ? (
+        {loadError && needsPanelConversations ? (
           <div className="alert alert-error">
             <span>{loadError}</span>
           </div>
         ) : null}
 
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <span className="loading loading-spinner loading-lg" />
+        {loading && needsPanelConversations ? (
+          <div className="py-4">
+            <CrmLoadingBanner
+              title="Cargando datos del CRM…"
+              message="Trayendo únicamente los contactos del período seleccionado."
+              note="Los datos se mantienen intactos; esta pantalla sólo está actualizando la vista."
+            />
           </div>
         ) : (
           <>
@@ -1269,7 +2394,9 @@ export default function AdminCRMPanel() {
                   ["vendedores", "2. Rendimiento vendedores", "Comparación por vendedor y semáforo diario"],
                   ["publicidad", "3. Publicidad / Leads", "Qué publicación genera más contactos nuevos"],
                   ["ventas", "4. Ventas por fecha", "Vendidos, pendientes y días futuros"],
-                  ["contactos", "5. Detalle de contactos", "Listado, filtros y análisis individual"],
+                  ["contactos", "5. Detalle de contactos", "Leads cuyo primer ingreso ocurrió en el período"],
+                  ["actividad", "6. Actividad del día", "Todos los contactos que realmente hablaron en el período"],
+                  ["analitica", "7. Analítica comercial", "Vista macro con métricas, gráficos y atribución"],
                 ].map(([key, title, description]) => {
                   const active = activeAdminSection === key;
                   return (
@@ -1292,6 +2419,17 @@ export default function AdminCRMPanel() {
                 })}
               </div>
             </section>
+
+            {((needsStatsData && statsLoading) || (activeAdminSection === "vendedores" && salesDataLoading)) ? (
+              <div className="flex items-center gap-3 p-3 text-sm border rounded-xl border-info/30 bg-info/10">
+                <span className="loading loading-spinner loading-sm shrink-0" />
+                <span>
+                  {statsLoading
+                    ? "Cargando estadísticas exactas del período…"
+                    : "Cargando pedidos y cierres para comparar vendedores…"}
+                </span>
+              </div>
+            ) : null}
 
             {activeAdminSection === "resumen" ? (
               <>
@@ -1969,120 +3107,430 @@ export default function AdminCRMPanel() {
 
             {activeAdminSection === "ventas" ? (
               <>
-            <section className="p-4 space-y-4 border rounded-2xl border-base-300 bg-base-100">
+            <section className="p-4 space-y-5 border rounded-2xl border-base-300 bg-base-100">
               <div>
-                <h2 className="text-lg font-semibold">Ventas CRM por fecha del pedido</h2>
+                <h2 className="text-lg font-semibold">Conversión de ventas</h2>
                 <p className="mt-1 text-xs opacity-60">
-                  No duplica el módulo de pedidos: acá solo se resume el rendimiento comercial. Un pedido queda pendiente hasta que aparece en el cierre individual del reparto correspondiente.
+                  Mide qué porcentaje de los leads recibidos terminó generando un pedido. El pedido cuenta como conversión aunque sea para hoy o para un día posterior; el cierre del reparto no cambia este porcentaje.
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Vendidos en el período" value={salesSummary.sold} />
-                <MetricCard label="Pendientes del período" value={salesSummary.pending} />
-                <MetricCard
-                  label={periodMode === "day" ? "Pendientes para otros días" : "Pendientes posteriores"}
-                  value={salesSummary.futurePending}
+              {(salesInitialPending || salesDataLoading || salesConversionLoading || attributionHistoryLoading || salesAttributionProcessing) ? (
+                <CrmLoadingBanner
+                  title="Actualizando análisis de ventas…"
+                  message={salesInitialPending || salesDataLoading
+                    ? "Cargando pedidos y cierres necesarios para esta fecha…"
+                    : salesConversionLoading
+                      ? (salesConversionStage || "Calculando conversión en segundo plano…")
+                      : attributionHistoryLoading
+                        ? "Buscando únicamente las conversaciones y antecedentes de estas ventas…"
+                        : (salesAttributionStage || "Clasificando el origen de las ventas en segundo plano…")}
                 />
-                <MetricCard label="Total comercial comprometido" value={salesSummary.committed} />
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Fecha del pedido</th>
-                      <th>Vendidos</th>
-                      <th>Venta pendiente</th>
-                      <th>Total del día</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {salesSummary.daily.length ? salesDayPagination.rows.map((day) => (
-                      <tr key={day.date}>
-                        <td className="font-medium">{day.date}</td>
-                        <td className="font-semibold text-success">{day.sold}</td>
-                        <td className="font-semibold text-warning">{day.pending}</td>
-                        <td className="font-semibold">{day.sold + day.pending}</td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center opacity-60">
-                          No hay pedidos comerciales para el período seleccionado.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <PaginationBar
-                page={salesDayPage}
-                totalPages={salesDayPagination.totalPages}
-                totalItems={salesSummary.daily.length}
-                pageSize={salesDayPageSize}
-                onPageChange={setSalesDayPage}
-                onPageSizeChange={(size) => { setSalesDayPageSize(size); setSalesDayPage(1); }}
-                label="días"
-                pageSizeOptions={[5, 10, 15, 30]}
-              />
-
-              {salesSummary.futureDaily.length ? (
-                <div>
-                  <h3 className="text-sm font-semibold">Pendientes para días posteriores</h3>
-                  <div className="mt-2 overflow-x-auto">
-                    <table className="table table-sm">
-                      <thead><tr><th>Fecha</th><th>Venta pendiente</th></tr></thead>
-                      <tbody>
-                        {futureSalesPagination.rows.map((day) => (
-                          <tr key={day.date}>
-                            <td className="font-medium">{day.date}</td>
-                            <td className="font-semibold text-warning">{day.pending}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <PaginationBar
-                    page={futureSalesPage}
-                    totalPages={futureSalesPagination.totalPages}
-                    totalItems={salesSummary.futureDaily.length}
-                    pageSize={futureSalesPageSize}
-                    onPageChange={setFutureSalesPage}
-                    onPageSizeChange={(size) => { setFutureSalesPageSize(size); setFutureSalesPage(1); }}
-                    label="días pendientes"
-                    pageSizeOptions={[5, 10, 15, 30]}
-                  />
-                </div>
               ) : null}
+
+              {salesConversionError ? (
+                <div className="p-3 text-sm border rounded-xl border-error/30 bg-error/10 text-error">{salesConversionError}</div>
+              ) : null}
+
+              <div className="flex flex-col gap-3 p-3 border rounded-xl border-base-300 bg-base-200/40 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="text-sm font-semibold">Objetivo de conversión</div>
+                  <p className="mt-1 text-xs opacity-60">
+                    Meta general para todos los vendedores. Solo afecta esta medición comercial; no modifica pedidos, cierres ni reparto.
+                  </p>
+                  {conversionTargetMessage ? (
+                    <div className="mt-2 text-xs">{conversionTargetMessage}</div>
+                  ) : null}
+                </div>
+                <div className="flex items-end gap-2">
+                  <label className="form-control">
+                    <span className="mb-1 text-xs opacity-70">Porcentaje</span>
+                    <div className="join">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="0.1"
+                        className="w-28 input input-bordered input-sm join-item"
+                        value={conversionTargetDraft}
+                        onChange={(event) => {
+                          setConversionTargetDraft(event.target.value);
+                          setConversionTargetMessage("");
+                        }}
+                        disabled={conversionTargetSaving}
+                      />
+                      <span className="flex items-center px-3 text-sm border border-l-0 border-base-300 bg-base-100 join-item">%</span>
+                    </div>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={saveConversionTarget}
+                    disabled={conversionTargetSaving}
+                  >
+                    {conversionTargetSaving ? "Guardando..." : "Guardar objetivo"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <MetricCard
+                  label={periodMode === "day" ? "Leads recibidos hoy" : "Leads recibidos"}
+                  value={metrics.received}
+                />
+                <MetricCard
+                  label={periodMode === "day" ? "Leads desde publicidad hoy" : "Leads desde publicidad"}
+                  value={selectedAdvertisingRows.length}
+                />
+                <MetricCard
+                  label="Pedidos logrados"
+                  value={salesConversionSummary.converted}
+                  loading={salesResultsPending}
+                  loadingLabel="Buscando pedidos…"
+                />
+                <MetricCard
+                  label="Conversión comercial"
+                  value={`${salesConversionSummary.conversionRate.toFixed(1)}%`}
+                  loading={salesResultsPending}
+                  loadingLabel="Calculando porcentaje…"
+                />
+                <MetricCard
+                  label="Objetivo diario"
+                  value={salesConversionSummary.goalReached ? `${conversionTargetPercent}% alcanzado` : `${conversionTargetPercent}%`}
+                />
+              </div>
+
+              <div className="p-3 text-sm border rounded-xl border-base-300 bg-base-200/40">
+                {salesResultsPending ? (
+                  <span className="flex items-center gap-2 crm-fade-in opacity-70">
+                    <span className="loading loading-dots loading-sm" />
+                    Preparando pedidos logrados y porcentaje de conversión…
+                  </span>
+                ) : salesConversionSummary.leads ? (
+                  salesConversionSummary.goalReached ? (
+                    <span>
+                      <b>Objetivo alcanzado:</b> {salesConversionSummary.converted} pedidos sobre {salesConversionSummary.leads} leads = <b>{salesConversionSummary.conversionRate.toFixed(1)}%</b>.
+                    </span>
+                  ) : (
+                    <span>
+                      <b>Objetivo {conversionTargetPercent}%:</b> {salesConversionSummary.converted} pedidos sobre {salesConversionSummary.leads} leads = <b>{salesConversionSummary.conversionRate.toFixed(1)}%</b>. Faltan <b>{salesConversionSummary.remainingToGoal}</b> pedido{salesConversionSummary.remainingToGoal === 1 ? "" : "s"} para alcanzar al menos el {conversionTargetPercent}% con esta cantidad de leads.
+                    </span>
+                  )
+                ) : (
+                  <span className="opacity-60">No hay leads de publicidad en el período seleccionado.</span>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold">Conversión por día de ingreso</h3>
+                <p className="mt-1 text-xs opacity-60">
+                  Cada día se mide únicamente con los leads que ingresaron desde publicidad. Si uno de esos leads compra para mañana o para otro día, la venta sigue sumando a la conversión del día en que ingresó ese lead.
+                </p>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Día</th>
+                        <th>Leads de publicidad</th>
+                        <th>Pedidos logrados</th>
+                        <th>Ventas para</th>
+                        <th>Conversión</th>
+                        <th>Objetivo {conversionTargetPercent}%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesDataLoading || salesConversionLoading ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center">
+                            <span className="inline-flex items-center gap-2 text-sm opacity-70">
+                              <span className="loading loading-spinner loading-sm" />
+                              {salesConversionStage || "Calculando conversión por día…"}
+                            </span>
+                          </td>
+                        </tr>
+                      ) : leadCohortRows.length ? leadCohortRows.map((cohort) => {
+                        const goalReached = cohort.conversionRate >= conversionTargetPercent;
+                        return (
+                          <tr key={cohort.leadDate}>
+                            <td className="font-medium">{cohort.leadDate}</td>
+                            <td className="font-semibold">{cohort.leads}</td>
+                            <td className="font-semibold">{cohort.converted}</td>
+                            <td>
+                              {cohort.deliveryDates?.length ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {cohort.deliveryDates.map((delivery) => (
+                                    <span
+                                      key={`${cohort.leadDate}-${delivery.date}`}
+                                      className="badge badge-ghost whitespace-nowrap"
+                                      title={`${delivery.count} pedido${delivery.count === 1 ? "" : "s"} logrado${delivery.count === 1 ? "" : "s"} para ${delivery.date}`}
+                                    >
+                                      {delivery.date}: {delivery.count}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs opacity-50">Sin pedidos</span>
+                              )}
+                            </td>
+                            <td className={`font-semibold ${goalReached ? "text-success" : "text-warning"}`}>
+                              {cohort.conversionRate.toFixed(1)}%
+                            </td>
+                            <td>
+                              <span className={`badge ${goalReached ? "badge-success" : "badge-warning"}`}>
+                                {goalReached ? `${conversionTargetPercent}% alcanzado` : `Meta ${conversionTargetPercent}%`}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      }) : (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center opacity-60">
+                            No hay leads de publicidad para calcular conversión en este período.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold">Clasificación de ventas por fecha</h3>
+                <p className="mt-1 text-xs opacity-60">
+                  Cada pedido entra una sola vez en una categoría. La clasificación combina cuándo ingresó el lead, si el cliente ya tenía una compra previa y qué origen pudo confirmar el CRM. “Recurrente” describe el historial del cliente; no significa que el origen sea orgánico. Podés tocar cualquier cantidad para ver exactamente qué pedidos y teléfonos la componen.
+                </p>
+
+                {attributionHistoryError ? (
+                  <div className="p-3 mt-3 text-sm border rounded-xl border-error/30 bg-error/10 text-error">
+                    {attributionHistoryError}
+                  </div>
+                ) : null}
+
+                {attributionHistoryLoading || salesAttributionProcessing ? (
+                  <div className="mt-3">
+                    <CrmLoadingBanner
+                      compact
+                      title="Clasificación de ventas"
+                      message={attributionHistoryLoading
+                        ? "Buscando sólo los antecedentes de los clientes que tienen pedidos…"
+                        : (salesAttributionStage || "Clasificando el origen de cada pedido…")}
+                      note="Las fechas futuras y los totales siguen visibles mientras se completa la clasificación."
+                    />
+                  </div>
+                ) : null}
+
+                <div className="mt-2 overflow-x-auto">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th rowSpan={2} className="align-middle">Fecha</th>
+                        <th colSpan={3} className="text-center border-l border-base-300">Publicidad atribuida</th>
+                        <th colSpan={5} className="text-center border-l border-base-300">Otros orígenes / atribución</th>
+                        <th rowSpan={2} className="align-middle border-l border-base-300">Total</th>
+                      </tr>
+                      <tr>
+                        <th className="border-l border-base-300">{periodMode === "day" ? "Publicidad · lead del día" : "Publicidad · lead del período"}</th>
+                        <th>Publicidad · lead anterior</th>
+                        <th>Publicidad · cliente recurrente</th>
+                        <th className="border-l border-base-300">Entrada Meta confirmada</th>
+                        <th>Facebook Marketplace</th>
+                        <th>Facebook contenido</th>
+                        <th>Sin publicidad registrada</th>
+                        <th>Origen no identificado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {((attributionHistoryLoaded && !salesAttributionProcessing) ? salesAttributionByOrderDate : salesAttributionBaseRows).length ? (
+                        (attributionHistoryLoaded && !salesAttributionProcessing) ? salesAttributionByOrderDate : salesAttributionBaseRows
+                      ).map((row) => {
+                        const detailButton = (count, items, title, className = "") => count > 0 ? (
+                          <button
+                            type="button"
+                            className={`btn btn-ghost btn-xs h-7 min-h-0 px-2 font-semibold ${className}`}
+                            onClick={() => setSalesAttributionDetail({
+                              title,
+                              date: row.date,
+                              items,
+                            })}
+                            title={`Ver los ${count} pedido${count === 1 ? "" : "s"}`}
+                          >
+                            {count}
+                          </button>
+                        ) : (
+                          <span className={`px-2 font-semibold ${className}`}>0</span>
+                        );
+
+                        if (!attributionHistoryLoaded || salesAttributionProcessing) {
+                          return (
+                            <tr key={`sales-attribution-loading-${row.date}`}>
+                              <td className="font-medium">{row.date}</td>
+                              {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
+                                <td key={`${row.date}-loading-${index}`}>
+                                  <CrmSkeletonLine widthClass={index % 2 === 0 ? "w-12" : "w-9"} />
+                                </td>
+                              ))}
+                              <td className="text-lg font-semibold">{row.total}</td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={`sales-attribution-${row.date}`}>
+                            <td className="font-medium">{row.date}</td>
+                            <td>
+                              {detailButton(
+                                row.selectedLeadSales,
+                                row.selectedLeadItems,
+                                periodMode === "day"
+                                  ? "Ventas de publicidad · leads del día seleccionado"
+                                  : "Ventas de publicidad · leads del período seleccionado",
+                                "text-primary"
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.previousLeadSales,
+                                row.previousLeadItems,
+                                "Ventas de publicidad · leads de otros días"
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.recurrentAdSales,
+                                row.recurrentAdItems,
+                                "Ventas de publicidad · clientes recurrentes"
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.metaEntrySales,
+                                row.metaEntryItems,
+                                "Ventas con entrada Meta confirmada (sin anuncio exacto)",
+                                row.metaEntrySales ? "text-secondary" : ""
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.marketplaceSales || 0,
+                                row.marketplaceItems || [],
+                                "Ventas desde Facebook Marketplace"
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.facebookContentSales || 0,
+                                row.facebookContentItems || [],
+                                "Ventas desde Facebook contenido"
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.organicSales,
+                                row.organicItems,
+                                "Ventas sin publicidad registrada"
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.unidentifiedSales,
+                                row.unidentifiedItems,
+                                "Ventas con origen no identificado",
+                                row.unidentifiedSales ? "text-warning" : ""
+                              )}
+                            </td>
+                            <td>
+                              {detailButton(
+                                row.total,
+                                row.totalItems,
+                                "Todas las ventas del vendedor",
+                                "text-base-content text-base"
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      }) : (
+                        <tr>
+                          <td colSpan={10} className="py-6 text-center opacity-60">
+                            No hay ventas cargadas para mostrar.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] opacity-60">
+                  La conversión de arriba cuenta cada lead una sola vez cuando consigue su primer pedido. Esta tabla clasifica pedidos reales por fecha y cada pedido aparece en una sola categoría. “Publicidad · cliente recurrente” significa que el cliente ya tenía una compra previa y volvió desde publicidad; no se lo considera orgánico.
+                </p>
+              </div>
 
               {selectedVendor === "_all" ? (
                 <div>
-                  <h3 className="text-sm font-semibold">Desglose por vendedor</h3>
+                  <h3 className="text-sm font-semibold">Conversión por vendedor</h3>
+                  <p className="mt-1 text-xs opacity-60">
+                    Permite comparar cuántos pedidos consiguió cada vendedor sobre los leads de publicidad que recibió en el período seleccionado.
+                  </p>
                   <div className="mt-2 overflow-x-auto">
                     <table className="table table-sm">
                       <thead>
                         <tr>
                           <th>Vendedor</th>
-                          <th>Vendidos</th>
-                          <th>Pendientes del período</th>
-                          <th>Pendientes futuras</th>
-                          <th>Total comprometido</th>
+                          <th>Leads de publicidad</th>
+                          <th>Pedidos logrados</th>
+                          <th>Ventas para</th>
+                          <th>Conversión</th>
+                          <th>Objetivo {conversionTargetPercent}%</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {salesByVendor.length ? salesVendorPagination.rows.map((row) => (
+                        {salesResultsPending ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center">
+                              <span className="inline-flex items-center gap-2 text-sm opacity-70">
+                                <span className="loading loading-spinner loading-sm" />
+                                {salesConversionStage || "Calculando conversión por vendedor…"}
+                              </span>
+                            </td>
+                          </tr>
+                        ) : salesByVendor.length ? salesVendorPagination.rows.map((row) => (
                           <tr key={row.vendor}>
                             <td>
                               <div className="font-semibold">{row.alias}</div>
                               <div className="text-[11px] opacity-60">{row.vendor}</div>
                             </td>
-                            <td>{row.sold}</td>
-                            <td>{row.pending}</td>
-                            <td>{row.futurePending}</td>
-                            <td className="font-semibold">{row.committed}</td>
+                            <td>{row.leads}</td>
+                            <td className="font-semibold">{row.converted}</td>
+                            <td>
+                              {row.salesByDate?.length ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {row.salesByDate.map((sale) => (
+                                    <span
+                                      key={`${row.vendor}-${sale.date}`}
+                                      className="badge badge-ghost badge-sm whitespace-nowrap"
+                                      title={`${sale.count} pedido${sale.count === 1 ? "" : "s"} logrado${sale.count === 1 ? "" : "s"} para ${sale.date}`}
+                                    >
+                                      {sale.date}: {sale.count}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs opacity-50">Sin pedidos</span>
+                              )}
+                            </td>
+                            <td className={`font-semibold ${row.goalReached ? "text-success" : "text-warning"}`}>
+                              {row.conversionRate.toFixed(1)}%
+                            </td>
+                            <td>
+                              {row.goalReached ? (
+                                <span className="badge badge-success">Alcanzado</span>
+                              ) : (
+                                <span className="text-xs">
+                                  Faltan {row.remainingToGoal} pedido{row.remainingToGoal === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </td>
                           </tr>
                         )) : (
-                          <tr><td colSpan={5} className="py-6 text-center opacity-60">Sin ventas para mostrar.</td></tr>
+                          <tr><td colSpan={6} className="py-6 text-center opacity-60">Sin leads de publicidad para mostrar.</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -2101,6 +3549,25 @@ export default function AdminCRMPanel() {
               ) : null}
             </section>
               </>
+            ) : null}
+
+            {activeAdminSection === "actividad" ? (
+              <AdminCrmDailyActivity
+                provinciaId={provinciaId}
+                selectedVendor={selectedVendor}
+                vendorNames={vendorNames}
+                range={range}
+                refreshKey={refreshKey}
+              />
+            ) : null}
+
+            {activeAdminSection === "analitica" ? (
+              <AdminCrmAnalytics
+                provinciaId={provinciaId}
+                vendors={vendors}
+                vendorNames={vendorNames}
+                connectedVendors={connectedVendors}
+              />
             ) : null}
 
             {activeAdminSection === "contactos" ? (
@@ -2185,14 +3652,7 @@ export default function AdminCRMPanel() {
                             ) : "—"}
                           </td>
                           <td>
-                            {isAdvertisingLead(conversation) ? (
-                              <div>
-                                <span className="badge badge-sm badge-info whitespace-nowrap w-max">Publicidad</span>
-                                <div className="mt-1 font-mono text-[10px] opacity-60">{firstReferralOf(conversation)?.sourceId || conversation?.leadSourceId || "sin ID"}</div>
-                              </div>
-                            ) : (
-                              <span className="badge badge-sm badge-ghost whitespace-nowrap w-max">No publicidad</span>
-                            )}
+                            <LeadOriginCell conversation={conversation} />
                           </td>
                           <td>{formatDateTime(conversation.firstInboundAt || conversation.createdAt)}</td>
                           <td>{formatDateTime(conversation.firstEverSellerResponseAt)}</td>
@@ -2273,6 +3733,131 @@ export default function AdminCRMPanel() {
           </>
         )}
       </main>
+
+      {salesAttributionDetail ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sales-attribution-detail-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSalesAttributionDetail(null);
+          }}
+        >
+          <div className="flex flex-col w-full max-w-6xl max-h-[85vh] overflow-hidden border shadow-xl rounded-2xl border-base-300 bg-base-100">
+            <div className="flex items-start justify-between gap-4 p-4 border-b border-base-300">
+              <div>
+                <h3 id="sales-attribution-detail-title" className="text-lg font-semibold">
+                  {salesAttributionDetail.title}
+                </h3>
+                <p className="mt-1 text-xs opacity-60">
+                  Fecha del pedido: {salesAttributionDetail.date} · {salesAttributionDetail.items.length} pedido{salesAttributionDetail.items.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => setSalesAttributionDetail(null)}
+                aria-label="Cerrar detalle"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overflow-auto">
+              <table className="table table-sm">
+                <thead className="sticky top-0 z-10 bg-base-100">
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Teléfono</th>
+                    <th>Vendedor</th>
+                    <th>Día del lead</th>
+                    <th>Historial</th>
+                    <th>Origen</th>
+                    <th>Publicidad / Source ID</th>
+                    <th>Pedido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesAttributionDetail.items.map((item, index) => (
+                    <tr key={`${item.pedidoId}-${index}`}>
+                      <td className="font-medium">{item.customerName}</td>
+                      <td className="font-mono text-xs whitespace-nowrap">{item.phone}</td>
+                      <td>
+                        {item.seller ? (
+                          <div>
+                            <div className="font-medium">
+                              {vendorNames[item.seller] || resolveVendedorNombre(item.seller)}
+                            </div>
+                            <div className="text-[10px] opacity-50">{item.seller}</div>
+                          </div>
+                        ) : (
+                          <span className="opacity-50">—</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap">{item.leadDate || "—"}</td>
+                      <td>
+                        <span className={`badge badge-sm whitespace-nowrap ${item.hasPreviousOrder ? "badge-secondary" : "badge-ghost"}`}>
+                          {item.hasPreviousOrder ? "Con compra previa" : "Sin compra previa"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge badge-sm whitespace-nowrap ${
+                          item.sourceType === "ad"
+                            ? "badge-info"
+                            : item.sourceType === "meta_entry"
+                              ? "badge-secondary"
+                            : item.sourceType === "marketplace"
+                              ? "badge-accent"
+                            : item.sourceType === "facebook_content"
+                              ? "badge-primary"
+                            : item.sourceType === "organic"
+                              ? "badge-ghost"
+                              : "badge-warning"
+                        }`}>
+                          {item.sourceLabel}
+                        </span>
+                      </td>
+                      <td className="max-w-[320px]">
+                        {item.sourceType === "ad" ? (
+                          <div>
+                            <div className="text-xs font-medium line-clamp-2">
+                              {item.sourceHeadline || "Publicidad sin título"}
+                            </div>
+                            <div className="mt-1 font-mono text-[10px] opacity-60 break-all">
+                              {item.sourceId || "Sin Source ID"}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs opacity-50">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="font-mono text-[10px] opacity-70 break-all">{item.pedidoId}</div>
+                        {item.conversationId ? (
+                          <div className="mt-1 text-[10px] opacity-50">
+                            CRM: {item.linkType || "vínculo"}
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end p-3 border-t border-base-300">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setSalesAttributionDetail(null)}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

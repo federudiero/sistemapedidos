@@ -1,0 +1,95 @@
+{
+  "requestId": "b5jpwwzyuF2rQmqsNBEl",
+  "found": true,
+  "receivedAt": "2026-10-02T11:40:54.678Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 645,
+  "rawSha256": "b5f80f91a1c0ad84ebd89924c7ed053392eecfd7981159f3b8b8c2d23f1bdabd",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzODI0NzM3NBUCABIYIEFDNUYzNDNBQTE3NDA5REU4QjU5MzU5MDEyMkNEMEFEAA=="
+    ],
+    "senderWaIds": [
+      "5491138247374"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "indumentaria"
+                  },
+                  "wa_id": "5491138247374",
+                  "user_id": "AR.1411508481090245"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491138247374",
+                  "from_user_id": "AR.1411508481090245",
+                  "id": "wamid.HBgNNTQ5MTEzODI0NzM3NBUCABIYIEFDNUYzNDNBQTE3NDA5REU4QjU5MzU5MDEyMkNEMEFEAA==",
+                  "timestamp": "1790941253",
+                  "text": {
+                    "body": "El envío es por cada balde o es un solo envío y puedes pedir tres baldes"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

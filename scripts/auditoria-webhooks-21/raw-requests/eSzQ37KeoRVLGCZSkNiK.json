@@ -1,0 +1,95 @@
+{
+  "requestId": "eSzQ37KeoRVLGCZSkNiK",
+  "found": true,
+  "receivedAt": "2026-10-02T14:11:45.322Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 603,
+  "rawSha256": "95c37d0c3c1ffe9ee86407f5eb16f04498d93888c471289868b69731a81f2d2e",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2MTIxMDc4NRUCABIYIEFDRUNDRjk5NzA1REM5QkE0QUQyMDYyOEFEMjg3MUVBAA=="
+    ],
+    "senderWaIds": [
+      "5491161210785"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Andre"
+                  },
+                  "wa_id": "5491161210785",
+                  "user_id": "AR.1059199337112479"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491161210785",
+                  "from_user_id": "AR.1059199337112479",
+                  "id": "wamid.HBgNNTQ5MTE2MTIxMDc4NRUCABIYIEFDRUNDRjk5NzA1REM5QkE0QUQyMDYyOEFEMjg3MUVBAA==",
+                  "timestamp": "1790950304",
+                  "text": {
+                    "body": "Membrana blanca como para el exterior no tienen"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

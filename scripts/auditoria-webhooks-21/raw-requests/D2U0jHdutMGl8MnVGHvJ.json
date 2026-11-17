@@ -1,0 +1,110 @@
+{
+  "requestId": "D2U0jHdutMGl8MnVGHvJ",
+  "found": true,
+  "receivedAt": "2026-10-02T15:41:12.094Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 1340,
+  "rawSha256": "df7465f9a1c530c8fcb0c5ed262e55286729e46478c7214c02e97f93af9c1f96",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 1,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzOTIwODA2ORUCABIYIEFDNkIyMzhCNTk0NzkwREY0NUEyRTgzRTBERTNFRkQxAA=="
+    ],
+    "senderWaIds": [
+      "5491139208069"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [
+      "120251654117980242"
+    ],
+    "referralSourceTypes": [
+      "ad"
+    ],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Flor 💜"
+                  },
+                  "wa_id": "5491139208069",
+                  "user_id": "AR.1616846636890524"
+                }
+              ],
+              "messages": [
+                {
+                  "referral": {
+                    "source_url": "https://wa.me/wamo/status/preview/5491169730249/120255167149840242",
+                    "source_id": "120251654117980242",
+                    "source_type": "ad",
+                    "headline": "Anuncio en estados",
+                    "media_type": "video",
+                    "thumbnail_url": "https://scontent.xx.fbcdn.net/v/t15.5256-10/706078977_27479599121625784_3186017717290810976_n.jpg?stp=dst-jpg_p180x540_tt6&_nc_cat=100&ccb=1-7&_nc_sid=40cf1a&_nc_ohc=YdT9dGSqOGYQ7kNvwEPX-Ta&_nc_oc=AdomzPmzsW6UExg-Q5ELcKkk1-4Qpu7PZba0O9zkpU_jjaTrHF9mAPDFyhO4GfMlcJY&_nc_zt=23&_nc_ht=scontent.xx&_nc_gid=HCdA0GGS1vr6wWIk8Bkcyw&_nc_ss=7f39b&oh=00_AQOvfNu5koNee47S1yxpKzN4gJ4zEmoBSJR8tbVrmIrweA&oe=6AC5B405",
+                    "welcome_message": {
+                      "text": "Hola! Gracias por consultar POR NUESTRA PINTURA !"
+                    }
+                  },
+                  "from": "5491139208069",
+                  "from_user_id": "AR.1616846636890524",
+                  "id": "wamid.HBgNNTQ5MTEzOTIwODA2ORUCABIYIEFDNkIyMzhCNTk0NzkwREY0NUEyRTgzRTBERTNFRkQxAA==",
+                  "timestamp": "1790955670",
+                  "text": {
+                    "body": "¡Hola! Quiero más información Sobre  PINTURAS"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

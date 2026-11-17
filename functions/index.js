@@ -51,3 +51,13 @@ exports.cierreRepartidorCrmSync = functions
   .region("us-central1")
   .firestore.document("provincias/{prov}/cierresRepartidor/{cierreId}")
   .onWrite(handleCierreRepartidorCrmSync);
+
+// Procesa lotes de costos programados de Fábrica. No toca otros módulos.
+exports.aplicarCostosProgramadosFabrica = functions
+  .region("us-central1")
+  .pubsub.schedule("10 0 * * *")
+  .timeZone("America/Argentina/Buenos_Aires")
+  .onRun(async () => {
+    const { aplicarCostosPendientes } = require("./src/services/costos-programados.service");
+    return aplicarCostosPendientes();
+  });

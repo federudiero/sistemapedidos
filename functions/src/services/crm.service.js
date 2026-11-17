@@ -19,6 +19,27 @@ const {
   disconnectWhatsAppConnection,
 } = require("./connection.service");
 const { assertVendorListedProv } = require("./vendor.service");
+const {
+  isChatbotPhoneNumber,
+} = require("../chatbot/chatbot-config.service");
+const {
+  parseChatbotInbound,
+  parseChatbotStatus,
+  processChatbotInbound,
+  processChatbotStatus,
+} = require("../chatbot/chatbot-webhook.service");
+const {
+  linkPendingHandoffFromSellerInbound,
+} = require("../chatbot/chatbot-handoff.service");
+const {
+  captureRawWebhook,
+  captureWebhookEvents,
+  markWebhookEventProcessed,
+  markWebhookEventError,
+  markRawWebhookProcessed,
+  markRawWebhookProcessingError,
+  buildAuditCaptureError,
+} = require("./webhook-audit.service");
 
 
 function serializeDate(value) {
@@ -35,6 +56,10 @@ function serializeDate(value) {
 
 function sellerConversationPayload(docSnap) {
   const data = docSnap.data() || {};
+  const firstReferral =
+    data.firstReferral && typeof data.firstReferral === "object" && !Array.isArray(data.firstReferral)
+      ? data.firstReferral
+      : null;
 
   return {
     id: docSnap.id,
@@ -51,6 +76,10 @@ function sellerConversationPayload(docSnap) {
     lastInboundAt: serializeDate(data.lastInboundAt),
     lastMessageAt: serializeDate(data.lastMessageAt),
     lastFrom: data.lastFrom || null,
+    leadSourceType: data.leadSourceType || null,
+    leadSourceId: data.leadSourceId || null,
+    leadSourceHeadline: data.leadSourceHeadline || null,
+    firstReferral,
   };
 }
 
@@ -453,46 +482,225 @@ function verifyWebhook(req) {
   return { ok: false };
 }
 
-async function handleWebhook(req) {
-  const prov = getProvFromReq(req);
-  const parsed = parseWhatsAppWebhook(req.body);
-  const results = [];
+async function processParsedWebhookItem({ prov, item }) {
+  const eventPhoneNumberId = String(
+    item?.value?.metadata?.phone_number_id ||
+      item?.payload?.phone_number_id ||
+      ""
+  ).trim();
 
-  for (const item of parsed) {
-    if (item.kind === "status") {
-      const event = parseStatusEvent(item.value, item.payload);
-      if (event) {
-        results.push({
-          kind: "status",
-          ...(await processStatusEvent({ prov, statusEvent: event })),
-        });
-      }
+  const chatbotEvent = eventPhoneNumberId
+    ? await isChatbotPhoneNumber({ prov, phoneNumberId: eventPhoneNumberId })
+    : false;
+
+  if (item.kind === "status") {
+    if (chatbotEvent) {
+      const statusEvent = parseChatbotStatus(item.value, item.payload);
+      if (!statusEvent) return null;
+      return {
+        kind: "chatbot_status",
+        ...(await processChatbotStatus({ prov, statusEvent })),
+      };
     }
 
-    if (item.kind === "message") {
-      const inbound = parseInboundMessage(item.value, item.payload);
-      if (inbound) {
-        results.push({
-          kind: "message",
-          ...(await processInboundMessage({ prov, inbound })),
-        });
-      }
-    }
-
-    if (item.kind === "echo") {
-      const echo = parseMessageEcho(item.value, item.payload);
-      if (echo) {
-        results.push({
-          kind: "echo",
-          ...(await processMessageEcho({ prov, echo })),
-        });
-      }
-    }
+    const event = parseStatusEvent(item.value, item.payload);
+    if (!event) return null;
+    return {
+      kind: "status",
+      ...(await processStatusEvent({ prov, statusEvent: event })),
+    };
   }
 
-  return results.length
-    ? { ok: true, prov, results }
-    : { ok: true, ignored: true };
+  if (item.kind === "message") {
+    if (chatbotEvent) {
+      const chatbotInbound = parseChatbotInbound(item.value, item.payload);
+      if (!chatbotInbound) return null;
+      return {
+        kind: "chatbot_message",
+        ...(await processChatbotInbound({ prov, inbound: chatbotInbound })),
+      };
+    }
+
+    const inbound = parseInboundMessage(item.value, item.payload);
+    if (!inbound) return null;
+
+    const crmResult = await processInboundMessage({ prov, inbound });
+    let chatbotHandoff = null;
+
+    if (crmResult?.ok && crmResult?.convId) {
+      try {
+        chatbotHandoff = await linkPendingHandoffFromSellerInbound({
+          prov,
+          inbound,
+          crmResult,
+        });
+      } catch (error) {
+        // Nunca se bloquea el CRM actual si falla el enlace auxiliar del chatbot.
+        console.error("CHATBOT HANDOFF LINK ERROR", {
+          prov,
+          convId: crmResult?.convId || null,
+          message: error?.message || String(error),
+        });
+      }
+    }
+
+    return {
+      kind: "message",
+      ...crmResult,
+      ...(chatbotHandoff?.linked ? { chatbotHandoff } : {}),
+    };
+  }
+
+  if (item.kind === "echo") {
+    // Los mensajes salientes del chatbot se guardan al enviarlos por Cloud API.
+    // Un echo del número del bot no debe pasar por la lógica del vendedor.
+    if (chatbotEvent) {
+      return {
+        kind: "chatbot_echo",
+        ok: true,
+        ignored: true,
+        reason: "chatbot_outbound_already_stored",
+      };
+    }
+
+    const echo = parseMessageEcho(item.value, item.payload);
+    if (!echo) return null;
+    return {
+      kind: "echo",
+      ...(await processMessageEcho({ prov, echo })),
+    };
+  }
+
+  return {
+    kind: item?.kind || "change",
+    ok: true,
+    ignored: true,
+    reason: "unsupported webhook change",
+  };
+}
+
+async function handleWebhook(req) {
+  const prov = getProvFromReq(req);
+
+  let webhookAudit = null;
+  try {
+    // IMPORTANTE: se guarda el request original antes de parsear, filtrar,
+    // deduplicar o asignar el mensaje dentro del CRM.
+    webhookAudit = await captureRawWebhook({ prov, req });
+  } catch (error) {
+    console.error("WEBHOOK RAW CAPTURE ERROR", {
+      prov,
+      message: error?.message || String(error),
+    });
+    throw buildAuditCaptureError(error);
+  }
+
+  try {
+    const parsed = parseWhatsAppWebhook(req.body);
+    const results = [];
+
+    let eventAudits = [];
+    try {
+      eventAudits = await captureWebhookEvents({
+        prov,
+        requestId: webhookAudit?.requestId || null,
+        events: parsed,
+      });
+    } catch (auditError) {
+      // El request crudo ya está persistido. La auditoría por evento es auxiliar
+      // y nunca debe bloquear el procesamiento normal del CRM.
+      console.error("WEBHOOK EVENT AUDIT CAPTURE ERROR", {
+        prov,
+        requestId: webhookAudit?.requestId || null,
+        message: auditError?.message || String(auditError),
+      });
+    }
+
+    const auditByIndex = new Map(
+      eventAudits.map((audit) => [audit.eventIndex, audit])
+    );
+
+    for (let index = 0; index < parsed.length; index += 1) {
+      const item = parsed[index];
+      const eventIndex = Number.isInteger(item?.eventIndex)
+        ? item.eventIndex
+        : index;
+      const eventAudit = auditByIndex.get(eventIndex) || null;
+
+      try {
+        const result = await processParsedWebhookItem({ prov, item });
+        if (!result) continue;
+        results.push(result);
+
+        try {
+          await markWebhookEventProcessed(eventAudit, result);
+        } catch (auditError) {
+          console.error("WEBHOOK EVENT AUDIT FINALIZE ERROR", {
+            prov,
+            requestId: webhookAudit?.requestId || null,
+            eventIndex,
+            message: auditError?.message || String(auditError),
+          });
+        }
+      } catch (error) {
+        console.error("WEBHOOK EVENT PROCESSING ERROR", {
+          prov,
+          requestId: webhookAudit?.requestId || null,
+          eventIndex,
+          kind: item?.kind || null,
+          message: error?.message || String(error),
+        });
+
+        try {
+          await markWebhookEventError(eventAudit, error);
+        } catch (auditError) {
+          console.error("WEBHOOK EVENT AUDIT ERROR MARK ERROR", {
+            prov,
+            requestId: webhookAudit?.requestId || null,
+            eventIndex,
+            message: auditError?.message || String(auditError),
+          });
+        }
+
+        results.push({
+          kind: item?.kind || "unknown",
+          ok: false,
+          eventIndex,
+          error: error?.message || "Webhook event processing error",
+        });
+      }
+    }
+
+    const response = results.length
+      ? { ok: true, prov, results }
+      : { ok: true, ignored: true };
+
+    try {
+      await markRawWebhookProcessed(webhookAudit, response);
+    } catch (auditError) {
+      // El payload crudo ya quedó persistido. Un fallo al actualizar solamente
+      // el estado de procesamiento no debe duplicar/reprocesar el webhook.
+      console.error("WEBHOOK AUDIT FINALIZE ERROR", {
+        prov,
+        requestId: webhookAudit?.requestId || null,
+        message: auditError?.message || String(auditError),
+      });
+    }
+
+    return response;
+  } catch (error) {
+    try {
+      await markRawWebhookProcessingError(webhookAudit, error);
+    } catch (auditError) {
+      console.error("WEBHOOK AUDIT ERROR MARK ERROR", {
+        prov,
+        requestId: webhookAudit?.requestId || null,
+        message: auditError?.message || String(auditError),
+      });
+    }
+
+    throw error;
+  }
 }
 
 module.exports = {

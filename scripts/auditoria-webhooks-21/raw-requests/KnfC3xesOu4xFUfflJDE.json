@@ -1,0 +1,95 @@
+{
+  "requestId": "KnfC3xesOu4xFUfflJDE",
+  "found": true,
+  "receivedAt": "2026-10-02T15:58:27.782Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 582,
+  "rawSha256": "95e94398e2c4e18407cd5a5846d33ba720b2f1437fa57ef0fd923d7bfcc42df3",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDNDA5MTJCQkY0NzlEMDJGQTgyNDBCQTEwNjc3MTMyAA=="
+    ],
+    "senderWaIds": [
+      "5491166305177"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Leonardo Aguilera"
+                  },
+                  "wa_id": "5491166305177",
+                  "user_id": "AR.4629358760620705"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491166305177",
+                  "from_user_id": "AR.4629358760620705",
+                  "id": "wamid.HBgNNTQ5MTE2NjMwNTE3NxUCABIYIEFDNDA5MTJCQkY0NzlEMDJGQTgyNDBCQTEwNjc3MTMyAA==",
+                  "timestamp": "1790956706",
+                  "text": {
+                    "body": "Voy a estar yo"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

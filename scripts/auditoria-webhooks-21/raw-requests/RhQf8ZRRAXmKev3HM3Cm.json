@@ -1,0 +1,95 @@
+{
+  "requestId": "RhQf8ZRRAXmKev3HM3Cm",
+  "found": true,
+  "receivedAt": "2026-10-02T14:34:55.765Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 577,
+  "rawSha256": "bed6a35189df90c732fdeb5973d0d6975cd75419d85858a03bb639b437dbe7a3",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2MTIxMDc4NRUCABIYIEFDRDdDMkQ4RkY3NTFGMDc0OEY3ODAyQzk1RTA1NDc2AA=="
+    ],
+    "senderWaIds": [
+      "5491161210785"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Andre"
+                  },
+                  "wa_id": "5491161210785",
+                  "user_id": "AR.1059199337112479"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491161210785",
+                  "from_user_id": "AR.1059199337112479",
+                  "id": "wamid.HBgNNTQ5MTE2MTIxMDc4NRUCABIYIEFDRDdDMkQ4RkY3NTFGMDc0OEY3ODAyQzk1RTA1NDc2AA==",
+                  "timestamp": "1790951694",
+                  "text": {
+                    "body": "Bien dejame coordinar"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "requestId": "Az05Xs56LBzh8T6qu0OG",
+  "found": true,
+  "receivedAt": "2026-10-02T15:24:13.278Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 1092,
+  "rawSha256": "d6037a478fcc8f15cb7afabd688e407b89da66fb65dd3346f242a67f6e97530b",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMjIxMDI1ODI5Mjg3MzgwMxUUABEYIEE1OEMwNDhCQ0Q1OEIyMDkwQTNDNTc2Q0RGOEZGQzk1AA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491125116651",
+                  "user_id": "AR.2210258292873803"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491125116651",
+                  "id": "wamid.HBgTQVIuMjIxMDI1ODI5Mjg3MzgwMxUUABEYIEE1OEMwNDhCQ0Q1OEIyMDkwQTNDNTc2Q0RGOEZGQzk1AA==",
+                  "to_user_id": "AR.2210258292873803",
+                  "timestamp": "1790954652",
+                  "interactive": {
+                    "product": {
+                      "title": "COMBO 2 LÁTEX ECONÓMICO BLANCO X 20L",
+                      "description": "• COMBO LÁTEX ECONÓMICO LÁTEX INTERIOR/ EXTERIOR BLANCO X 20L.\n• INCLUYE: \n• RODILLO\n• ENDUIDO DE 1KG.\n• FIJADOR DE 1L.\n\n• Excelente opción para blanquear, tapar tonos cálidos.\n• Súper completo para empezar a pintar!\n\nRendimiento: 8 a 10 mts ² x litro x mano",
+                      "currency_code": "ARS",
+                      "price_amount": 41250000,
+                      "sale_price_amount": 37500000
+                    },
+                    "type": "product"
+                  },
+                  "type": "interactive"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

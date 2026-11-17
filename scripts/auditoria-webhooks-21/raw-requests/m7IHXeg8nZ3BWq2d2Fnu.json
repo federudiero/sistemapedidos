@@ -1,0 +1,96 @@
+{
+  "requestId": "m7IHXeg8nZ3BWq2d2Fnu",
+  "found": true,
+  "receivedAt": "2026-10-02T13:49:11.146Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 1044,
+  "rawSha256": "cf4e3855f7791931635851d670089a17373d8c9fb89db14b222dafe0c910709a",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTgwMjM1MDI5NzQ0NDMwMxUUABEYIEE1QUNERTY1ODY3NUJDRTMwRUM0QkQ5RDgxMjU2MUJEAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491125475938",
+                  "user_id": "AR.1802350297444303"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491125475938",
+                  "id": "wamid.HBgTQVIuMTgwMjM1MDI5NzQ0NDMwMxUUABEYIEE1QUNERTY1ODY3NUJDRTMwRUM0QkQ5RDgxMjU2MUJEAA==",
+                  "to_user_id": "AR.1802350297444303",
+                  "timestamp": "1790948949",
+                  "interactive": {
+                    "product": {
+                      "title": "COMBO MEMBRANA EN PASTA BLANCO X 20L",
+                      "description": "• COMBO MEMBRANA EN PASTA X 20L BLANCO\n•INCLUYE: RODILLO Y VENDA.\n\n• Excelente rendimiento y espesor.\n• Elastómerica. Flexible. no sé rompe.\n• ideal para lozas, paredes, chapas.\n\nRendimiento: 25 a 30 mts ² las 3 manos. ( la primera mano se puede diluir)",
+                      "currency_code": "ARS",
+                      "price_amount": 57200000,
+                      "sale_price_amount": 52000000
+                    },
+                    "type": "product"
+                  },
+                  "type": "interactive"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -8,6 +8,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocFromServer,
   deleteDoc,
   addDoc,
   onSnapshot,
@@ -892,6 +893,10 @@ export default function CierreCaja() {
       totalGastos +
       (tipoMovimientoGlobal === "ingreso" ? montoMovimientoGlobal : 0);
 
+    // Todos los gastos se pagan en efectivo. Los ingresos globales no se
+    // suman aquí porque el cierre no registra su medio de cobro.
+    const efectivoRestante = round2(totalEfectivo - totalGastos);
+
     return {
       totalEfectivo,
       totalTransferencia,
@@ -905,6 +910,7 @@ export default function CierreCaja() {
       totalGastos,
       totalBruto,
       totalNeto,
+      efectivoRestante,
     };
   }, [repartidores, pedidos, gastos, gastoGlobalExtra]);
 
@@ -1235,10 +1241,26 @@ export default function CierreCaja() {
       gastoGlobalExtra?.tipo === "ingreso" ? "ingreso" : "egreso";
 
     try {
+      // Fuente unica del cierre global: cierres individuales leidos del servidor.
+      // No reutilizar el estado `cierres` de React (puede estar desactualizado).
+      const cierresPersistidos = new Map();
       const faltan = [];
       for (const email of repartidores) {
-        const snap = await getDoc(doc(colCierresRepartidor, `${fechaStr}_${email}`));
-        if (!snap.exists()) faltan.push(email);
+        const snap = await getDocFromServer(doc(colCierresRepartidor, `${fechaStr}_${email}`));
+        if (!snap.exists()) {
+          faltan.push(email);
+          continue;
+        }
+
+        const cierre = snap.data();
+        if (
+          (cierre.fechaStr && cierre.fechaStr !== fechaStr) ||
+          (cierre.emailRepartidor && cierre.emailRepartidor !== email) ||
+          !Array.isArray(cierre.pedidosEntregados)
+        ) {
+          throw new Error(`Cierre individual inconsistente: ${fechaStr}_${email}`);
+        }
+        cierresPersistidos.set(email, cierre);
       }
       if (faltan.length) {
         await Swal.fire(
@@ -1263,13 +1285,8 @@ export default function CierreCaja() {
       };
 
       for (const email of repartidores) {
-        let cierre = cierres[email];
-        if (!cierre?.pedidosEntregados) {
-          const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-          const snap = await getDoc(ref);
-          if (snap.exists()) cierre = snap.data();
-        }
-        const entregados = cierre?.pedidosEntregados || [];
+        const cierre = cierresPersistidos.get(email);
+        const entregados = cierre.pedidosEntregados;
 
         for (const pedido of entregados) {
           const productos = pedido?.productos || [];
@@ -1350,13 +1367,8 @@ export default function CierreCaja() {
       let totalOriginal = 0;
 
       for (const email of repartidores) {
-        let cierre = cierres[email];
-        if (!cierre?.pedidosEntregados) {
-          const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-          const snap = await getDoc(ref);
-          if (snap.exists()) cierre = snap.data();
-        }
-        const entregados = cierre?.pedidosEntregados || [];
+        const cierre = cierresPersistidos.get(email);
+        const entregados = cierre.pedidosEntregados;
         for (const p of entregados) {
           const orig = roundMoney(p?.monto || 0);
           const base = roundMoney(getMontoCobrar(p));
@@ -1381,13 +1393,8 @@ export default function CierreCaja() {
 
       let totalGastos = 0;
       for (const email of repartidores) {
-        let cierre = cierres[email];
-        if (!cierre?.gastos) {
-          const ref = doc(colCierresRepartidor, `${fechaStr}_${email}`);
-          const snap = await getDoc(ref);
-          if (snap.exists()) cierre = snap.data();
-        }
-        const g = cierre?.gastos || {};
+        const cierre = cierresPersistidos.get(email);
+        const g = cierre.gastos || {};
         totalGastos +=
           (Number(g.repartidor) || 0) +
           (Number(g.acompanante) || 0) +
@@ -1558,6 +1565,7 @@ export default function CierreCaja() {
           totalBruto -
           totalGastos +
           (gastoGlobalExtraTipo === "ingreso" ? gastoGlobalExtraMonto : 0);
+        const efectivoRestante = round2(totalEfectivo - totalGastos);
 
         await setDoc(doc(colResumenVentas, fechaStr), {
           fechaStr,
@@ -1568,6 +1576,7 @@ export default function CierreCaja() {
           totalTarjetaCredito,
           totalGastos,
           totalNeto,
+          efectivoRestante,
           totalDescuentos,
           totalOriginal,
           gastoGlobalExtra: {
@@ -1706,6 +1715,7 @@ export default function CierreCaja() {
         totalBruto -
         totalGastos +
         (gastoGlobalExtraTipo === "ingreso" ? gastoGlobalExtraMonto : 0);
+      const efectivoRestante = round2(totalEfectivo - totalGastos);
 
       await setDoc(doc(colResumenVentas, fechaStr), {
         fechaStr,
@@ -1716,6 +1726,7 @@ export default function CierreCaja() {
         totalTarjetaCredito,
         totalGastos,
         totalNeto,
+        efectivoRestante,
         totalDescuentos,
         totalOriginal,
         gastoGlobalExtra: {
@@ -2025,6 +2036,7 @@ export default function CierreCaja() {
                   totalTransferencia: resumenSnap.data().totalTransferencia || 0,
                   totalTransferencia10: resumenSnap.data().totalTransferencia10 || 0,
                   totalTarjetaCredito: resumenSnap.data().totalTarjetaCredito || 0,
+                  efectivoRestante: resumenSnap.data().efectivoRestante ?? null,
                   totalPorProducto: resumenSnap.data().totalPorProducto || {},
                   gastoGlobalExtra: resumenSnap.data().gastoGlobalExtra || null,
                 }
@@ -2452,6 +2464,16 @@ export default function CierreCaja() {
             </div>
 
             <div className="pt-2 mt-2 border-t border-base-300">
+              <div className="text-sm opacity-70">Efectivo restante después de gastos</div>
+              <div className="text-xl font-bold text-success">
+                {Number(resumenGlobalPreview.efectivoRestante || 0).toLocaleString("es-AR", {
+                  style: "currency",
+                  currency: "ARS",
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 mt-2 border-t border-base-300">
               <div className="text-sm opacity-70">Neto global estimado</div>
               <div className="text-xl font-bold text-primary">
                 ${Number(resumenGlobalPreview.totalNeto || 0).toFixed(0)}
@@ -2545,9 +2567,13 @@ export default function CierreCaja() {
                   🎯 Descuentos:{" "}
                   <strong>${Number(resumenGlobal.totalDescuentos || 0).toLocaleString("es-AR")}</strong>
                 </div>
-                <div className="opacity-70">
-                  Subtotal original: ${Number(resumenGlobal.totalOriginal || 0).toLocaleString("es-AR")}
-                </div>
+               
+<div className="mt-1 text-base font-medium text-base-content/90">
+  Subtotal original:{" "}
+  <span className="font-semibold">
+    ${Number(resumenGlobal.totalOriginal || 0).toLocaleString("es-AR")}
+  </span>
+</div>
               </div>
 
               <div className="pt-2 mt-2 text-sm border-t border-base-300">
@@ -2571,6 +2597,23 @@ export default function CierreCaja() {
               <div className="pt-2 mt-2 text-sm border-t border-base-300">
                 <span>🧾 Gastos del día (incluye egresos globales): </span>
                 <strong>${(resumenGlobal.totalGastos || 0).toLocaleString("es-AR")}</strong>
+              </div>
+
+              <div className="pt-3 mt-3 border-t border-base-300">
+                <div className="text-sm font-semibold">Efectivo restante después de gastos</div>
+                <div className="text-xl font-bold text-success">
+                  {Number(
+                    typeof resumenGlobal.efectivoRestante === "number"
+                      ? resumenGlobal.efectivoRestante
+                      : round2(
+                          Number(resumenGlobal.totalEfectivo || 0) -
+                          Number(resumenGlobal.totalGastos || 0)
+                        )
+                  ).toLocaleString("es-AR", {
+                    style: "currency",
+                    currency: "ARS",
+                  })}
+                </div>
               </div>
             </div>
 

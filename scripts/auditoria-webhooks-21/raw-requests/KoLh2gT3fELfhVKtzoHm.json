@@ -1,0 +1,95 @@
+{
+  "requestId": "KoLh2gT3fELfhVKtzoHm",
+  "found": true,
+  "receivedAt": "2026-10-02T16:04:13.721Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 588,
+  "rawSha256": "f5de0f7f9e9eec729b22658b2710825c108cf940a215483415952628ca94d77f",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE0MDI2NzU2NhUCABIYIEFDQjM3MzdFNDA5M0E1MTc1QjQ2ODJBREQ2QUFCNjI1AA=="
+    ],
+    "senderWaIds": [
+      "5491140267566"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Alegre Elizabeth"
+                  },
+                  "wa_id": "5491140267566",
+                  "user_id": "AR.1078351875009255"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491140267566",
+                  "from_user_id": "AR.1078351875009255",
+                  "id": "wamid.HBgNNTQ5MTE0MDI2NzU2NhUCABIYIEFDQjM3MzdFNDA5M0E1MTc1QjQ2ODJBREQ2QUFCNjI1AA==",
+                  "timestamp": "1790957052",
+                  "text": {
+                    "body": "Ustedes de dónde"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

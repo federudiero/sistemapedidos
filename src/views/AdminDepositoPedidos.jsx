@@ -35,6 +35,7 @@ import { format, startOfDay, addDays } from "date-fns";
 
 import AdminNavbar from "../components/AdminNavbar";
 import { useProvincia } from "../hooks/useProvincia";
+import { validarProductosParaVenta } from "../utils/validarProductosParaVenta";
 import { baseDireccion } from "../constants/provincias";
 import { normalizeEmail, requireProvinciaAdmin } from "../utils/adminAccess";
 import {
@@ -524,9 +525,10 @@ export default function AdminDepositoPedidos() {
 
   const productosFiltrados = useMemo(() => {
     const q = lo(busquedaProd);
-    if (!q) return productosFirestore;
+    const disponibles = productosFirestore.filter((p) => p.ocultoParaVentas !== true);
+    if (!q) return disponibles;
 
-    return productosFirestore.filter((p) => lo(p.nombre).includes(q));
+    return disponibles.filter((p) => lo(p.nombre).includes(q));
   }, [productosFirestore, busquedaProd]);
 
   const buildProductoSeleccionado = (
@@ -790,6 +792,16 @@ export default function AdminDepositoPedidos() {
 
       const vendNom = String(vendedorManualNuevo || "").trim();
       if (vendNom) payload.vendedorNombreManual = vendNom;
+
+      const disponibilidad = await validarProductosParaVenta(provinciaId, payload.productos);
+      if (!disponibilidad.disponible) {
+        await Swal.fire(
+          "Producto no disponible",
+          `El producto "${disponibilidad.nombre}" fue ocultado para nuevas ventas. Actualizá la página y seleccioná el producto vigente. El pedido no fue guardado.`,
+          "warning"
+        );
+        return;
+      }
 
       await addDoc(colPedidos(provinciaId), payload);
 

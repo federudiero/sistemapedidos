@@ -1,0 +1,99 @@
+{
+  "requestId": "ZzNMcfykpGAdr8RDyCRp",
+  "found": true,
+  "receivedAt": "2026-10-02T10:58:28.039Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 935,
+  "rawSha256": "3ddcce180866c783dbb7087e9935797288cbbb8a353ed22f481d54e86feba655",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzMDc2ODE5NRUCABIYIEFDOThFNzFEMzQ4RjZFOUY0RjQ5OEJBQUIxNjM5Q0YyAA=="
+    ],
+    "senderWaIds": [
+      "5491130768195"
+    ],
+    "messageTypes": [
+      "audio"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "EL NEGRO MAURO N°12 💣🗡️🗡️💣"
+                  },
+                  "wa_id": "5491130768195",
+                  "user_id": "AR.1452968300301459"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491130768195",
+                  "from_user_id": "AR.1452968300301459",
+                  "id": "wamid.HBgNNTQ5MTEzMDc2ODE5NRUCABIYIEFDOThFNzFEMzQ4RjZFOUY0RjQ5OEJBQUIxNjM5Q0YyAA==",
+                  "timestamp": "1790938705",
+                  "type": "audio",
+                  "audio": {
+                    "mime_type": "audio/ogg; codecs=opus",
+                    "sha256": "/vlixFZyaAC6bAYnlm+AiKTflLAjxwhj3BdQgld1do8=",
+                    "id": "1322258739884693",
+                    "url": "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1322258739884693&source=webhook&ext=1790939007&hash=ATxsRQBxOI4oJ83fI1E1zAYW_LONnKzipRSFLznrtqAB2w",
+                    "voice": true
+                  }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

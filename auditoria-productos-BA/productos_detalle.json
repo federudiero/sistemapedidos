@@ -1,0 +1,3991 @@
+[
+  {
+    "id": "-5iFcLIc_Jvk92LIbSrJy",
+    "nombre": "FIJADOR X1LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 4000,
+    "preciosVenta": [
+      {
+        "id": "6e0XLjNjpv",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 4000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.900Z",
+        "createdAtLocal": "2026-05-18T15:29:39.121Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.064Z",
+    "costo": 0,
+    "stock": 9876
+  },
+  {
+    "id": "-PU_DNMRX8lK8E2n3ccWw",
+    "nombre": "FIJADOR X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 46000,
+    "preciosVenta": [
+      {
+        "id": "KbmchbCf2M",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 46000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.901Z",
+        "createdAtLocal": "2026-05-18T15:29:51.514Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.123Z",
+    "costo": 0,
+    "stock": 97
+  },
+  {
+    "id": "-PvkvrEeV_B4h9Qn4SRaE",
+    "nombre": "COLOR NEGRO X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "WSv0UY1y1s",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.901Z",
+        "createdAtLocal": "2026-05-18T15:17:47.612Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.146Z",
+    "costo": 0,
+    "stock": 97
+  },
+  {
+    "id": "00MdvkqZFsktB6yBFKmpa",
+    "nombre": "LATEX SUPERIOR X10LTS",
+    "precio": 33000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 97
+  },
+  {
+    "id": "0CkSBQFekwQL4KpJL8KR4",
+    "nombre": "MEMB LIQ GRIS X10LTS",
+    "precio": 33000,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "0HfN6DeFNLamaiSQ_iQEt",
+    "nombre": "LATEX ECO X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 21000,
+    "preciosVenta": [
+      {
+        "id": "UCV5musAUf",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 21000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.901Z",
+        "createdAtLocal": "2026-05-18T15:48:19.202Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.184Z",
+    "costo": 0,
+    "stock": 91
+  },
+  {
+    "id": "0O3HS26NHjxpDe4phK21Z",
+    "nombre": "ENTONADOR AMARILLO",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 988
+  },
+  {
+    "id": "0UMsSmPJhfUivUP4hfduT",
+    "nombre": "LÁTEX BLANCO 4L Económico",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 12500,
+    "preciosVenta": [
+      {
+        "id": "GTDGE_qC-D",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 12500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.901Z",
+        "createdAtLocal": "2026-05-18T15:32:04.112Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.210Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "0YN-M2h-0JZRTkJZT-3Q0",
+    "nombre": "MEMBRANA EN PASTA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 15000,
+    "preciosVenta": [
+      {
+        "id": "pAYEs4qCcC",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 15000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.901Z",
+        "createdAtLocal": "2026-05-18T15:58:53.491Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.227Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "0ZIZT3dWt1FBYb1R2die3",
+    "nombre": "COLOR VIOLETA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "nKkoS_XK4v",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.901Z",
+        "createdAtLocal": "2026-05-18T15:22:11.032Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.243Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "0hz5s0O9hx_Bem0uyVfI3",
+    "nombre": "pincel cabo plastico virola 1 n15",
+    "precio": 2150,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 98
+  },
+  {
+    "id": "1L59241Yrbcinmn4VTcrm",
+    "nombre": "COLOR VIOLETA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "Si_-mjBL3x",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.901Z",
+        "createdAtLocal": "2026-05-18T15:22:23.686Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.261Z",
+    "costo": 0,
+    "stock": 97
+  },
+  {
+    "id": "1QmbB1OWoUyVG6KHUrwLy",
+    "nombre": "COLOR VIOLETA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "kJL2mBN4fL",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:22:33.911Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.278Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "279BDmDhrpUdBnBm4oBc2",
+    "nombre": "Pincel cabo plástico verde 15",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 2600,
+    "preciosVenta": [],
+    "stock": 98
+  },
+  {
+    "id": "2XUXG_t2ag8rnqqgV0xvK",
+    "nombre": "COLOR CELESTE 20LTS",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "q2x8zYFnDF",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:14:59.541Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.323Z",
+    "stock": 100
+  },
+  {
+    "id": "2pQzHvds9Le--mlvpq2MN",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "nombre": "Entonador verde claro",
+    "precio": 3000,
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 982
+  },
+  {
+    "id": "33bkJ3-IjtAepylllGJUo",
+    "nombre": "COLOR GRIS  X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "Ry8844daEc",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:25:34.729Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.346Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "49tVG1b5bA7Cda0jCA7gq",
+    "nombre": "COLOR AZUL CARIBE X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "spbmMyMRI4",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:13:40.067Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.362Z",
+    "costo": 0,
+    "stock": 97
+  },
+  {
+    "id": "5RHFXTny3A6FpRWcN3GWG",
+    "nombre": "MEMBRANA LIQUIDA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 25000,
+    "preciosVenta": [
+      {
+        "id": "4fAfUicyAy",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 25000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T16:00:35.079Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.376Z",
+    "costo": 0,
+    "stock": 97
+  },
+  {
+    "id": "5U7ZrU-wmNAl-zQqWirFF",
+    "nombre": "ENDUIDO X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 46000,
+    "preciosVenta": [
+      {
+        "id": "80o8OAKkHV",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 46000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:28:09.762Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.398Z",
+    "costo": 0,
+    "stock": 99987
+  },
+  {
+    "id": "5Uqv54dyJ7QO1dSTizAJQ",
+    "nombre": "pincel cabo verde n20",
+    "precio": 2850,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 98
+  },
+  {
+    "id": "6FxUvtHYvNB3cD3wUKmDt",
+    "nombre": "Envio4",
+    "precio": 5000,
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 874
+  },
+  {
+    "id": "6gn8JPdfQEREtJZMYxg1N",
+    "nombre": "COLOR OCRE X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "OjPiNI4V0C",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:18:38.977Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.419Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "6hsG5y68qkJi3WD0-Or6K",
+    "nombre": "MEM CAUCHO X 10 L",
+    "precio": 40000,
+    "costo": 0,
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 97
+  },
+  {
+    "id": "7JMMCXTQ4ljm3jMfLVvf9",
+    "nombre": "VENDA 10X25",
+    "precio": 3500,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 971
+  },
+  {
+    "id": "7dmIDUkzpV4fuPykTgyz1",
+    "nombre": "COLOR AVENA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "AhVuxTTW67",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:13:09.572Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.434Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "7gsjtuL6BVLTDRzUVL27F",
+    "precio": 1600,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "nombre": "PINCEL CERDA CHINA N 10",
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 94
+  },
+  {
+    "id": "7hh1wtoi6PhGbCaRKZgIc",
+    "nombre": "LÁTEX SUPERIOR X4LTS",
+    "precio": 22000,
+    "costo": 0,
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "7lh1Yo_aNoeYO-ZWmlvoG",
+    "nombre": "COMBO SUPERIOR",
+    "stock": 1000000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "bCKgltgfQQ5rBQwFvrgUQ",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "D4kbb4H2CT13nzh9exqib",
+        "cantidad": 1
+      }
+    ],
+    "precio": 59000,
+    "preciosVenta": [
+      {
+        "id": "UhxDhLIeyB",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 59000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:27:06.379Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.448Z"
+  },
+  {
+    "id": "7xCOM-Gl4ptx_PxYBjYUK",
+    "nombre": "LÁTEX BLANCO 10L Superior",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 33000,
+    "preciosVenta": [
+      {
+        "id": "gOVOy_YQVJ",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 33000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:30:48.847Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.464Z",
+    "costo": 0,
+    "stock": 95
+  },
+  {
+    "id": "9EUDgM1H2ssXT0anl1mtW",
+    "nombre": "COLOR BORGOÑA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "B-xHFfiWPg",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:14:19.527Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.505Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "A1K3XmWe6w7GKtIHy7bNH",
+    "nombre": "COLOR VERDE MZNA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "2AZJt0unTz",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:21:41.502Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.521Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "AbpV9GkSM2Bcd8TShlxY5",
+    "nombre": "COLOR ROJO TEJA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "wdHIYj4IFQ",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:18:51.074Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.536Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "BDo6QSyUWmIuRVfePQGtt",
+    "nombre": "MEMB LIQUIDA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 42500,
+    "preciosVenta": [
+      {
+        "id": "Bh0w_3D34v",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 42500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:57:36.024Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.550Z",
+    "costo": 0,
+    "stock": 748
+  },
+  {
+    "id": "BexoE-MR1zyt3nWFsoQ7g",
+    "nombre": "COMBO MEMB LIQ ROJA X20LTS",
+    "stock": 100000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "Fq22PEn4ksE8tCdXGG_GB",
+        "cantidad": 1
+      },
+      {
+        "id": "rC1020qaWy5dYDSN9aYNc",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      }
+    ],
+    "precio": 58000,
+    "preciosVenta": [
+      {
+        "id": "RGe5jvTMtF",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 58000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:24:28.172Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.565Z"
+  },
+  {
+    "id": "CwgtHp5ktnhlggOGP8C_h",
+    "nombre": "COLOR VERDE ESMERALDA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "r7q9KQtmfj",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:21:09.366Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.581Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "D4kbb4H2CT13nzh9exqib",
+    "nombre": "ENDUIDO X1LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 4000,
+    "preciosVenta": [
+      {
+        "id": "Pj-xpMQcEL",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 4000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:27:57.859Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.597Z",
+    "stock": 998114,
+    "costo": 2000
+  },
+  {
+    "id": "DG_ztLn84Wg05teWn-toO",
+    "nombre": "MEMB LIQ  COLOR X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 54000,
+    "preciosVenta": [
+      {
+        "id": "NpPOs0Ogsd",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:53:53.644Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.640Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "Ds8AtKw4BIkpgRzzR_fTK",
+    "nombre": "ENTONADOR CEDRO",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 986
+  },
+  {
+    "id": "E1Euyt_4Q_SxREbHTF9Vg",
+    "nombre": "Pincel cabo verde n15",
+    "precio": 3500,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "EQE_dFyrrMiw1htu9N-Vv",
+    "nombre": "COMBO LATEX  ECO 2 ( RODILLO ENDUIDO Y FIJADOR)",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "_v0FzRgdym-GeUgWOm2Vy",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "D4kbb4H2CT13nzh9exqib",
+        "cantidad": 1
+      },
+      {
+        "id": "-5iFcLIc_Jvk92LIbSrJy",
+        "cantidad": 1
+      }
+    ],
+    "precio": 37500,
+    "preciosVenta": [
+      {
+        "id": "q-oHPSta2r",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 37500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:23:12.170Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.668Z",
+    "stock": 10000000
+  },
+  {
+    "id": "EXk4JYRcv-vJeRceTRxoB",
+    "nombre": "Membrana pasta",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 50000,
+    "preciosVenta": [
+      {
+        "id": "z-PT4mXUhD",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 50000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T16:01:20.987Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.687Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "EgNQkh_wxtMdpocedz3ga",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "nombre": "Entonador  Verde Claro",
+    "precio": 3000,
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 989
+  },
+  {
+    "id": "EnB2JjI3fDmFuzW6hVgPP",
+    "nombre": "LÁTEX BLANCO 4L Lavable",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 20000,
+    "preciosVenta": [
+      {
+        "id": "VKwIYMeWom",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 20000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:38:25.500Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.718Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "FR6WoXYYWLUZXYget-Mge",
+    "nombre": "COLOR VERDE OLIVA X4LTS",
+    "precio": 27000,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "FeTEZ1SPpbDpsX3bxM68f",
+    "nombre": "ENTONADOR NEGRO",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 877
+  },
+  {
+    "id": "Fq22PEn4ksE8tCdXGG_GB",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "nombre": "MEMB LIQ ROJA X20LTS",
+    "precio": 54000,
+    "preciosVenta": [
+      {
+        "id": "rQ2-Rb3kfm",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:54:17.666Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.735Z",
+    "costo": 0,
+    "stock": 969
+  },
+  {
+    "id": "FqoDhowrV8QQu6QT-JoWu",
+    "nombre": "LATEX LAVABLE X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 20000,
+    "preciosVenta": [
+      {
+        "id": "YaICPYgnYn",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 20000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:49:20.692Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.753Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "G-iaSLXohXVSp86_Ye5Nv",
+    "nombre": "RODILLO INTERMEDIO",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 5500,
+    "preciosVenta": [
+      {
+        "id": "7SINWUWrut",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 5500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T16:03:38.449Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.774Z",
+    "stock": 9999999999
+  },
+  {
+    "id": "HGdZZK-oiyiZQD7ZM3z82",
+    "nombre": "LATEX COLOR CELESTE X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "iDOaifRcLJ",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:47:55.736Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.791Z",
+    "stock": 100
+  },
+  {
+    "id": "HOCCWyxTM6UZkvmgMZ6yH",
+    "nombre": "COLOR VERDE OLIVA X20LTS",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "FNY2OhiSDa",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:21:59.890Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.809Z",
+    "stock": 99
+  },
+  {
+    "id": "HOR7UXFtD4KevZRWJZIzs",
+    "nombre": "ENTONADOR ROJO",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 979
+  },
+  {
+    "id": "IHIfRGZunW9s_GGLdUmy8",
+    "nombre": "LATEX LAVABLE X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 49500,
+    "preciosVenta": [
+      {
+        "id": "sEOyYfD2N2",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 49500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:49:10.930Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.824Z",
+    "costo": 0,
+    "stock": 44
+  },
+  {
+    "id": "IJcZwowErZvOe7NlKAJtG",
+    "nombre": "FIJADOR X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 13000,
+    "preciosVenta": [
+      {
+        "id": "QimE8aVwtn",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 13000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:30:04.762Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.843Z",
+    "costo": 0,
+    "stock": 86
+  },
+  {
+    "id": "IQf3wA-ctQ1s9NWRaxDdP",
+    "nombre": "MEMBRANA EN PASTA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 30000,
+    "preciosVenta": [
+      {
+        "id": "LnARZffORT",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 30000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:58:20.074Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.862Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "Im0eAE4rhqI7X2B7GJjDE",
+    "nombre": "RODILLO POR MAYOR",
+    "precio": 1,
+    "stock": 100,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": []
+  },
+  {
+    "id": "JaaStavcB8i6XpseKin-n",
+    "nombre": "COLOR NARANJA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "m5C7PubeI1",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:17:05.947Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.877Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "KgSwdKVULb74boJbGMFMI",
+    "nombre": "COLOR OCRE X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "9UurRJ5MHv",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:18:27.029Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.892Z",
+    "costo": 0,
+    "stock": 95
+  },
+  {
+    "id": "KmWl6WoFB_ixCKoi6hhsL",
+    "nombre": "COLOR AMARILLO X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "IuLzsRlc4r",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:12:46.321Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.913Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "LBPpXoU_GSlusG__fRMii",
+    "nombre": "LÁTEX BLANCO 10L Lavable",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 31000,
+    "preciosVenta": [
+      {
+        "id": "ub_sbmzDMC",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 31000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:30:35.996Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.930Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "LGKaxQqSoHURonxABYZ5X",
+    "nombre": "COLOR AVENA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "NOlS9iflNY",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:13:24.504Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.946Z",
+    "costo": 0,
+    "stock": 96
+  },
+  {
+    "id": "LI5vgDiDe1GSJPP-4Y60W",
+    "costo": 0,
+    "stockMinimo": 1,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "7JMMCXTQ4ljm3jMfLVvf9",
+        "cantidad": 1
+      },
+      {
+        "id": "Ti4Uey9MTbLqkiHQeQFpi",
+        "cantidad": 1
+      }
+    ],
+    "nombre": "COMBO MEMBRANA POLIURETANICA X20LTS",
+    "precio": 62000,
+    "preciosVenta": [
+      {
+        "id": "q78Qnxi6i4",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 62000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:26:34.242Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.963Z",
+    "stock": 10000000
+  },
+  {
+    "id": "LQEg2N1GFp8TfBxK9K4KQ",
+    "nombre": "MEM POLIURETANICA X 10 L",
+    "precio": 40000,
+    "costo": 0,
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "NHpxHOn0ECQXdS6abmXJZ",
+    "nombre": "COMBO MEMB PASTA",
+    "stock": 10000000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "rC1020qaWy5dYDSN9aYNc",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "fAZiTQ3tRsE4X5sohR3yB",
+        "cantidad": 1
+      }
+    ],
+    "precio": 52000,
+    "preciosVenta": [
+      {
+        "id": "8Am7NeAPwA",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 52000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:24:59.554Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:04.986Z"
+  },
+  {
+    "id": "NIHuqtCG4luBgSymvZG3D",
+    "nombre": "COLOR AMARILLO X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "O5jBm30uI4",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:00:52.726Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.008Z",
+    "stock": 98
+  },
+  {
+    "id": "NPHiHOFsq8I8cHWs1B0rH",
+    "nombre": "COLOR TURQUEZA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "KJxijQ5lYT",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:20:40.307Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.030Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "NnC5i1yLjEvnRAGVAjWVB",
+    "nombre": "COLOR AZUL CARIBE X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "rhltMQPljc",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:13:51.930Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.052Z",
+    "costo": 0,
+    "stock": 92
+  },
+  {
+    "id": "NnJ8ss58N55-OSXa_rPaS",
+    "nombre": "MEMBRANA LIQUIDA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 16000,
+    "preciosVenta": [
+      {
+        "id": "Dd95I903p6",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 16000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T16:00:55.349Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.067Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "NvufsUGq5RHX4cGAtsmfL",
+    "nombre": "LÁTEX BLANCO 4L Premium",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 17500,
+    "preciosVenta": [
+      {
+        "id": "x33sD679Al",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 17500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:47:20.236Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.083Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "O2cb2eQdvikgg-XRXLIni",
+    "nombre": "COLOR MARRON X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "cbFB4G19sl",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:16:27.766Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.099Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "O91-DDvlfvR1fhY29adtK",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "nombre": "Membrana Rojo teja",
+    "precio": 54000,
+    "preciosVenta": [
+      {
+        "id": "WYmb8zzpWH",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T16:02:36.385Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.121Z",
+    "costo": 0,
+    "stock": 1000
+  },
+  {
+    "id": "O9QXhKwGT85PK7_XhXusN",
+    "nombre": "RODILLO PELO INTERMEDIO",
+    "stock": 10,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 5500,
+    "preciosVenta": [
+      {
+        "id": "2DQHn7velc",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 5500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T16:04:09.439Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.136Z"
+  },
+  {
+    "id": "Pbd-a-QgXroMmDTnTrR5h",
+    "nombre": "COLOR ROJO X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "0OZAJuTHEM",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.902Z",
+        "createdAtLocal": "2026-05-18T15:19:35.760Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.153Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "QU4aB18wSPDLt8UzNoVzc",
+    "nombre": "LATEX PREMIUM X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 43500,
+    "preciosVenta": [
+      {
+        "id": "1eVqVhcZie",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 43500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:49:44.649Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.170Z",
+    "costo": 0,
+    "stock": 62
+  },
+  {
+    "id": "RRSGfTahOQMo8KHiLzPRw",
+    "nombre": "MEMBRANA BASE CAUCHO X20LTS",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 58000,
+    "preciosVenta": [],
+    "stock": 953
+  },
+  {
+    "id": "SQJVXbeRBCWctNbIKHzRc",
+    "nombre": "ENTONADOR MARRON",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 970
+  },
+  {
+    "id": "Ti4Uey9MTbLqkiHQeQFpi",
+    "nombre": "MEMBRANA POLIURETANICA X20lts",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 58000,
+    "preciosVenta": [
+      {
+        "id": "0BR4aa_HvK",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 58000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T16:02:05.786Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.202Z",
+    "stock": 963
+  },
+  {
+    "id": "Tvr9hgdvY3mAsrvc4EZk5",
+    "nombre": "COLOR TURQUEZA 4LTS",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "ogp65uuKPJ",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:20:28.817Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.219Z",
+    "stock": 99
+  },
+  {
+    "id": "TxHUZVWtlDHVtTPmULmMk",
+    "nombre": "MEMB LIQUIDA ROJO TEJA X20LTS",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 54000,
+    "preciosVenta": [
+      {
+        "id": "FnfiRbchBn",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:54:31.637Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.234Z",
+    "stock": 1000
+  },
+  {
+    "id": "U1A-DBnRXEMQpFW-455Jr",
+    "componentes": [],
+    "esCombo": false,
+    "nombre": "Memb líquida gris 4lts",
+    "costo": 0,
+    "precio": 21000,
+    "stockMinimo": 10,
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "U4TBwd2WoQAjgyDCwFR9d",
+    "nombre": "COLOR VERDE MZNA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "i0RPqeJRPX",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:21:32.287Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.249Z",
+    "costo": 0,
+    "stock": 96
+  },
+  {
+    "id": "UDXGX8pssD0ygkGN8cLE0",
+    "nombre": "RODILLO PELO LARGO",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "precio": 6000,
+    "stock": 95
+  },
+  {
+    "id": "U_tRH9B1U1tdJInA_VwTn",
+    "nombre": "LÁTEX BLANCO 4L Superior",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 22000,
+    "preciosVenta": [
+      {
+        "id": "_BdjmOpC_-",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 22000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:47:30.913Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.265Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "Vzh_2FGrarGtPyR4r1TmO",
+    "nombre": "ENTONADOR VIOLETA",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 917
+  },
+  {
+    "id": "W4njBA8ouLblhxuCRsY3H",
+    "nombre": "COLOR ROJO TEJA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "sx23YxFAoK",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:19:00.912Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.284Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "W5_VMf-NBQGuA3NtuD6qO",
+    "nombre": "Fijador x Xl",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 4000,
+    "preciosVenta": [
+      {
+        "id": "r1M6ie61fJ",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 4000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:29:14.623Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.303Z",
+    "costo": 0,
+    "stock": 994
+  },
+  {
+    "id": "W8xuY1CypIbLHbVApmbEm",
+    "nombre": "COLOR BORGOÑA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "ZKtG0lDR6v",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:14:29.749Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.322Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "WHTgvc-HOgBFEanWteqDI",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "precio": 42500,
+    "preciosVenta": [
+      {
+        "id": "-1qSnGTDG9",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 42500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T16:00:08.268Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.352Z",
+    "nombre": "membrana liquida X20LTS",
+    "stock": 99
+  },
+  {
+    "id": "Wm3S4lruH2oMBVYHV9wF2",
+    "nombre": "ENDUIDO X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 13000,
+    "preciosVenta": [
+      {
+        "id": "UUN2xETs23",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 13000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:28:21.267Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.396Z",
+    "costo": 0,
+    "stock": 94
+  },
+  {
+    "id": "WssFqsgCj1MSVAE9jFbsu",
+    "nombre": "COMBO MEMB LIQUIDA",
+    "stock": 1000000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "BDo6QSyUWmIuRVfePQGtt",
+        "cantidad": 1
+      },
+      {
+        "id": "rC1020qaWy5dYDSN9aYNc",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      }
+    ],
+    "precio": 46500,
+    "preciosVenta": [
+      {
+        "id": "J5kYUHhY-9",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 46500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": true,
+        "esDefault": true,
+        "aplicado": false,
+        "aplicadoAtLocal": null,
+        "createdAtLocal": "2026-05-18T15:24:47.364Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      },
+      {
+        "id": "RtIEKEp7f1",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 46500,
+        "desde": "2026-05-22",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-24",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-23T01:28:35.982Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.420Z"
+  },
+  {
+    "id": "X0rWPCW9rcbMO0HkCWYzy",
+    "nombre": "Membrana Gris",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 54000,
+    "preciosVenta": [
+      {
+        "id": "OYsORt1NnP",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:59:28.309Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.437Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "Xshgq_Um7258vjLVprYHj",
+    "nombre": "COLOR ROSA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "M-iVfr8N67",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:20:08.616Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.455Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "YdxZeAnkgoCqZqVChfkHm",
+    "nombre": "COLOR ROSA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "KygRdMqUoI",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:20:19.379Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.473Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "YxUkB9rV9mHlFMnWKXVo_",
+    "nombre": "COMBO LAVABLEE X20LTS",
+    "costo": 0,
+    "stock": 1000000000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "IHIfRGZunW9s_GGLdUmy8",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "D4kbb4H2CT13nzh9exqib",
+        "cantidad": 1
+      }
+    ],
+    "precio": 53500,
+    "preciosVenta": [
+      {
+        "id": "t88F529OrW",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 53500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:23:59.644Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.488Z"
+  },
+  {
+    "id": "_Bebq7Yvu0O5fyCsLvR4-",
+    "nombre": "COLOR ROJO X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "XkpwTcsAcB",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:19:47.209Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.502Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "__v0au8zyb2mrzTHbTkd0",
+    "nombre": "Pincel cabo plástico 25",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 4750,
+    "preciosVenta": [],
+    "stock": 99
+  },
+  {
+    "id": "_nEbwjkxl7uRJUHSSAdXl",
+    "nombre": "COLOR VERDE ESMERALDA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "1QYCSRDFPK",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:21:00.438Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.523Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "_v0FzRgdym-GeUgWOm2Vy",
+    "nombre": "LATEX ECONOMICO X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 31500,
+    "preciosVenta": [
+      {
+        "id": "RibUVH-6Go",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 31500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:48:45.309Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.541Z",
+    "costo": 0,
+    "stock": 8230
+  },
+  {
+    "id": "aET-Zj9GXQxYuddLbMyrS",
+    "nombre": "Fijador x 10lts",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "Ouw1e_0Dal",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:46:44.562Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.561Z",
+    "costo": 0,
+    "stock": 996
+  },
+  {
+    "id": "aozoCJMkcDHClTjzPUYpe",
+    "nombre": "Membrana pasta 10L",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 30000,
+    "preciosVenta": [
+      {
+        "id": "KUesjwn6gg",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 30000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T16:08:45.600Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.580Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "bC9Pm87P6emlF3Nbd-nzK",
+    "nombre": "cabo negro 25",
+    "precio": 3750,
+    "costo": 0,
+    "stock": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": []
+  },
+  {
+    "id": "bCKgltgfQQ5rBQwFvrgUQ",
+    "nombre": "LATEX SUPERIOR X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 54500,
+    "preciosVenta": [
+      {
+        "id": "qudhAvyo-x",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:50:28.506Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.604Z",
+    "costo": 0,
+    "stock": 36
+  },
+  {
+    "id": "bXi9rVjlXKtFUH_EjTpKS",
+    "nombre": "COMBO PREMIUM",
+    "stock": 100000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "D4kbb4H2CT13nzh9exqib",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "QU4aB18wSPDLt8UzNoVzc",
+        "cantidad": 1
+      }
+    ],
+    "precio": 47500,
+    "preciosVenta": [
+      {
+        "id": "VDnTommY81",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 47500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:26:52.738Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.630Z"
+  },
+  {
+    "id": "bbmE0o2LfHen_-gHED2h8",
+    "nombre": "LÁTEX BLANCO 20L Lavable",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 49500,
+    "preciosVenta": [
+      {
+        "id": "xXkVgvrTel",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 49500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.903Z",
+        "createdAtLocal": "2026-05-18T15:31:01.282Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.646Z",
+    "costo": 0,
+    "stock": 96
+  },
+  {
+    "id": "bwZXRzwnoOntwKdLGlsF9",
+    "nombre": "COLOR BORGOÑA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "WX2iUAFDcA",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:14:45.684Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.664Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "cDEFWQYwLCaSF44RfHMes",
+    "nombre": "Envio2",
+    "precio": 4000,
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": -841
+  },
+  {
+    "id": "cexWvoJvWVVKfPe_aF4N8",
+    "nombre": "COLOR ROJO X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "wz19TM5qeW",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:19:26.148Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.684Z",
+    "costo": 0,
+    "stock": 96
+  },
+  {
+    "id": "dSMi8RlZ2_Ytv4SpJdRuv",
+    "nombre": "COLOR NEGRO X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "eqZVXZigQf",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:17:33.704Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.701Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "dSd5ANoWFGntZnOdIs9Sj",
+    "nombre": "COMBO LATEX ECO 1 ( RODILLO Y ENDUIDO)",
+    "costo": 0,
+    "stock": 10000000000000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "_v0FzRgdym-GeUgWOm2Vy",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "D4kbb4H2CT13nzh9exqib",
+        "cantidad": 1
+      }
+    ],
+    "precio": 35500,
+    "preciosVenta": [
+      {
+        "id": "7t0gNJVVGr",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 35500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": true,
+        "esDefault": true,
+        "aplicado": false,
+        "aplicadoAtLocal": null,
+        "createdAtLocal": "2026-05-18T15:23:30.863Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      },
+      {
+        "id": "lGybhOA0EQ",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 35500,
+        "desde": "2026-05-22",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-24",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-23T01:28:12.056Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.724Z"
+  },
+  {
+    "id": "eA_lx4wIYeAce969wIPdq",
+    "nombre": "RODILLO DE LANA",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 10000,
+    "preciosVenta": [
+      {
+        "id": "sJ-kSJ4Cai",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 10000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T16:03:18.720Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.741Z",
+    "stock": 98
+  },
+  {
+    "id": "eH_QzY-W6BDvLR4Q_C-SM",
+    "nombre": "LATEX BLANCO LAVABLE X20LTS",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 49500,
+    "preciosVenta": [
+      {
+        "id": "1cbGd-STxD",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 49500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:47:43.554Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.758Z",
+    "stock": 99
+  },
+  {
+    "id": "eIPTBRBLA9t9VJK_HBvV-",
+    "nombre": "Pincel Cabo Verde 30",
+    "precio": 5560,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "efcRGxUldSH5hewCeDm3m",
+    "nombre": "Memb liq rojo teja 10lts",
+    "precio": 33000,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 100
+  },
+  {
+    "id": "egkhX5--iKYe6sQr9K4JL",
+    "nombre": "Memb liq rojo teja 4lts",
+    "precio": 21000,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 99
+  },
+  {
+    "id": "emnIqmCWGAc7H4uso68hI",
+    "nombre": "Enduido x Xl",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 4000,
+    "preciosVenta": [
+      {
+        "id": "JxH-OJDc3N",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 4000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:27:29.643Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.773Z",
+    "costo": 0,
+    "stock": 99998
+  },
+  {
+    "id": "f2BvGqw6fwplzZjOLw0jw",
+    "nombre": "Membrana Liquida 4l",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 16000,
+    "preciosVenta": [
+      {
+        "id": "oVhZ3OM_gy",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 16000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T16:00:22.403Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.789Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "f7-7AH2IEhezt8lMrZkl7",
+    "nombre": "Rodillo Semi lana 22 cm",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 5000,
+    "preciosVenta": [
+      {
+        "id": "9X7DyfAVAM",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 5000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T16:04:34.771Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.810Z",
+    "stock": 99999432
+  },
+  {
+    "id": "fAZiTQ3tRsE4X5sohR3yB",
+    "nombre": "MEMBRANA EN PASTA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 50000,
+    "preciosVenta": [
+      {
+        "id": "o6BoDS28FI",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 50000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:58:38.793Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.832Z",
+    "costo": 0,
+    "stock": 78
+  },
+  {
+    "id": "giseAawmKAE9u3nDOGRwd",
+    "nombre": "ENTONADOR OCRE",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 965
+  },
+  {
+    "id": "gmqi5dNw6Btgjrxu1-G2f",
+    "nombre": "COLOR VERDE MZNA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "Ov8u1lRLaI",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:21:50.888Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.850Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "gvk4XOWOAlXniOm8FYimw",
+    "nombre": "COLOR ROJO TEJA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "pxhMQsLFlq",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:19:12.515Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.866Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "hacVzmqrlzHSivJZAE-7i",
+    "nombre": "COLOR OCRE X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "1nAF2_bN8P",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:18:12.171Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.881Z",
+    "costo": 0,
+    "stock": 96
+  },
+  {
+    "id": "hfLaPzyVBslFumKtzNte3",
+    "nombre": "LATEX LAVABLE X10LTS",
+    "precio": 27500,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [
+      {
+        "id": "UdxrP347i_",
+        "tipo": "promocion",
+        "nombre": "Precio nuevo",
+        "precio": 31000,
+        "desde": "2026-05-18",
+        "hasta": "2026-05-23",
+        "mantenerAnteriorHasta": null,
+        "activo": true,
+        "esDefault": false,
+        "aplicado": false,
+        "aplicadoAtLocal": null,
+        "createdAtLocal": "2026-05-18T15:49:01.479Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-18T15:49:04.962Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "hvZb2cRJWrJFaIGzRkb21",
+    "nombre": "COLOR NEGRO X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "U8WW-dBefH",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:17:59.714Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.900Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "hwXSLwxhmp6Yt_prh7ke0",
+    "nombre": "ENTONADOR VERDE OSCURO",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 964
+  },
+  {
+    "id": "iGJ7UZX_3o8AdeXtWMap5",
+    "nombre": "RODILLO PELO CORTO",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 5000,
+    "preciosVenta": [
+      {
+        "id": "RU99Lq2z5Y",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 5000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T16:04:00.854Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.915Z",
+    "stock": 996620
+  },
+  {
+    "id": "iYSNrpgMEN5NLJfGIRi78",
+    "nombre": "COMBO MEMB LIQ GRIS X20LTS",
+    "stock": 10000000,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "tU-a_Mjwuz5Z0eOKzK-jZ",
+        "cantidad": 1
+      },
+      {
+        "id": "rC1020qaWy5dYDSN9aYNc",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      }
+    ],
+    "precio": 58000,
+    "preciosVenta": [
+      {
+        "id": "vIxbuHzAYR",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 58000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:24:15.143Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.930Z"
+  },
+  {
+    "id": "ikAlYyWvgSthqJWW__BqU",
+    "nombre": "LATEX PREMIUM X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27500,
+    "preciosVenta": [
+      {
+        "id": "Ne2gid0ANS",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:49:32.953Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.947Z",
+    "costo": 0,
+    "stock": 91
+  },
+  {
+    "id": "jGOWFR6dnl_4y244o_UvV",
+    "nombre": "Envio3",
+    "precio": 4500,
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 999
+  },
+  {
+    "id": "kQpySl_pTGdhs-x6L5P4E",
+    "nombre": "COLOR NARANJA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "3k2vczuaS4",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:17:18.511Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.962Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "kgbN0CoBNHexHua0NFO1G",
+    "nombre": "ENTONADOR NARANJA",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 958
+  },
+  {
+    "id": "kjKR5KIFW8z731hz1dKiU",
+    "nombre": "COLOR TURQUEZA X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "m-Wp1zubPt",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:20:49.998Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.980Z",
+    "costo": 0,
+    "stock": 98
+  },
+  {
+    "id": "lH3mHI3IFQUIrIzIt-qXi",
+    "nombre": "FIJADOR X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "vR1DyRTem8",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:29:27.091Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:05.997Z",
+    "costo": 0,
+    "stock": 996
+  },
+  {
+    "id": "legFSf4r8vFPwZr7XM-W0",
+    "nombre": "LATEX ECO X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 12500,
+    "preciosVenta": [
+      {
+        "id": "XMUARixlWP",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 12500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:48:34.483Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.014Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "lzcIVMuMqAGavuQD1Jqm-",
+    "nombre": "RODILLO ANTIGOTA",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 8000,
+    "preciosVenta": [
+      {
+        "id": "uktIczZiWe",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 8000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T16:03:08.055Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.029Z",
+    "stock": 99991
+  },
+  {
+    "id": "maXURUmQIIFv0_c40nnSx",
+    "nombre": "producto de prueba",
+    "costo": 10000,
+    "stock": 1000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 25000,
+    "preciosVenta": [
+      {
+        "id": "Kse06uM4Qm",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 25000,
+        "desde": "2026-05-16",
+        "hasta": null,
+        "mantenerAnteriorHasta": null,
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-16T19:26:33.864Z",
+        "createdAtLocal": "2026-05-14T16:56:32.958Z",
+        "createdBy": "federudiero@gmail.com"
+      },
+      {
+        "id": "0ez8BOINfx",
+        "tipo": "promocion",
+        "nombre": "Precio nuevo",
+        "precio": 25000,
+        "desde": "2026-05-14",
+        "hasta": "2026-05-16",
+        "mantenerAnteriorHasta": null,
+        "activo": true,
+        "esDefault": false,
+        "aplicado": false,
+        "aplicadoAtLocal": null,
+        "createdAtLocal": "2026-05-14T16:57:26.770Z",
+        "createdBy": "federudiero@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-16T19:26:37.969Z"
+  },
+  {
+    "id": "nSlXbzPt2mphHpz9i-Ku8",
+    "nombre": "Memb caucho x4lts",
+    "precio": 25000,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 99
+  },
+  {
+    "id": "nz1Vo3TNymmDCcZWZFANA",
+    "nombre": "pincel cabo plastico eco 30",
+    "precio": 4300,
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "preciosVenta": [],
+    "stock": 98
+  },
+  {
+    "id": "oILYemfjkr3i0OBVPdoZU",
+    "nombre": "ENTONADOR AZUL",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 937
+  },
+  {
+    "id": "oNEEwlddaa6tu8TIyLMTu",
+    "nombre": "ENTONADOR SIENA",
+    "precio": 3000,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 945
+  },
+  {
+    "id": "oU9qbXTANTyqdaxJ3t1Lo",
+    "nombre": "Venda",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "costo": 0,
+    "componentes": [],
+    "precio": 3500,
+    "preciosVenta": [],
+    "stock": 996
+  },
+  {
+    "id": "pxSlM4i-iuE_UR-pCljnQ",
+    "nombre": "COLOR GRIS X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "jWCu1v3DGd",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:15:34.057Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.047Z",
+    "costo": 0,
+    "stock": 96
+  },
+  {
+    "id": "qRpd9RtyF3kYx5uqFsjB-",
+    "nombre": "COLOR NARANJA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "iqqAqP0bf7",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:16:51.373Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.062Z",
+    "costo": 0,
+    "stock": 99
+  },
+  {
+    "id": "qbDCnGs3q4OAB0McUM2Ic",
+    "nombre": "COLOR AZUL CARIBE X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "r-xFFrPix4",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:14:05.477Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.078Z",
+    "costo": 0,
+    "stock": 94
+  },
+  {
+    "id": "rC1020qaWy5dYDSN9aYNc",
+    "nombre": "VENDA 10X25",
+    "precio": 3500,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "stock": 9999545
+  },
+  {
+    "id": "rRXUje8P8FrTbGfHy6Svw",
+    "nombre": "COLOR AMARILLO X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "Q9O377pO03",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:12:24.089Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.120Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "sIfn0XB3wRDZBBQOZ0W0y",
+    "nombre": "COLOR AVENA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "fCAkXuH4iQ",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:11:55.095Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.136Z",
+    "costo": 0,
+    "stock": 94
+  },
+  {
+    "id": "sQhwvbzqnXVgoIM8OutVB",
+    "nombre": "LATEX COLOR VERDE OLIVA X10LTS",
+    "costo": 0,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "th1AAJbwNa",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:48:04.867Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.155Z",
+    "stock": 100
+  },
+  {
+    "id": "ssbk-5am0gG_c_wI2sw0s",
+    "nombre": "Rodillo pelo corto",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 5000,
+    "preciosVenta": [
+      {
+        "id": "eWkLnNmHdy",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 5000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T16:03:52.989Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.373Z",
+    "stock": 99984
+  },
+  {
+    "id": "t2Aja5L9JO8Chlfm1gIvp",
+    "nombre": "ENDUIDO X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "Iu-uqlM0H7",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:27:44.224Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.392Z",
+    "costo": 0,
+    "stock": 91
+  },
+  {
+    "id": "tNxkRuLBK1VXj88SUI8XN",
+    "nombre": "COLOR GRIS X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 64000,
+    "preciosVenta": [
+      {
+        "id": "fH2-sjEEgo",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 64000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:15:45.204Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.409Z",
+    "costo": 0,
+    "stock": 91
+  },
+  {
+    "id": "tU-a_Mjwuz5Z0eOKzK-jZ",
+    "nombre": "MEMB LIQ GRIS X20LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 54000,
+    "preciosVenta": [
+      {
+        "id": "F83rN7eZVq",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:54:04.184Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.426Z",
+    "costo": 0,
+    "stock": 973
+  },
+  {
+    "id": "tX8lYqQQXdXE8X7OQJg3m",
+    "nombre": "Membrana pasta 4L",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 15000,
+    "preciosVenta": [
+      {
+        "id": "RSrdqVFxJs",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 15000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T16:08:30.607Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.442Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "uLwExocqqTeMhWjuUKihx",
+    "nombre": "LÁTEX BLANCO 20L Premium",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 45500,
+    "preciosVenta": [
+      {
+        "id": "22HCEEzOgH",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 45500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:31:24.968Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.461Z",
+    "costo": 0,
+    "stock": 97
+  },
+  {
+    "id": "uR3yRoRWzdOHgCh3UKVNv",
+    "nombre": "COLOR ROSA X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "E961DRT9Z6",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:19:57.157Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.476Z",
+    "costo": 100,
+    "stock": 99
+  },
+  {
+    "id": "v-1NClXK0cu_yzNBdIo9D",
+    "nombre": "COLOR MARRON X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "agL5sDWzhb",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:16:40.101Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.492Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "vZhPfw2sse-0r7zcQUoEn",
+    "nombre": "COLOR MARRON X10LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 40000,
+    "preciosVenta": [
+      {
+        "id": "wppwFCcRbu",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 40000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:16:14.247Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.509Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "vgQ2pYG-yYlCPcfD95t_g",
+    "nombre": "PINCELETA CABO VERDE",
+    "precio": 7000,
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "stock": 6
+  },
+  {
+    "id": "vs-l3ua_b4KfkRvlI9098",
+    "nombre": "COLOR VERDE ESMERALDA X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 27000,
+    "preciosVenta": [
+      {
+        "id": "vpl43PTAlT",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 27000,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:21:22.235Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.524Z",
+    "costo": 0,
+    "stock": 97
+  },
+  {
+    "id": "xC-WHnq1seXvrwBnoPrRq",
+    "nombre": "LATEX PREMIUM X4LTS",
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 17500,
+    "preciosVenta": [
+      {
+        "id": "v7OGrisy8D",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 17500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:49:54.711Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.539Z",
+    "costo": 0,
+    "stock": 100
+  },
+  {
+    "id": "xgGAB1Vm0Pd6Gw87u_ppu",
+    "nombre": "LÁTEX BLANCO 20L Superior",
+    "stockMinimo": 1,
+    "esCombo": false,
+    "componentes": [],
+    "precio": 54500,
+    "preciosVenta": [
+      {
+        "id": "MepR8sTkRO",
+        "tipo": "definitivo",
+        "nombre": "Lista nueva",
+        "precio": 54500,
+        "desde": "2026-05-18",
+        "hasta": null,
+        "mantenerAnteriorHasta": "2026-05-23",
+        "activo": false,
+        "esDefault": true,
+        "aplicado": true,
+        "aplicadoAtLocal": "2026-05-27T19:56:59.904Z",
+        "createdAtLocal": "2026-05-18T15:31:47.471Z",
+        "createdBy": "franco.coronel.134@gmail.com"
+      }
+    ],
+    "updatedAt": "2026-05-27T19:57:06.559Z",
+    "costo": 0,
+    "stock": 96
+  },
+  {
+    "id": "xn_nO15ZoEj85ZdHCm2hU",
+    "nombre": "COMBO MEMBRANA BASE CAUCHO X20LTS",
+    "precio": 62000,
+    "costo": 0,
+    "stock": 9999999999999,
+    "stockMinimo": 10,
+    "esCombo": true,
+    "componentes": [
+      {
+        "id": "RRSGfTahOQMo8KHiLzPRw",
+        "cantidad": 1
+      },
+      {
+        "id": "iGJ7UZX_3o8AdeXtWMap5",
+        "cantidad": 1
+      },
+      {
+        "id": "rC1020qaWy5dYDSN9aYNc",
+        "cantidad": 1
+      }
+    ]
+  },
+  {
+    "id": "z59_5ydb1gTiwHDEHn8F0",
+    "nombre": "PINCEL CABO VERDE N30",
+    "precio": 4500,
+    "stockMinimo": 10,
+    "esCombo": false,
+    "componentes": [],
+    "costo": 0,
+    "preciosVenta": [],
+    "stock": 99
+  }
+]

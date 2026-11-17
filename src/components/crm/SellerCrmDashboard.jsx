@@ -39,6 +39,11 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function buildWhatsAppUrl(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 8 ? `https://wa.me/${digits}` : null;
+}
+
 function normalizeSlug(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -176,6 +181,158 @@ function firstInboundAt(conversation) {
 
 function lastActivityAt(conversation) {
   return conversation?.lastMessageAt || conversation?.lastInboundAt || firstInboundAt(conversation);
+}
+
+function firstReferralOf(conversation) {
+  const referral = conversation?.firstReferral;
+  return referral && typeof referral === "object" ? referral : {};
+}
+
+function leadSourceType(conversation) {
+  const referral = firstReferralOf(conversation);
+  return String(referral?.sourceType || conversation?.leadSourceType || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isAdvertisingLead(conversation) {
+  return leadSourceType(conversation) === "ad";
+}
+
+function isMarketplaceLead(conversation) {
+  return leadSourceType(conversation) === "marketplace";
+}
+
+function isFacebookContentLead(conversation) {
+  return leadSourceType(conversation) === "facebook_content";
+}
+
+function isMetaEntryLead(conversation) {
+  return ["meta_entry", "post"].includes(leadSourceType(conversation));
+}
+
+function isUnattributedLead(conversation) {
+  const type = leadSourceType(conversation);
+  const status = String(conversation?.leadSourceStatus || "").trim().toLowerCase();
+  return !type || type === "unknown" || status === "unattributed";
+}
+
+function safeHttpUrl(value) {
+  const raw = String(value || "").trim();
+  return /^https?:\/\//i.test(raw) ? raw : "";
+}
+
+function LeadOriginCell({ conversation }) {
+  if (isMarketplaceLead(conversation)) {
+    const attribution = conversation?.firstAttribution || {};
+    const sourceId = String(attribution?.sourceId || conversation?.leadSourceId || "").trim();
+    const sourceUrl = safeHttpUrl(attribution?.sourceUrl);
+
+    return (
+      <div className="min-w-[200px] space-y-1">
+        <span className="badge badge-sm badge-accent whitespace-nowrap">
+          Facebook Marketplace
+        </span>
+        {sourceId ? <div className="font-mono text-[10px] opacity-60">Item: {sourceId}</div> : null}
+        {sourceUrl ? (
+          <a
+            className="text-xs link link-primary"
+            href={sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Ver publicación
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (isFacebookContentLead(conversation)) {
+    const attribution = conversation?.firstAttribution || {};
+    const sourceUrl = safeHttpUrl(attribution?.sourceUrl);
+
+    return (
+      <div className="min-w-[200px] space-y-1">
+        <span className="badge badge-sm badge-primary whitespace-nowrap">
+          Facebook contenido
+        </span>
+        <div className="max-w-[260px] text-[11px] opacity-70">
+          Reel / publicación compartida por el cliente al iniciar la conversación.
+        </div>
+        {sourceUrl ? (
+          <a
+            className="text-xs link link-primary"
+            href={sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Ver contenido
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (isMetaEntryLead(conversation)) {
+    return (
+      <div className="min-w-[190px] space-y-1">
+        <span className="badge badge-sm badge-secondary whitespace-nowrap">
+          {leadSourceType(conversation) === "post"
+            ? "Publicación Meta"
+            : "Entrada Meta confirmada"}
+        </span>
+        <div className="max-w-[260px] text-[11px] opacity-70">
+          {leadSourceType(conversation) === "post"
+            ? "Meta informó una publicación como origen."
+            : "Meta confirmó referral_conversion; puede ser anuncio o CTA de Facebook."}
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdvertisingLead(conversation)) {
+    const unattributed = isUnattributedLead(conversation);
+    return (
+      <div className="min-w-[180px]">
+        <span className={`badge badge-sm whitespace-nowrap ${unattributed ? "badge-warning" : "badge-ghost"}`}>
+          {unattributed ? "Sin identificar" : "Orgánico / sin publicidad"}
+        </span>
+      </div>
+    );
+  }
+
+  const referral = firstReferralOf(conversation);
+  const sourceId = String(
+    referral?.sourceId || conversation?.leadSourceId || ""
+  ).trim();
+  const headline = String(
+    referral?.headline || conversation?.leadSourceHeadline || ""
+  ).trim();
+  const destinationUrl =
+    safeHttpUrl(referral?.videoUrl) || safeHttpUrl(referral?.sourceUrl);
+
+  return (
+    <div className="min-w-[220px] space-y-1">
+      <span className="badge badge-sm badge-info whitespace-nowrap">Publicidad Meta</span>
+      <div className="text-xs font-medium">
+        {headline || "Publicidad sin título informado por Meta"}
+      </div>
+      <div className="font-mono text-[10px] text-[var(--crm-muted)]">
+        ID: {sourceId || "sin ID"}
+      </div>
+      {destinationUrl ? (
+        <a
+          className="text-xs link link-primary"
+          href={destinationUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Ver publicidad
+        </a>
+      ) : null}
+    </div>
+  );
 }
 
 function MetricCard({ label, value, detail }) {
@@ -371,6 +528,10 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
         conversation.nombre,
         conversation.telefonoE164,
         conversation.clienteWaId,
+        conversation.leadSourceId,
+        conversation.leadSourceHeadline,
+        firstReferralOf(conversation)?.sourceId,
+        firstReferralOf(conversation)?.headline,
         conversation.lastInboundPreview,
         conversation.lastMessageText,
         tagLabel(tag),
@@ -411,6 +572,8 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
   useEffect(() => {
     setContactPage((current) => Math.min(current, totalContactPages));
   }, [totalContactPages]);
+
+  const leadMetricLabel = periodMode === "day" ? "Leads del día" : "Leads del período";
 
   const handleTagChange = async (conversation, nextTag) => {
     if (!CRM_TAG_VALUES.has(nextTag) || ["venta_pendiente", "vendido"].includes(nextTag)) return;
@@ -583,7 +746,7 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
             </div>
 
             <button
-              className="btn btn-sm btn-outline gap-2"
+              className="gap-2 btn btn-sm btn-outline"
               type="button"
               onClick={() => setRefreshKey((value) => value + 1)}
               disabled={loading}
@@ -593,9 +756,9 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
             </button>
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="grid gap-2 mt-4 sm:grid-cols-2 lg:grid-cols-6">
             <select
-              className="select select-bordered w-full"
+              className="w-full select select-bordered"
               value={periodMode}
               onChange={(event) => setPeriodMode(event.target.value)}
             >
@@ -607,7 +770,7 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
 
             {periodMode !== "range" ? (
               <input
-                className="input input-bordered w-full"
+                className="w-full input input-bordered"
                 type="date"
                 value={toDateInput(anchorDate)}
                 onChange={(event) => setAnchorDate(fromDateInput(event.target.value) || new Date())}
@@ -615,13 +778,13 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
             ) : (
               <>
                 <input
-                  className="input input-bordered w-full"
+                  className="w-full input input-bordered"
                   type="date"
                   value={toDateInput(customStart)}
                   onChange={(event) => setCustomStart(fromDateInput(event.target.value) || new Date())}
                 />
                 <input
-                  className="input input-bordered w-full"
+                  className="w-full input input-bordered"
                   type="date"
                   value={toDateInput(customEnd)}
                   onChange={(event) => setCustomEnd(fromDateInput(event.target.value) || new Date())}
@@ -635,7 +798,12 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
           </div>
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <MetricCard
+            label={leadMetricLabel}
+            value={conversations.length}
+            detail="Contactos cuyo primer ingreso al CRM ocurrió dentro del período seleccionado."
+          />
           <MetricCard label="Contactos nuevos" value={activityMetrics.newContacts} detail="Primera vez histórica en este número/canal." />
           <MetricCard label="Viejos / recurrentes" value={activityMetrics.recurrentContacts} detail="Ya habían hablado antes y volvieron a escribir." />
           <MetricCard label="Contactos activos" value={activeContacts} detail="Nuevo o recurrente, contado una vez por día." />
@@ -692,7 +860,7 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
             </div>
             <div className="flex w-full max-w-xl gap-2">
               <input
-                className="input input-bordered input-sm flex-1"
+                className="flex-1 input input-bordered input-sm"
                 placeholder="Ej.: Mayorista, volver a llamar..."
                 value={newLabelName}
                 onChange={(event) => setNewLabelName(event.target.value)}
@@ -706,7 +874,7 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mt-3">
             {customLabels.length ? customLabels.map((label) => (
               <div key={label.slug || label.id} className="flex items-center gap-1 rounded-full border border-[var(--crm-border)] px-2 py-1 text-xs">
                 <span>{label.name || label.slug}</span>
@@ -732,19 +900,19 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
             <div className="text-sm text-[var(--crm-muted)]">{filteredRows.length} de {conversations.length} contactos</div>
           </div>
 
-          <div className="mt-4 grid gap-2 md:grid-cols-3">
+          <div className="grid gap-2 mt-4 md:grid-cols-3">
             <input
-              className="input input-bordered w-full"
+              className="w-full input input-bordered"
               type="search"
               placeholder="Buscar por nombre, teléfono o etiqueta"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <select className="select select-bordered w-full" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+            <select className="w-full select select-bordered" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
               <option value="all">Todos los estados</option>
               {CRM_TAGS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-            <select className="select select-bordered w-full" value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}>
+            <select className="w-full select select-bordered" value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}>
               <option value="all">Todas mis etiquetas</option>
               {customLabels.map((label) => (
                 <option key={label.slug || label.id} value={normalizeSlug(label.slug || label.id)}>{label.name || label.slug}</option>
@@ -761,6 +929,7 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
                   <tr>
                     <th>Contacto</th>
                     <th>Teléfono</th>
+                    <th>Origen</th>
                     <th>Ingresó</th>
                     <th>Último mensaje</th>
                     <th>Estado CRM</th>
@@ -780,7 +949,25 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
                     return (
                       <tr key={conversation.id}>
                         <td className="font-medium">{conversation.nombre || "Sin nombre"}</td>
-                        <td>{conversation.telefonoE164 || conversation.clienteWaId || "—"}</td>
+                        <td>
+                          {(() => {
+                            const phone = conversation.telefonoE164 || conversation.clienteWaId || "";
+                            const whatsappUrl = buildWhatsAppUrl(phone);
+
+                            return whatsappUrl ? (
+                              <a
+                                href={whatsappUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="link link-primary whitespace-nowrap"
+                                title={`Abrir WhatsApp con ${phone}`}
+                              >
+                                {phone}
+                              </a>
+                            ) : (phone || "—");
+                          })()}
+                        </td>
+                        <td><LeadOriginCell conversation={conversation} /></td>
                         <td>{formatDateTime(firstInboundAt(conversation))}</td>
                         <td>{formatDateTime(lastActivityAt(conversation))}</td>
                         <td className="min-w-[240px]">
@@ -803,7 +990,7 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
                         <td className="min-w-[320px]">
                           <div className="flex flex-wrap gap-1">
                             {assignedLabels.map((slug) => (
-                              <span key={slug} className="badge badge-ghost gap-1">
+                              <span key={slug} className="gap-1 badge badge-ghost">
                                 {labelMap.get(slug)?.name || slug}
                                 <button type="button" className="ml-1" onClick={() => removePersonalLabel(conversation, slug)} disabled={savingId === conversation.id}>×</button>
                               </span>
@@ -825,12 +1012,12 @@ export default function SellerCrmDashboard({ provinciaId, sellerEmail }) {
                               ))}
                             </select>
                           ) : null}
-                          {savingId === conversation.id ? <span className="loading loading-spinner loading-xs ml-2" /> : null}
+                          {savingId === conversation.id ? <span className="ml-2 loading loading-spinner loading-xs" /> : null}
                         </td>
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan={6} className="py-10 text-center text-[var(--crm-muted)]">No hay contactos que coincidan con el período y los filtros seleccionados.</td></tr>
+                    <tr><td colSpan={7} className="py-10 text-center text-[var(--crm-muted)]">No hay contactos que coincidan con el período y los filtros seleccionados.</td></tr>
                   )}
                 </tbody>
               </table>

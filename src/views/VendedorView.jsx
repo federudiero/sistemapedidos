@@ -136,6 +136,10 @@ function VendedorView() {
   const [cantidadPedidos, setCantidadPedidos] = useState(0);
   const [pedidos, setPedidos] = useState([]);
   const [pedidoAEditar, setPedidoAEditar] = useState(null);
+  // Conserva el mismo ID mientras una carga no haya podido confirmarse.
+  // Así un reintento por microcorte no crea un pedido duplicado.
+  const pedidoPendienteIdRef = useRef(null);
+  const [estadoCargaPedido, setEstadoCargaPedido] = useState(null);
 
   const [prefillDraft, setPrefillDraft] = useState(null);
 
@@ -435,8 +439,29 @@ function VendedorView() {
       return false;
     }
 
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Sin conexión",
+        html:
+          "No se pudo iniciar la carga porque este dispositivo está sin conexión.<br/><br/>" +
+          "<b>Los datos del pedido siguen en el formulario.</b><br/>" +
+          "Verificá Internet y volvé a presionar <b>Agregar pedido</b>.",
+        confirmButtonText: "Entendido",
+      });
+      return false;
+    }
+
     const fechaElegida = fechaSeleccionada;
-    const ref = doc(collection(db, "provincias", provinciaId, "pedidos"));
+
+    // Si un intento anterior quedó sin confirmar (por ejemplo, por un microcorte),
+    // reutilizamos exactamente el mismo ID. setDoc sobre el mismo ID es idempotente
+    // para este flujo y evita crear duplicados al reintentar.
+    const pedidoId =
+      pedidoPendienteIdRef.current ||
+      doc(collection(db, "provincias", provinciaId, "pedidos")).id;
+    pedidoPendienteIdRef.current = pedidoId;
+    const ref = doc(db, "provincias", provinciaId, "pedidos", pedidoId);
 
     let crmLink = null;
     try {
@@ -468,19 +493,70 @@ function VendedorView() {
         : {}),
     };
 
+    let avisoDemoraTimer = null;
+
     try {
+      setEstadoCargaPedido({
+        tipo: "guardando",
+        mensaje: "Guardando pedido...",
+      });
+
+      // Si la confirmación demora, solo informamos. No cancelamos setDoc:
+      // ante un microcorte Firestore puede completar la misma escritura al volver Internet.
+      avisoDemoraTimer = window.setTimeout(() => {
+        if (!isAliveRef.current) return;
+
+        const offline =
+          typeof navigator !== "undefined" && navigator.onLine === false;
+
+        setEstadoCargaPedido({
+          tipo: offline ? "sin-conexion" : "demorando",
+          mensaje: offline
+            ? "No cierres esta pantalla ni vuelvas a cargar el pedido. Cuando vuelva Internet, el sistema seguirá intentando."
+            : "Estamos esperando la confirmación del pedido. No vuelvas a cargarlo.",
+        });
+      }, 5000);
+
       await setDoc(ref, nuevo);
 
-
-      setPedidos((prev) => [nuevo, ...prev]);
+      if (avisoDemoraTimer) window.clearTimeout(avisoDemoraTimer);
+      setEstadoCargaPedido(null);
+      pedidoPendienteIdRef.current = null;
+      setPedidos((prev) => [nuevo, ...prev.filter((item) => item.id !== nuevo.id)]);
       setCantidadPedidos((n) => n + 1);
       return true;
     } catch (e) {
-      await Swal.fire(
-        "Error",
-        e?.message || "No se pudo agregar el pedido.",
-        "error"
-      );
+      if (avisoDemoraTimer) window.clearTimeout(avisoDemoraTimer);
+      setEstadoCargaPedido(null);
+
+      console.error("Error confirmando carga de pedido:", {
+        code: e?.code || null,
+        message: e?.message || String(e),
+        pedidoId: ref.id,
+        provinciaId,
+        vendedorEmail: emailVendedor,
+      });
+
+      const sinConexion =
+        e?.code === "unavailable" ||
+        e?.code === "network-request-failed" ||
+        (typeof navigator !== "undefined" && navigator.onLine === false);
+
+      await Swal.fire({
+        icon: "warning",
+        title: sinConexion
+          ? "No se pudo confirmar el pedido"
+          : "No se pudo cargar el pedido",
+        html:
+          (sinConexion
+            ? "Hubo un problema de conexión y Firestore no pudo confirmar la carga."
+            : "La base de datos devolvió un error y el pedido no pudo confirmarse.") +
+          "<br/><br/><b>Los datos NO se borraron del formulario.</b><br/>" +
+          "Verificá tu conexión y volvé a presionar <b>Agregar pedido</b>. " +
+          "El sistema reutilizará el mismo identificador para evitar duplicados.",
+        confirmButtonText: "Entendido",
+      });
+
       return false;
     }
   };
@@ -1136,6 +1212,7 @@ function VendedorView() {
                 onPrefillConsumed={() => setPrefillDraft(null)}
                 onGuardado={finalizarGuardadoPedido}
                 fechaPedido={fechaSeleccionada}
+                estadoCargaPedido={estadoCargaPedido}
               />
 
               {!estaCerrado && pedidoAEditar && (

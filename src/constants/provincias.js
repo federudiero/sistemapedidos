@@ -1,6 +1,6 @@
 // src/constants/provincias.js
 export const PROVINCIAS = [
-  { id: "BA", nombre: "Buenos Aires", base: "Godoy Cruz 1225, La Tablada, Buenos Aires" },
+  { id: "BA", nombre: "Buenos Aires", base: "Cochabamba 2051, Villa Madero, Buenos Aires" },
   { id: "CAT", nombre: "Catamarca", base: "San Fernando del Valle de Catamarca, Catamarca" },
   { id: "CHA", nombre: "Chaco", base: "Resistencia, Chaco" },
   { id: "CHU", nombre: "Chubut", base: "Trelew, Chubut" },

@@ -1,0 +1,412 @@
+{
+  "generatedAt": "2026-10-06T20:09:52.796Z",
+  "mode": "READ_ONLY",
+  "province": "BA",
+  "phone": "+5491150634594",
+  "conversations": [
+    {
+      "id": "908622795675424__5491150634594",
+      "clienteWaId": "5491150634594",
+      "telefonoE164": "+5491150634594",
+      "nombre": "gustavomuller528",
+      "assignedToEmail": "ayelenyamile97@gmail.com",
+      "firstInboundAt": "2026-10-06T18:40:34.000Z",
+      "lastInboundAt": "2026-10-06T18:40:34.000Z",
+      "leadSourceType": "unknown",
+      "leadSourceStatus": "unattributed",
+      "leadSourceMethod": "missing_meta_referral",
+      "leadSourceReason": "meta_referral_not_received",
+      "leadSourceId": null,
+      "leadSourceHeadline": null,
+      "firstAttribution": {
+        "sourceId": null,
+        "reason": "meta_referral_not_received",
+        "method": "missing_meta_referral",
+        "mediaType": null,
+        "body": null,
+        "type": "unknown",
+        "sourceUrl": null,
+        "ctwaClid": null,
+        "messageErrorCodes": [],
+        "signals": {
+          "headlinePresent": false,
+          "adFingerprintMatch": false,
+          "ctwaClidPresent": false,
+          "sourceTypePresent": false,
+          "metaReferralConversion": false,
+          "messageCodeMatch": false,
+          "sourceIdPresent": false,
+          "messageTextMatch": false,
+          "metaReferral": false,
+          "sourceUrlPresent": false
+        },
+        "messageType": "text",
+        "videoUrl": null,
+        "imageUrl": null,
+        "detectedAt": "2026-10-06T18:40:34.000Z",
+        "headline": null,
+        "status": "unattributed",
+        "thumbnailUrl": null
+      },
+      "lastAttribution": {
+        "sourceId": null,
+        "reason": "meta_referral_not_received",
+        "method": "missing_meta_referral",
+        "mediaType": null,
+        "body": null,
+        "type": "unknown",
+        "sourceUrl": null,
+        "ctwaClid": null,
+        "messageErrorCodes": [],
+        "signals": {
+          "headlinePresent": false,
+          "adFingerprintMatch": false,
+          "ctwaClidPresent": false,
+          "sourceTypePresent": false,
+          "metaReferralConversion": false,
+          "messageCodeMatch": false,
+          "sourceIdPresent": false,
+          "messageTextMatch": false,
+          "metaReferral": false,
+          "sourceUrlPresent": false
+        },
+        "messageType": "text",
+        "videoUrl": null,
+        "imageUrl": null,
+        "detectedAt": "2026-10-06T18:40:34.000Z",
+        "headline": null,
+        "status": "unattributed",
+        "thumbnailUrl": null
+      },
+      "firstReferral": null,
+      "lastReferral": null,
+      "lastInboundType": "text",
+      "lastInboundPreview": "¡Hola! Quiero más información Sobre  PINTURAS\nPara pintar con soplete y pintura de autos con diluyente",
+      "inboundMessagesCount": 1,
+      "waPhoneNumberId": "908622795675424",
+      "waDisplayPhoneNumber": "5491169730249"
+    }
+  ],
+  "events": [
+    {
+      "id": "Uv9MkW5eDonkYaAk8oll_0000",
+      "at": "2026-10-06T18:40:36.039Z",
+      "requestId": "Uv9MkW5eDonkYaAk8oll",
+      "kind": "message",
+      "changeField": "messages",
+      "rawType": "text",
+      "statusName": null,
+      "waMessageId": "wamid.HBgNNTQ5MTE1MDYzNDU5NBUCABIYIEFDMzdFNkI5QUM0Q0JBOENCOTU3OURBQTMxQzVDRTg5AA==",
+      "body": "¡Hola! Quiero más información Sobre  PINTURAS\nPara pintar con soplete y pintura de autos con diluyente",
+      "urls": [],
+      "urlKinds": [],
+      "hasReferral": false,
+      "referralSourceType": null,
+      "referralSourceId": null,
+      "referralCtwaClid": null,
+      "referralSourceUrl": null,
+      "referralHeadline": null,
+      "metaReferralConversion": false,
+      "metaConversationOriginType": null,
+      "metaConversationType": null,
+      "messageErrorCodes": [],
+      "processingStatus": "processed",
+      "duplicate": false,
+      "enriched": false,
+      "contentUpgraded": false,
+      "attributionUpgraded": false,
+      "firstAttributionUpgraded": false,
+      "ignored": false,
+      "reason": null,
+      "attribution": {
+        "sourceId": null,
+        "reason": "meta_referral_not_received",
+        "method": "missing_meta_referral",
+        "mediaType": null,
+        "body": null,
+        "type": "unknown",
+        "sourceUrl": null,
+        "ctwaClid": null,
+        "messageErrorCodes": [],
+        "signals": {
+          "headlinePresent": false,
+          "adFingerprintMatch": false,
+          "ctwaClidPresent": false,
+          "sourceTypePresent": false,
+          "metaReferralConversion": false,
+          "messageCodeMatch": false,
+          "sourceIdPresent": false,
+          "messageTextMatch": false,
+          "metaReferral": false,
+          "sourceUrlPresent": false
+        },
+        "messageType": "text",
+        "videoUrl": null,
+        "imageUrl": null,
+        "detectedAt": {
+          "_nanoseconds": 0,
+          "_seconds": 1791312034
+        },
+        "headline": null,
+        "status": "unattributed",
+        "thumbnailUrl": null
+      },
+      "rawEvent": {
+        "from": "5491150634594",
+        "from_user_id": "AR.1277628627814545",
+        "id": "wamid.HBgNNTQ5MTE1MDYzNDU5NBUCABIYIEFDMzdFNkI5QUM0Q0JBOENCOTU3OURBQTMxQzVDRTg5AA==",
+        "timestamp": "1791312034",
+        "text": {
+          "body": "¡Hola! Quiero más información Sobre  PINTURAS\nPara pintar con soplete y pintura de autos con diluyente"
+        },
+        "type": "text"
+      },
+      "rawMetadata": {
+        "display_phone_number": "5491169730249",
+        "phone_number_id": "908622795675424"
+      }
+    },
+    {
+      "id": "whpDQUzs5WNdwDxchlC3_0000",
+      "at": "2026-10-06T19:01:06.410Z",
+      "requestId": "whpDQUzs5WNdwDxchlC3",
+      "kind": "echo",
+      "changeField": "smb_message_echoes",
+      "rawType": "text",
+      "statusName": null,
+      "waMessageId": "wamid.HBgTQVIuMTI3NzYyODYyNzgxNDU0NRUUABEYIEE1NkU0QUNBMEU1NkFFNUUwMTRBOUQxM0VBMkEyQkY4AA==",
+      "body": "Buenas tardes",
+      "urls": [],
+      "urlKinds": [],
+      "hasReferral": false,
+      "referralSourceType": null,
+      "referralSourceId": null,
+      "referralCtwaClid": null,
+      "referralSourceUrl": null,
+      "referralHeadline": null,
+      "metaReferralConversion": false,
+      "metaConversationOriginType": null,
+      "metaConversationType": null,
+      "messageErrorCodes": [],
+      "processingStatus": "processed",
+      "duplicate": false,
+      "enriched": false,
+      "contentUpgraded": false,
+      "attributionUpgraded": false,
+      "firstAttributionUpgraded": false,
+      "ignored": false,
+      "reason": null,
+      "attribution": null,
+      "rawEvent": {
+        "from": "5491169730249",
+        "to": "5491150634594",
+        "id": "wamid.HBgTQVIuMTI3NzYyODYyNzgxNDU0NRUUABEYIEE1NkU0QUNBMEU1NkFFNUUwMTRBOUQxM0VBMkEyQkY4AA==",
+        "to_user_id": "AR.1277628627814545",
+        "timestamp": "1791313265",
+        "text": {
+          "body": "Buenas tardes"
+        },
+        "type": "text"
+      },
+      "rawMetadata": {
+        "display_phone_number": "5491169730249",
+        "phone_number_id": "908622795675424"
+      }
+    },
+    {
+      "id": "ob7ODffINdtlhAngH0RG_0000",
+      "at": "2026-10-06T19:01:10.342Z",
+      "requestId": "ob7ODffINdtlhAngH0RG",
+      "kind": "echo",
+      "changeField": "smb_message_echoes",
+      "rawType": "text",
+      "statusName": null,
+      "waMessageId": "wamid.HBgTQVIuMTI3NzYyODYyNzgxNDU0NRUUABEYIEE1RERFRDU2MDNEQTk4QzBFNTYxMDZFMDc3RTA4MzU2AA==",
+      "body": "En qué localidad estás?",
+      "urls": [],
+      "urlKinds": [],
+      "hasReferral": false,
+      "referralSourceType": null,
+      "referralSourceId": null,
+      "referralCtwaClid": null,
+      "referralSourceUrl": null,
+      "referralHeadline": null,
+      "metaReferralConversion": false,
+      "metaConversationOriginType": null,
+      "metaConversationType": null,
+      "messageErrorCodes": [],
+      "processingStatus": "processed",
+      "duplicate": false,
+      "enriched": false,
+      "contentUpgraded": false,
+      "attributionUpgraded": false,
+      "firstAttributionUpgraded": false,
+      "ignored": false,
+      "reason": null,
+      "attribution": null,
+      "rawEvent": {
+        "from": "5491169730249",
+        "to": "5491150634594",
+        "id": "wamid.HBgTQVIuMTI3NzYyODYyNzgxNDU0NRUUABEYIEE1RERFRDU2MDNEQTk4QzBFNTYxMDZFMDc3RTA4MzU2AA==",
+        "to_user_id": "AR.1277628627814545",
+        "timestamp": "1791313269",
+        "text": {
+          "body": "En qué localidad estás?"
+        },
+        "type": "text"
+      },
+      "rawMetadata": {
+        "display_phone_number": "5491169730249",
+        "phone_number_id": "908622795675424"
+      }
+    }
+  ],
+  "rawRequests": [
+    {
+      "requestId": "Uv9MkW5eDonkYaAk8oll",
+      "found": true,
+      "receivedAt": "2026-10-06T18:40:35.869Z",
+      "processingStatus": "processed",
+      "rawStorageMode": "inline",
+      "signals": [],
+      "rawPayload": {
+        "object": "whatsapp_business_account",
+        "entry": [
+          {
+            "id": "892040703179327",
+            "changes": [
+              {
+                "value": {
+                  "messaging_product": "whatsapp",
+                  "metadata": {
+                    "display_phone_number": "5491169730249",
+                    "phone_number_id": "908622795675424"
+                  },
+                  "contacts": [
+                    {
+                      "profile": {
+                        "name": "gustavomuller528"
+                      },
+                      "wa_id": "5491150634594",
+                      "user_id": "AR.1277628627814545"
+                    }
+                  ],
+                  "messages": [
+                    {
+                      "from": "5491150634594",
+                      "from_user_id": "AR.1277628627814545",
+                      "id": "wamid.HBgNNTQ5MTE1MDYzNDU5NBUCABIYIEFDMzdFNkI5QUM0Q0JBOENCOTU3OURBQTMxQzVDRTg5AA==",
+                      "timestamp": "1791312034",
+                      "text": {
+                        "body": "¡Hola! Quiero más información Sobre  PINTURAS\nPara pintar con soplete y pintura de autos con diluyente"
+                      },
+                      "type": "text"
+                    }
+                  ]
+                },
+                "field": "messages"
+              }
+            ]
+          }
+        ]
+      },
+      "reconstructedRawBody": null
+    },
+    {
+      "requestId": "whpDQUzs5WNdwDxchlC3",
+      "found": true,
+      "receivedAt": "2026-10-06T19:01:06.249Z",
+      "processingStatus": "processed",
+      "rawStorageMode": "inline",
+      "signals": [],
+      "rawPayload": {
+        "object": "whatsapp_business_account",
+        "entry": [
+          {
+            "id": "892040703179327",
+            "changes": [
+              {
+                "value": {
+                  "messaging_product": "whatsapp",
+                  "metadata": {
+                    "display_phone_number": "5491169730249",
+                    "phone_number_id": "908622795675424"
+                  },
+                  "contacts": [
+                    {
+                      "wa_id": "5491150634594",
+                      "user_id": "AR.1277628627814545"
+                    }
+                  ],
+                  "message_echoes": [
+                    {
+                      "from": "5491169730249",
+                      "to": "5491150634594",
+                      "id": "wamid.HBgTQVIuMTI3NzYyODYyNzgxNDU0NRUUABEYIEE1NkU0QUNBMEU1NkFFNUUwMTRBOUQxM0VBMkEyQkY4AA==",
+                      "to_user_id": "AR.1277628627814545",
+                      "timestamp": "1791313265",
+                      "text": {
+                        "body": "Buenas tardes"
+                      },
+                      "type": "text"
+                    }
+                  ]
+                },
+                "field": "smb_message_echoes"
+              }
+            ]
+          }
+        ]
+      },
+      "reconstructedRawBody": null
+    },
+    {
+      "requestId": "ob7ODffINdtlhAngH0RG",
+      "found": true,
+      "receivedAt": "2026-10-06T19:01:10.179Z",
+      "processingStatus": "processed",
+      "rawStorageMode": "inline",
+      "signals": [],
+      "rawPayload": {
+        "object": "whatsapp_business_account",
+        "entry": [
+          {
+            "id": "892040703179327",
+            "changes": [
+              {
+                "value": {
+                  "messaging_product": "whatsapp",
+                  "metadata": {
+                    "display_phone_number": "5491169730249",
+                    "phone_number_id": "908622795675424"
+                  },
+                  "contacts": [
+                    {
+                      "wa_id": "5491150634594",
+                      "user_id": "AR.1277628627814545"
+                    }
+                  ],
+                  "message_echoes": [
+                    {
+                      "from": "5491169730249",
+                      "to": "5491150634594",
+                      "id": "wamid.HBgTQVIuMTI3NzYyODYyNzgxNDU0NRUUABEYIEE1RERFRDU2MDNEQTk4QzBFNTYxMDZFMDc3RTA4MzU2AA==",
+                      "to_user_id": "AR.1277628627814545",
+                      "timestamp": "1791313269",
+                      "text": {
+                        "body": "En qué localidad estás?"
+                      },
+                      "type": "text"
+                    }
+                  ]
+                },
+                "field": "smb_message_echoes"
+              }
+            ]
+          }
+        ]
+      },
+      "reconstructedRawBody": null
+    }
+  ]
+}

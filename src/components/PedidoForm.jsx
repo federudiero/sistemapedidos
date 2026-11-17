@@ -5,6 +5,7 @@ import { collection, getDocs, getDoc, doc } from "firebase/firestore";
 import { db, auth } from "../firebase/firebase";
 import { useLoadScript, GoogleMap } from "@react-google-maps/api";
 import { useProvincia } from "../hooks/useProvincia.js";
+import { validarProductosParaVenta } from "../utils/validarProductosParaVenta.js";
 import {
   PRECIO_PRINCIPAL_ID,
   buildPriceSnapshot,
@@ -213,6 +214,7 @@ const PedidoForm = ({
   onPrefillConsumed,
   onGuardado,
   fechaPedido,
+  estadoCargaPedido,
 }) => {
   const { provinciaId } = useProvincia();
 
@@ -243,6 +245,9 @@ const PedidoForm = ({
   const [vendedorEmailSeleccionado, setVendedorEmailSeleccionado] = useState("");
   const [vendedorNombreManual, setVendedorNombreManual] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [conexionOnline, setConexionOnline] = useState(
+    typeof navigator === "undefined" ? true : navigator.onLine
+  );
 
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
@@ -263,6 +268,23 @@ const PedidoForm = ({
     scrollwheel: true,
     mapId: MAP_ID || undefined,
   };
+
+  useEffect(() => {
+    if (!guardando || typeof window === "undefined") return undefined;
+
+    const actualizarConexion = () => {
+      setConexionOnline(typeof navigator === "undefined" ? true : navigator.onLine);
+    };
+
+    actualizarConexion();
+    window.addEventListener("online", actualizarConexion);
+    window.addEventListener("offline", actualizarConexion);
+
+    return () => {
+      window.removeEventListener("online", actualizarConexion);
+      window.removeEventListener("offline", actualizarConexion);
+    };
+  }, [guardando]);
 
   const fechaPedidoDate = useMemo(() => {
     if (fechaPedido?.toDate) {
@@ -1315,6 +1337,21 @@ const PedidoForm = ({
     setGuardando(true);
 
     try {
+      // Solo altas nuevas: nunca se bloquea una edición histórica por un producto oculto.
+      if (!pedidoAEditar) {
+        const disponibilidad = await validarProductosParaVenta(provinciaId, productosDb);
+        if (!disponibilidad.disponible) {
+          setGuardando(false);
+          await Swal.fire({
+            icon: "warning",
+            title: "Producto no disponible",
+            text: `El producto "${disponibilidad.nombre}" ya no está habilitado para nuevas ventas. Actualizá la página y seleccioná el producto vigente. El pedido no fue guardado.`,
+            confirmButtonText: "Entendido",
+          });
+          return;
+        }
+      }
+
       const guardadoCorrectamente = pedidoAEditar
         ? await onActualizar({ ...pedidoAEditar, ...pedidoConProductos })
         : await onAgregar(pedidoConProductos);
@@ -1323,6 +1360,10 @@ const PedidoForm = ({
         setGuardando(false);
         return;
       }
+
+      // La escritura ya fue confirmada. Quitamos primero el estado visual
+      // "Guardando..." para que no quede visible detrás del mensaje de éxito.
+      setGuardando(false);
 
       await Swal.fire({
         icon: "success",
@@ -1335,7 +1376,6 @@ const PedidoForm = ({
       });
 
       resetFormulario();
-      setGuardando(false);
       onGuardado?.();
     } catch (e) {
       setGuardando(false);
@@ -1604,6 +1644,7 @@ const PedidoForm = ({
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {productosFirestore
+                .filter((prod) => prod.ocultoParaVentas !== true || productosSeleccionados.some((sel) => getProductoKey(sel) === getProductoKey(prod)))
                 .filter((prod) => (prod.nombre || "").toLowerCase().includes(busqueda.toLowerCase()))
                 .map((prod, idx) => {
                   const prodKey = getProductoKey(prod);
@@ -1890,18 +1931,63 @@ const PedidoForm = ({
             </div>
           )}
 
-          <div className="mt-6 text-right">
-            <button
-              type="submit"
-              className={`btn ${pedidoAEditar ? "btn-warning" : "btn-primary"}`}
-              disabled={bloqueado || guardando}
-            >
-              {guardando
-                ? "Guardando..."
-                : pedidoAEditar
-                  ? "✏️ Actualizar pedido"
-                  : "➕ Agregar pedido"}
-            </button>
+          <div className="mt-6">
+            {guardando && (
+              <div
+                className={`mb-3 rounded-xl border p-3 text-sm ${
+                  !conexionOnline
+                    ? "border-warning bg-warning/15"
+                    : estadoCargaPedido?.tipo === "sin-conexion"
+                      ? "border-success bg-success/10"
+                      : estadoCargaPedido?.tipo === "demorando"
+                        ? "border-info bg-info/10"
+                        : "border-base-300 bg-base-200/70"
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                <div className="flex items-start gap-2">
+                  <span
+                    className="loading loading-spinner loading-sm mt-0.5 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <div className="text-left">
+                    <strong>
+                      {!conexionOnline
+                        ? "Sin conexión. Esperando Internet..."
+                        : estadoCargaPedido?.tipo === "sin-conexion"
+                          ? "Conexión recuperada. Confirmando pedido..."
+                          : estadoCargaPedido?.tipo === "demorando"
+                            ? "La conexión está demorando"
+                            : "Guardando pedido..."}
+                    </strong>
+                    <p className="mt-1 opacity-80">
+                      {!conexionOnline
+                        ? "No cierres esta pantalla ni vuelvas a cargar el pedido. Cuando vuelva Internet, el sistema seguirá intentando."
+                        : estadoCargaPedido?.tipo === "sin-conexion"
+                          ? "Ya volvió Internet. Estamos esperando la confirmación final de la base de datos."
+                          : estadoCargaPedido?.tipo === "demorando"
+                            ? "Estamos esperando la confirmación del pedido. No vuelvas a cargarlo."
+                            : "Esperando confirmación de la base de datos."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="text-right">
+              <button
+                type="submit"
+                className={`btn ${pedidoAEditar ? "btn-warning" : "btn-primary"}`}
+                disabled={bloqueado || guardando}
+              >
+                {guardando
+                  ? "Guardando..."
+                  : pedidoAEditar
+                    ? "✏️ Actualizar pedido"
+                    : "➕ Agregar pedido"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-6">

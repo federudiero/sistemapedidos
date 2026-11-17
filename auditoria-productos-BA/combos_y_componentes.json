@@ -1,0 +1,385 @@
+[
+  {
+    "comboId": "7lh1Yo_aNoeYO-ZWmlvoG",
+    "comboNombre": "COMBO SUPERIOR",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "bCKgltgfQQ5rBQwFvrgUQ",
+        "nombreEnCombo": null,
+        "nombreActual": "LATEX SUPERIOR X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "D4kbb4H2CT13nzh9exqib",
+        "nombreEnCombo": null,
+        "nombreActual": "ENDUIDO X1LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "BexoE-MR1zyt3nWFsoQ7g",
+    "comboNombre": "COMBO MEMB LIQ ROJA X20LTS",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "Fq22PEn4ksE8tCdXGG_GB",
+        "nombreEnCombo": null,
+        "nombreActual": "MEMB LIQ ROJA X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "rC1020qaWy5dYDSN9aYNc",
+        "nombreEnCombo": null,
+        "nombreActual": "VENDA 10X25",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "EQE_dFyrrMiw1htu9N-Vv",
+    "comboNombre": "COMBO LATEX  ECO 2 ( RODILLO ENDUIDO Y FIJADOR)",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "_v0FzRgdym-GeUgWOm2Vy",
+        "nombreEnCombo": null,
+        "nombreActual": "LATEX ECONOMICO X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "D4kbb4H2CT13nzh9exqib",
+        "nombreEnCombo": null,
+        "nombreActual": "ENDUIDO X1LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 4,
+        "productoId": "-5iFcLIc_Jvk92LIbSrJy",
+        "nombreEnCombo": null,
+        "nombreActual": "FIJADOR X1LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 4
+  },
+  {
+    "comboId": "LI5vgDiDe1GSJPP-4Y60W",
+    "comboNombre": "COMBO MEMBRANA POLIURETANICA X20LTS",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "7JMMCXTQ4ljm3jMfLVvf9",
+        "nombreEnCombo": null,
+        "nombreActual": "VENDA 10X25",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "Ti4Uey9MTbLqkiHQeQFpi",
+        "nombreEnCombo": null,
+        "nombreActual": "MEMBRANA POLIURETANICA X20lts",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "NHpxHOn0ECQXdS6abmXJZ",
+    "comboNombre": "COMBO MEMB PASTA",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "rC1020qaWy5dYDSN9aYNc",
+        "nombreEnCombo": null,
+        "nombreActual": "VENDA 10X25",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "fAZiTQ3tRsE4X5sohR3yB",
+        "nombreEnCombo": null,
+        "nombreActual": "MEMBRANA EN PASTA X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "WssFqsgCj1MSVAE9jFbsu",
+    "comboNombre": "COMBO MEMB LIQUIDA",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "BDo6QSyUWmIuRVfePQGtt",
+        "nombreEnCombo": null,
+        "nombreActual": "MEMB LIQUIDA X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "rC1020qaWy5dYDSN9aYNc",
+        "nombreEnCombo": null,
+        "nombreActual": "VENDA 10X25",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "YxUkB9rV9mHlFMnWKXVo_",
+    "comboNombre": "COMBO LAVABLEE X20LTS",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "IHIfRGZunW9s_GGLdUmy8",
+        "nombreEnCombo": null,
+        "nombreActual": "LATEX LAVABLE X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "D4kbb4H2CT13nzh9exqib",
+        "nombreEnCombo": null,
+        "nombreActual": "ENDUIDO X1LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "bXi9rVjlXKtFUH_EjTpKS",
+    "comboNombre": "COMBO PREMIUM",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "D4kbb4H2CT13nzh9exqib",
+        "nombreEnCombo": null,
+        "nombreActual": "ENDUIDO X1LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "QU4aB18wSPDLt8UzNoVzc",
+        "nombreEnCombo": null,
+        "nombreActual": "LATEX PREMIUM X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "dSd5ANoWFGntZnOdIs9Sj",
+    "comboNombre": "COMBO LATEX ECO 1 ( RODILLO Y ENDUIDO)",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "_v0FzRgdym-GeUgWOm2Vy",
+        "nombreEnCombo": null,
+        "nombreActual": "LATEX ECONOMICO X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "D4kbb4H2CT13nzh9exqib",
+        "nombreEnCombo": null,
+        "nombreActual": "ENDUIDO X1LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "iYSNrpgMEN5NLJfGIRi78",
+    "comboNombre": "COMBO MEMB LIQ GRIS X20LTS",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "tU-a_Mjwuz5Z0eOKzK-jZ",
+        "nombreEnCombo": null,
+        "nombreActual": "MEMB LIQ GRIS X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "rC1020qaWy5dYDSN9aYNc",
+        "nombreEnCombo": null,
+        "nombreActual": "VENDA 10X25",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  },
+  {
+    "comboId": "xn_nO15ZoEj85ZdHCm2hU",
+    "comboNombre": "COMBO MEMBRANA BASE CAUCHO X20LTS",
+    "componentes": [
+      {
+        "indice": 1,
+        "productoId": "RRSGfTahOQMo8KHiLzPRw",
+        "nombreEnCombo": null,
+        "nombreActual": "MEMBRANA BASE CAUCHO X20LTS",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 2,
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombreEnCombo": null,
+        "nombreActual": "RODILLO PELO CORTO",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      },
+      {
+        "indice": 3,
+        "productoId": "rC1020qaWy5dYDSN9aYNc",
+        "nombreEnCombo": null,
+        "nombreActual": "VENDA 10X25",
+        "cantidad": 1,
+        "enStock": true,
+        "requiereRevision": false
+      }
+    ],
+    "componentesDetectados": 3
+  }
+]

@@ -1,0 +1,95 @@
+{
+  "requestId": "YnAAueXTYharcHGyYTqz",
+  "found": true,
+  "receivedAt": "2026-10-02T13:43:15.512Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 590,
+  "rawSha256": "1a48ce380401848d62f6f6d8a10238c97dd50791b57be64e9837e0941e8737e0",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2MTIxMDc4NRUCABIYIEFDRDdFNzJGMjgzN0Q4NjQwNURDREUzMDM5MTIzNUQ4AA=="
+    ],
+    "senderWaIds": [
+      "5491161210785"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Andre"
+                  },
+                  "wa_id": "5491161210785",
+                  "user_id": "AR.1059199337112479"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491161210785",
+                  "from_user_id": "AR.1059199337112479",
+                  "id": "wamid.HBgNNTQ5MTE2MTIxMDc4NRUCABIYIEFDRDdFNzJGMjgzN0Q4NjQwNURDREUzMDM5MTIzNUQ4AA==",
+                  "timestamp": "1790948594",
+                  "text": {
+                    "body": "Hola quisiera info de las pinturas"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

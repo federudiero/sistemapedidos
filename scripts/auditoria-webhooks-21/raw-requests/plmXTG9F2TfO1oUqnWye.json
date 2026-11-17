@@ -1,0 +1,111 @@
+{
+  "requestId": "plmXTG9F2TfO1oUqnWye",
+  "found": true,
+  "receivedAt": "2026-10-02T07:43:18.693Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 1851,
+  "rawSha256": "3d1b346ef8979bb563381b51a70c083e7ddb1e0955597ee24c1042d1d46864b8",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 1,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2MzAzNjU0NhUCABIYIEFDNDZGM0EzQTYxRUIwMjdCRjQwM0VBNjlCRTQyM0NBAA=="
+    ],
+    "senderWaIds": [
+      "5491163036546"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [
+      "120246188593050242"
+    ],
+    "referralSourceTypes": [
+      "ad"
+    ],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Ricardo"
+                  },
+                  "wa_id": "5491163036546",
+                  "user_id": "AR.1480798473890799"
+                }
+              ],
+              "messages": [
+                {
+                  "referral": {
+                    "source_url": "https://wa.me/wamo/status/preview/5491124959496/120255326682300242",
+                    "source_id": "120246188593050242",
+                    "source_type": "ad",
+                    "body": "🛡️💧 ¡Protegé y sellá tus superficies! 💧🛡️\n\n🪣 MEMBRANA LÍQUIDA x 20 L\nTodo incluido para un trabajo completo:\n\n🌧️ Impermeabiliza y sella\n🏠 Ideal para techos, terrazas y muros\n💪 Alta resistencia y durabilidad\n\n💰 PRECIO ESPECIAL: \n\n🚀 Solución práctica, rápida y efectiva\n📲 Consultanos y asegurá tu compra hoy",
+                    "headline": "Chatea con nosotros",
+                    "media_type": "video",
+                    "thumbnail_url": "https://scontent.xx.fbcdn.net/v/t15.5256-10/706473884_1307748741422752_3705094154126796716_n.jpg?stp=dst-jpg_p180x540_tt6&_nc_cat=106&ccb=1-7&_nc_sid=40cf1a&_nc_ohc=KxD5VDzJq2IQ7kNvwGYfsZx&_nc_oc=Adr1ZORiYQ0peJTg5Y7GhRghsYl0JtufJ4XNtVLDsuFgWKBWHHMpPEl0ASz7KUbWqz4&_nc_zt=23&_nc_ht=scontent.xx&_nc_gid=X_of4eckMY9oZYKClpwxWw&_nc_ss=7a3ba&oh=00_AQNOhqxWLErYZWcKHQTqiv-zFIhTI-OSsgoVQr5pDYqRNQ&oe=6AC5389B",
+                    "welcome_message": {
+                      "text": "¡Hola! ¿Queres más información sobre membranas?"
+                    }
+                  },
+                  "from": "5491163036546",
+                  "from_user_id": "AR.1480798473890799",
+                  "id": "wamid.HBgNNTQ5MTE2MzAzNjU0NhUCABIYIEFDNDZGM0EzQTYxRUIwMjdCRjQwM0VBNjlCRTQyM0NBAA==",
+                  "timestamp": "1790926994",
+                  "text": {
+                    "body": "¡Hola! Quiero más información sobre membranas"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

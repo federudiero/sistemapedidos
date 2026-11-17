@@ -1,0 +1,108 @@
+{
+  "requestId": "IdcgrHMMEiTgVJHyyQFa",
+  "found": true,
+  "receivedAt": "2026-10-02T16:01:18.716Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 772,
+  "rawSha256": "c74757b194e6cf5537305def2a7ba6d6d8f535c017c2c9c29a764c3053248787",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 1,
+    "messageErrorCount": 1,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE1ODgwNTc2OBUCABIYIEFDMDg3NzI3MzU1MDcyRjY5NUNFRTFBQjAwRTE1Q0EzAA=="
+    ],
+    "senderWaIds": [
+      "5491158805768"
+    ],
+    "messageTypes": [
+      "unsupported"
+    ],
+    "messageErrorCodes": [
+      "131060"
+    ],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Roxana"
+                  },
+                  "wa_id": "5491158805768",
+                  "user_id": "AR.2669939453440901"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491158805768",
+                  "from_user_id": "AR.2669939453440901",
+                  "id": "wamid.HBgNNTQ5MTE1ODgwNTc2OBUCABIYIEFDMDg3NzI3MzU1MDcyRjY5NUNFRTFBQjAwRTE1Q0EzAA==",
+                  "timestamp": "1790956877",
+                  "errors": [
+                    {
+                      "code": 131060,
+                      "title": "This message is unavailable.",
+                      "message": "This message is unavailable.",
+                      "error_data": {
+                        "details": "This message is currently unavailable."
+                      }
+                    }
+                  ],
+                  "type": "unsupported",
+                  "unsupported": {
+                    "type": "unknown",
+                    "raw_type": "unknown"
+                  }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

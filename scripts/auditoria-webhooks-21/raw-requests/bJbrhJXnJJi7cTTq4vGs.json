@@ -1,0 +1,87 @@
+{
+  "requestId": "bJbrhJXnJJi7cTTq4vGs",
+  "found": true,
+  "receivedAt": "2026-10-02T16:03:49.115Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 538,
+  "rawSha256": "2c30190268c755f895a7907ca08bfa804e5a213734cadfc14a158133b394e90b",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 1,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [
+      "wamid.HBgTQVIuMjY2OTkzOTQ1MzQ0MDkwMRUUABEYIEE1MzdFODg3QTI2QTg5QzJGQzM0MEFDMTc1RkE4OEM5AA=="
+    ],
+    "statusNames": [
+      "delivered"
+    ],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491158805768",
+                  "user_id": "AR.2669939453440901"
+                }
+              ],
+              "statuses": [
+                {
+                  "id": "wamid.HBgTQVIuMjY2OTkzOTQ1MzQ0MDkwMRUUABEYIEE1MzdFODg3QTI2QTg5QzJGQzM0MEFDMTc1RkE4OEM5AA==",
+                  "status": "delivered",
+                  "timestamp": "1790957028",
+                  "recipient_id": "5491158805768",
+                  "recipient_user_id": "AR.2669939453440901"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

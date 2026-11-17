@@ -1,0 +1,99 @@
+{
+  "requestId": "nzr1VtZkHs47LqlTo2Hz",
+  "found": true,
+  "receivedAt": "2026-10-02T15:36:14.368Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 856,
+  "rawSha256": "e7c48a72d50d69706a9bed016785f2ee197ddc45686931a9c10b3f00aa5c637d",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzMzgxNTg1NxUCABIYIEFDMkZDNjQxQjRBMTI2NUQ5RDk0NkVCQUNCOUY5OTg4AA=="
+    ],
+    "senderWaIds": [
+      "5491133815857"
+    ],
+    "messageTypes": [
+      "audio"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "el pola"
+                  },
+                  "wa_id": "5491133815857",
+                  "user_id": "AR.1079280398315206"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491133815857",
+                  "from_user_id": "AR.1079280398315206",
+                  "id": "wamid.HBgNNTQ5MTEzMzgxNTg1NxUCABIYIEFDMkZDNjQxQjRBMTI2NUQ5RDk0NkVCQUNCOUY5OTg4AA==",
+                  "timestamp": "1790955372",
+                  "type": "audio",
+                  "audio": {
+                    "mime_type": "audio/ogg; codecs=opus",
+                    "sha256": "DovVIvPfFSov0dAC9TlJILahbaRrDmMNG9ReSc6VbbY=",
+                    "id": "1760265865200842",
+                    "url": "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1760265865200842&source=webhook&ext=1790955674&hash=ATyqKscWln6YrU0w3JDP8tcRFJYd2G5T8XQBHtDqKMgGjw",
+                    "voice": true
+                  }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

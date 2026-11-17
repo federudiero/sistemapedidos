@@ -1,0 +1,12 @@
+{
+  "provincia": "BA",
+  "productos": 163,
+  "combosCatalogo": 11,
+  "gruposNombresRepetidos": 3,
+  "pedidosExaminados": 39709,
+  "pedidosLimitados": false,
+  "lineasPedidoSinId": 11359,
+  "snapshotsDeCombo": 22199,
+  "referenciasAProductosInexistentes": 103,
+  "observacion": "Las coincidencias de nombre NO prueban que dos IDs representen el mismo producto. No se alteró Firestore."
+}

@@ -1,0 +1,95 @@
+{
+  "requestId": "kWiItqHt0VurSKIi1r1V",
+  "found": true,
+  "receivedAt": "2026-10-02T15:42:38.860Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 581,
+  "rawSha256": "e9b9442cbb8a611661736dc17a3faeb70ae71a3ad7e71b80fcc7942b921d8e70",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzOTIwODA2ORUCABIYIEFDMjEzQUQyRTQ0REQ3NTQ0QzU3MkRBMDUxNDExOTgzAA=="
+    ],
+    "senderWaIds": [
+      "5491139208069"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Flor 💜"
+                  },
+                  "wa_id": "5491139208069",
+                  "user_id": "AR.1616846636890524"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491139208069",
+                  "from_user_id": "AR.1616846636890524",
+                  "id": "wamid.HBgNNTQ5MTEzOTIwODA2ORUCABIYIEFDMjEzQUQyRTQ0REQ3NTQ0QzU3MkRBMDUxNDExOTgzAA==",
+                  "timestamp": "1790955757",
+                  "text": {
+                    "body": "De San Miguel"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

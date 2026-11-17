@@ -1,0 +1,53 @@
+[
+  {
+    "clave": "ENTONADOR VERDE CLARO",
+    "productos": [
+      {
+        "productoId": "2pQzHvds9Le--mlvpq2MN",
+        "nombre": "Entonador verde claro",
+        "pedidosDistintos": 100,
+        "combos": 0
+      },
+      {
+        "productoId": "EgNQkh_wxtMdpocedz3ga",
+        "nombre": "Entonador  Verde Claro",
+        "pedidosDistintos": 68,
+        "combos": 0
+      }
+    ]
+  },
+  {
+    "clave": "VENDA 10X25",
+    "productos": [
+      {
+        "productoId": "7JMMCXTQ4ljm3jMfLVvf9",
+        "nombre": "VENDA 10X25",
+        "pedidosDistintos": 26,
+        "combos": 1
+      },
+      {
+        "productoId": "rC1020qaWy5dYDSN9aYNc",
+        "nombre": "VENDA 10X25",
+        "pedidosDistintos": 5,
+        "combos": 5
+      }
+    ]
+  },
+  {
+    "clave": "RODILLO PELO CORTO",
+    "productos": [
+      {
+        "productoId": "iGJ7UZX_3o8AdeXtWMap5",
+        "nombre": "RODILLO PELO CORTO",
+        "pedidosDistintos": 62,
+        "combos": 11
+      },
+      {
+        "productoId": "ssbk-5am0gG_c_wI2sw0s",
+        "nombre": "Rodillo pelo corto",
+        "pedidosDistintos": 100,
+        "combos": 0
+      }
+    ]
+  }
+]

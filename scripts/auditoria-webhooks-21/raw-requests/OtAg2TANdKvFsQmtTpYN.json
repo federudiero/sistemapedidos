@@ -1,0 +1,95 @@
+{
+  "requestId": "OtAg2TANdKvFsQmtTpYN",
+  "found": true,
+  "receivedAt": "2026-10-02T13:11:42.974Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 635,
+  "rawSha256": "709a2949fccccfd86c567b9ca5b0ff196450ac126c9562f024c3588620804f63",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNTQ3NTkzOBUCABIYIEFDQzM0MkY3NzYzMjlBQTk2NkRGNEQ5N0U2MUM0QURGAA=="
+    ],
+    "senderWaIds": [
+      "5491125475938"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Mai González"
+                  },
+                  "wa_id": "5491125475938",
+                  "user_id": "AR.1802350297444303"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491125475938",
+                  "from_user_id": "AR.1802350297444303",
+                  "id": "wamid.HBgNNTQ5MTEyNTQ3NTkzOBUCABIYIEFDQzM0MkY3NzYzMjlBQTk2NkRGNEQ5N0U2MUM0QURGAA==",
+                  "timestamp": "1790946701",
+                  "text": {
+                    "body": "Quería saber si la membrana líquida sirve para casillas ?"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

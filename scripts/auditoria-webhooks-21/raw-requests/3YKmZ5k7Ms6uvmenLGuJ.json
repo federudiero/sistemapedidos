@@ -1,0 +1,89 @@
+{
+  "requestId": "3YKmZ5k7Ms6uvmenLGuJ",
+  "found": true,
+  "receivedAt": "2026-10-02T16:07:06.390Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 848,
+  "rawSha256": "5c7dfd5f404d9a792bb2dc3d28ff22b098ec788555aba6ffcffbcac2adb231b4",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMjY2OTkzOTQ1MzQ0MDkwMRUUABEYIEE1MkRCMTA4RkUxQUY2QUM2RDMxMTI1NEFBMjFCOUIzAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491158805768",
+                  "user_id": "AR.2669939453440901"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491158805768",
+                  "id": "wamid.HBgTQVIuMjY2OTkzOTQ1MzQ0MDkwMRUUABEYIEE1MkRCMTA4RkUxQUY2QUM2RDMxMTI1NEFBMjFCOUIzAA==",
+                  "to_user_id": "AR.2669939453440901",
+                  "timestamp": "1790957225",
+                  "text": {
+                    "body": "⚠️ LA PROMOCIÓN MAS ELEGIDA.\n\nLatex blanco eco listo para usar 👌\n20L + rodillo + enduido\n\n💲35.500\n🚚 Envío $4.000\n💵 Pago al recibir\n\nÚltimas unidades en promo!\n*Te gustaría que te lo llevemos?*"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

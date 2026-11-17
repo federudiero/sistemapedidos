@@ -1,0 +1,495 @@
+[
+  {
+    "phone": "+5491139028596",
+    "classification": "SIN_EVIDENCIA_SUFICIENTE",
+    "reason": "No se encontró referral/sourceId/ctwaClid ni referral_conversion.",
+    "conversationCount": 1,
+    "webhookEventCount": 5,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T16:15:34.000Z",
+    "conversationIds": [
+      "908622795675424__5491139028596"
+    ]
+  },
+  {
+    "phone": "+5491158805768",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 11,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [
+      "120251654117980242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T16:01:17.000Z",
+    "conversationIds": [
+      "908622795675424__5491158805768"
+    ]
+  },
+  {
+    "phone": "+5491140267566",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 22,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [
+      "120251654117980242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T15:59:44.000Z",
+    "conversationIds": [
+      "908622795675424__5491140267566"
+    ]
+  },
+  {
+    "phone": "+5491124953376",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 23,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [
+      "120251654117980242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T15:54:45.000Z",
+    "conversationIds": [
+      "908622795675424__5491124953376"
+    ]
+  },
+  {
+    "phone": "+5491139208069",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 9,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [
+      "120251654117980242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T15:41:09.000Z",
+    "conversationIds": [
+      "908622795675424__5491139208069"
+    ]
+  },
+  {
+    "phone": "+5491125116651",
+    "classification": "SIN_EVIDENCIA_SUFICIENTE",
+    "reason": "No se encontró referral/sourceId/ctwaClid ni referral_conversion.",
+    "conversationCount": 1,
+    "webhookEventCount": 26,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [],
+    "firstInboundAt": "2026-10-02T15:19:03.000Z",
+    "conversationIds": [
+      "908622795675424__5491125116651"
+    ]
+  },
+  {
+    "phone": "+5491141622105",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 18,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [
+      "120251654117980242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T13:16:54.000Z",
+    "conversationIds": [
+      "908622795675424__5491141622105"
+    ]
+  },
+  {
+    "phone": "+5491125475938",
+    "classification": "SIN_EVIDENCIA_SUFICIENTE",
+    "reason": "No se encontró referral/sourceId/ctwaClid ni referral_conversion.",
+    "conversationCount": 1,
+    "webhookEventCount": 28,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [],
+    "firstInboundAt": "2026-10-02T13:11:21.000Z",
+    "conversationIds": [
+      "908622795675424__5491125475938"
+    ]
+  },
+  {
+    "phone": "+5492215865894",
+    "classification": "SIN_EVIDENCIA_SUFICIENTE",
+    "reason": "No se encontró referral/sourceId/ctwaClid ni referral_conversion.",
+    "conversationCount": 1,
+    "webhookEventCount": 6,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T14:13:41.000Z",
+    "conversationIds": [
+      "908622795675424__5492215865894"
+    ]
+  },
+  {
+    "phone": "+5491161210785",
+    "classification": "SIN_EVIDENCIA_SUFICIENTE",
+    "reason": "No se encontró referral/sourceId/ctwaClid ni referral_conversion.",
+    "conversationCount": 1,
+    "webhookEventCount": 33,
+    "sellers": [
+      "ayelenyamile97@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "908622795675424"
+    ],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [],
+    "firstInboundAt": "2026-10-02T13:43:14.000Z",
+    "conversationIds": [
+      "908622795675424__5491161210785"
+    ]
+  },
+  {
+    "phone": "+5492949613870",
+    "classification": "NO_ENCONTRADO",
+    "reason": "El teléfono no apareció en conversaciones ni crmWebhookEvents de la provincia seleccionada.",
+    "conversationCount": 0,
+    "webhookEventCount": 0,
+    "sellers": [],
+    "businessPhoneNumberIds": [],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [],
+    "firstInboundAt": "",
+    "conversationIds": []
+  },
+  {
+    "phone": "+5491166305177",
+    "classification": "SIN_EVIDENCIA_SUFICIENTE",
+    "reason": "No se encontró referral/sourceId/ctwaClid ni referral_conversion.",
+    "conversationCount": 1,
+    "webhookEventCount": 65,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [],
+    "firstInboundAt": "2026-10-02T15:27:33.000Z",
+    "conversationIds": [
+      "391883443998032__5491166305177"
+    ]
+  },
+  {
+    "phone": "+5491133815857",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 26,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246188593050242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T15:17:08.000Z",
+    "conversationIds": [
+      "391883443998032__5491133815857"
+    ]
+  },
+  {
+    "phone": "+5491124594969",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 29,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246188593050242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T15:08:59.000Z",
+    "conversationIds": [
+      "391883443998032__5491124594969"
+    ]
+  },
+  {
+    "phone": "+5491136379823",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 25,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246188593050242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T13:56:24.000Z",
+    "conversationIds": [
+      "391883443998032__5491136379823"
+    ]
+  },
+  {
+    "phone": "+5491122843908",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 23,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246230670190242"
+    ],
+    "ctwaClidPresent": true,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T09:31:06.000Z",
+    "conversationIds": [
+      "391883443998032__5491122843908"
+    ]
+  },
+  {
+    "phone": "+5491163036546",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 8,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246188593050242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T07:43:12.000Z",
+    "conversationIds": [
+      "391883443998032__5491163036546"
+    ]
+  },
+  {
+    "phone": "+5491130768195",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 29,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246188593050242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T04:30:03.000Z",
+    "conversationIds": [
+      "391883443998032__5491130768195"
+    ]
+  },
+  {
+    "phone": "+5491165670078",
+    "classification": "SIN_EVIDENCIA_SUFICIENTE",
+    "reason": "No se encontró referral/sourceId/ctwaClid ni referral_conversion.",
+    "conversationCount": 1,
+    "webhookEventCount": 28,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T03:27:16.000Z",
+    "conversationIds": [
+      "391883443998032__5491165670078"
+    ]
+  },
+  {
+    "phone": "+5491145268592",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 15,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246188593050242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T03:16:38.000Z",
+    "conversationIds": [
+      "391883443998032__5491145268592"
+    ]
+  },
+  {
+    "phone": "+5491138247374",
+    "classification": "PUBLICIDAD_META_CONFIRMADA",
+    "reason": "Hay evidencia directa de Meta (referral/sourceId/ctwaClid).",
+    "conversationCount": 1,
+    "webhookEventCount": 32,
+    "sellers": [
+      "yarasosa16@gmail.com"
+    ],
+    "businessPhoneNumberIds": [
+      "391883443998032"
+    ],
+    "sourceIds": [
+      "120246188593050242"
+    ],
+    "ctwaClidPresent": false,
+    "metaReferralConversion": false,
+    "errorCodes": [
+      "131060"
+    ],
+    "firstInboundAt": "2026-10-02T03:12:26.000Z",
+    "conversationIds": [
+      "391883443998032__5491138247374"
+    ]
+  }
+]

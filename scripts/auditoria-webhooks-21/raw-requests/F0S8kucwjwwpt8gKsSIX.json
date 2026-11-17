@@ -1,0 +1,95 @@
+{
+  "requestId": "F0S8kucwjwwpt8gKsSIX",
+  "found": true,
+  "receivedAt": "2026-10-02T14:20:01.670Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 600,
+  "rawSha256": "228fbbdbf9a953f5a3dc0cf32f0a5d7f714cc7d9f9b443b59b809ff4172e632a",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MjIxNTg2NTg5NBUCABIYIEFDMDU3N0IyNDhDNUFCMUNFNzUwQzYwQUJENTNDM0E3AA=="
+    ],
+    "senderWaIds": [
+      "5492215865894"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "arceangelica178"
+                  },
+                  "wa_id": "5492215865894",
+                  "user_id": "AR.1094426876293868"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5492215865894",
+                  "from_user_id": "AR.1094426876293868",
+                  "id": "wamid.HBgNNTQ5MjIxNTg2NTg5NBUCABIYIEFDMDU3N0IyNDhDNUFCMUNFNzUwQzYwQUJENTNDM0E3AA==",
+                  "timestamp": "1790950800",
+                  "text": {
+                    "body": "Cuánto me sale con envío"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

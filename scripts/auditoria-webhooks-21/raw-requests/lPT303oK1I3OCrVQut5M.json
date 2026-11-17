@@ -1,0 +1,95 @@
+{
+  "requestId": "lPT303oK1I3OCrVQut5M",
+  "found": true,
+  "receivedAt": "2026-10-02T15:10:42.629Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 608,
+  "rawSha256": "e3d700e2291e33ce88f2668d656bd4ac8374bf27cd7af39d342312dd5f70a8ac",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNDU5NDk2ORUCABIYIEFDMzA2MzJFODI1RkFBMTY0OUZFRjI1MTA1MzUxRTMxAA=="
+    ],
+    "senderWaIds": [
+      "5491124594969"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Carlos Rodriguez"
+                  },
+                  "wa_id": "5491124594969",
+                  "user_id": "AR.1439527671607009"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491124594969",
+                  "from_user_id": "AR.1439527671607009",
+                  "id": "wamid.HBgNNTQ5MTEyNDU5NDk2ORUCABIYIEFDMzA2MzJFODI1RkFBMTY0OUZFRjI1MTA1MzUxRTMxAA==",
+                  "timestamp": "1790953841",
+                  "text": {
+                    "body": "Pero organizamos para la semana que viene"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "requestId": "hZ9eXLH0ln7B5ELMXv2p",
+  "found": true,
+  "receivedAt": "2026-10-02T15:54:47.682Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 1718,
+  "rawSha256": "5051f1247349b4ab8554c4a506dbded6679eab26faa37829d93d2d3e513604fc",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 1,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNDk1MzM3NhUCABIYIEFDODdEODQzNjU0N0IzQ0IyMzhDMjkwNjU2NDJERDgwAA=="
+    ],
+    "senderWaIds": [
+      "5491124953376"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [
+      "120251654117980242"
+    ],
+    "referralSourceTypes": [
+      "ad"
+    ],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Henry Patiño"
+                  },
+                  "wa_id": "5491124953376",
+                  "user_id": "AR.1540740611428961"
+                }
+              ],
+              "messages": [
+                {
+                  "referral": {
+                    "source_url": "https://wa.me/wamo/status/preview/5491169730249/120255167149840242",
+                    "source_id": "120251654117980242",
+                    "source_type": "ad",
+                    "body": "🎨✨ ¡Dejá tus paredes como nuevas! ✨🎨\n\n🪣 LÁTEX BLANCO 20 L\nIncluye todo lo que necesitás para pintar sin vueltas:\n🖌️ Rodillo\n🧱 Enduido\n\n💪 Excelente cobertura\n🏠 Ideal para interiores y exteriores\n🎯 Rendimiento profesional",
+                    "headline": "🪣 LÁTEX BLANCO 20 L",
+                    "media_type": "video",
+                    "thumbnail_url": "https://scontent.xx.fbcdn.net/v/t15.5256-10/706078977_27479599121625784_3186017717290810976_n.jpg?stp=dst-jpg_p180x540_tt6&_nc_cat=100&ccb=1-7&_nc_sid=40cf1a&_nc_ohc=YdT9dGSqOGYQ7kNvwEPX-Ta&_nc_oc=AdomzPmzsW6UExg-Q5ELcKkk1-4Qpu7PZba0O9zkpU_jjaTrHF9mAPDFyhO4GfMlcJY&_nc_zt=23&_nc_ht=scontent.xx&_nc_gid=fL4eSlqslQ0JVZAp2NmKaw&_nc_ss=7f3ba&oh=00_AQO0CRjEj3GDhnhY_FBVrHETGCW0hHYILdqVQuu8XKCKUw&oe=6AC5B405",
+                    "welcome_message": {
+                      "text": "Hola! Gracias por consultar POR NUESTRA PINTURA !"
+                    }
+                  },
+                  "from": "5491124953376",
+                  "from_user_id": "AR.1540740611428961",
+                  "id": "wamid.HBgNNTQ5MTEyNDk1MzM3NhUCABIYIEFDODdEODQzNjU0N0IzQ0IyMzhDMjkwNjU2NDJERDgwAA==",
+                  "timestamp": "1790956486",
+                  "text": {
+                    "body": "¡Hola! Quiero más información Sobre  PINTURAS"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

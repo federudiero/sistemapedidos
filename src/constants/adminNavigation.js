@@ -1,6 +1,7 @@
 import { ADMIN_SECTIONS, ADMIN_SECTION_LABELS } from "./adminSections.js";
 
 export const ADMIN_NAV_ITEMS = [
+  { section: "gestionFabrica", label: "Gestión de Fábrica", shortLabel: "Fábrica", to: "/admin/fabrica", icon: "gestionFabrica" },
   {
     section: ADMIN_SECTIONS.DASHBOARD_ADMIN,
     label: ADMIN_SECTION_LABELS[ADMIN_SECTIONS.DASHBOARD_ADMIN],

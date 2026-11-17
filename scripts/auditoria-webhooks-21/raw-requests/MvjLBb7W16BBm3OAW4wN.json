@@ -1,0 +1,89 @@
+{
+  "requestId": "MvjLBb7W16BBm3OAW4wN",
+  "found": true,
+  "receivedAt": "2026-10-02T15:28:25.208Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 727,
+  "rawSha256": "f89fe5f7db8288c922a368b120741bc0388cde82eb66240df6e0bd0d5738fd47",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTA3OTI4MDM5ODMxNTIwNhUUABEYIEE1RTg5REJBN0JDNEJBNzIyNjQ4RDUwNUZDMzhCQzBGAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491133815857",
+                  "user_id": "AR.1079280398315206"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491124959496",
+                  "to": "5491133815857",
+                  "id": "wamid.HBgTQVIuMTA3OTI4MDM5ODMxNTIwNhUUABEYIEE1RTg5REJBN0JDNEJBNzIyNjQ4RDUwNUZDMzhCQzBGAA==",
+                  "to_user_id": "AR.1079280398315206",
+                  "timestamp": "1790954903",
+                  "text": {
+                    "body": "20 LTS de membrana blanca + rodillo + venda  ($46.500) + envío $4.000\n\n*PRECIO FINAL EN EFECTIVO $50.500*\n\ntransferencia $55.550 (precio de lista)"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

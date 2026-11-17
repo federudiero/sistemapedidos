@@ -33,19 +33,79 @@ const {
 
 function parseWhatsAppWebhook(body) {
   const events = [];
+  let eventIndex = 0;
+
   for (const entry of Array.isArray(body?.entry) ? body.entry : []) {
+    const entryId = limitedString(entry?.id, 300);
+
     for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
       const value = change?.value || {};
-      if (change?.field === "smb_message_echoes") {
-        for (const echo of Array.isArray(value?.message_echoes) ? value.message_echoes : []) {
-          events.push({ kind: "echo", value, payload: echo });
+      const changeField = limitedString(change?.field, 120);
+      const eventCountBeforeChange = events.length;
+
+      if (changeField === "smb_message_echoes") {
+        for (const echo of Array.isArray(value?.message_echoes)
+          ? value.message_echoes
+          : []) {
+          events.push({
+            eventIndex: eventIndex++,
+            kind: "echo",
+            entryId,
+            changeField,
+            value,
+            payload: echo,
+          });
+        }
+        if (events.length === eventCountBeforeChange) {
+          events.push({
+            eventIndex: eventIndex++,
+            kind: "change",
+            entryId,
+            changeField,
+            value,
+            payload: value,
+          });
         }
         continue;
       }
-      for (const msg of Array.isArray(value?.messages) ? value.messages : []) events.push({ kind: "message", value, payload: msg });
-      for (const status of Array.isArray(value?.statuses) ? value.statuses : []) events.push({ kind: "status", value, payload: status });
+
+      for (const msg of Array.isArray(value?.messages) ? value.messages : []) {
+        events.push({
+          eventIndex: eventIndex++,
+          kind: "message",
+          entryId,
+          changeField,
+          value,
+          payload: msg,
+        });
+      }
+
+      for (const status of Array.isArray(value?.statuses) ? value.statuses : []) {
+        events.push({
+          eventIndex: eventIndex++,
+          kind: "status",
+          entryId,
+          changeField,
+          value,
+          payload: status,
+        });
+      }
+
+      // Si Meta agrega un field nuevo o un change sin messages/statuses, igual
+      // queda indexado en crmWebhookEvents además de existir en el payload crudo.
+      if (events.length === eventCountBeforeChange) {
+        events.push({
+          eventIndex: eventIndex++,
+          kind: "change",
+          entryId,
+          changeField,
+          value,
+          payload: value,
+        });
+      }
     }
   }
+
   return events;
 }
 
@@ -57,6 +117,41 @@ function normalizePhoneId(value) {
 function limitedString(value, maxLength = 500) {
   const normalized = safeStr(value);
   return normalized ? normalized.slice(0, maxLength) : null;
+}
+
+function extractFacebookMarketplaceItem(text) {
+  const raw = safeStr(text);
+  if (!raw) return null;
+
+  const match = raw.match(
+    /https?:\/\/(?:www\.|m\.)?facebook\.com\/marketplace\/item\/(\d+)(?:[^\s]*)?/i
+  );
+  if (!match) return null;
+
+  const sourceUrl = limitedString(
+    String(match[0] || "").replace(/[),.;!?]+$/g, ""),
+    2000
+  );
+  const sourceId = limitedString(match[1], 200);
+
+  return sourceUrl ? { sourceUrl, sourceId } : null;
+}
+
+function extractFacebookContentSource(text) {
+  const raw = safeStr(text);
+  if (!raw) return null;
+
+  const match = raw.match(
+    /https?:\/\/(?:www\.|m\.)?facebook\.com\/(?:share\/(?:r|v|p)\/[^\s]+|reels?\/[^\s]+|watch\/?[^\s]*|[^\s/]+\/posts\/[^\s]+|[^\s/]+\/videos\/[^\s]+)/i
+  );
+  if (!match) return null;
+
+  const sourceUrl = limitedString(
+    String(match[0] || "").replace(/[),.;!?]+$/g, ""),
+    2000
+  );
+
+  return sourceUrl ? { sourceUrl } : null;
 }
 
 function normalizeReferral(referral) {
@@ -78,6 +173,157 @@ function normalizeReferral(referral) {
   };
 
   return Object.values(normalized).some(Boolean) ? normalized : null;
+}
+
+function jsonSafeObject(value) {
+  if (value === undefined || value === null) return null;
+
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeMessageErrors(errors) {
+  if (!Array.isArray(errors)) return [];
+  return errors.map((error) => jsonSafeObject(error)).filter(Boolean);
+}
+
+function normalizeAttribution(attribution) {
+  if (!attribution || typeof attribution !== "object" || Array.isArray(attribution)) {
+    return null;
+  }
+
+  const normalized = jsonSafeObject(attribution);
+  return normalized && typeof normalized === "object" ? normalized : null;
+}
+
+function buildInboundAttribution({ referral, rawType, messageErrors = [], text = "" }) {
+  const sourceType = limitedString(referral?.sourceType, 80)?.toLowerCase() || null;
+  const hasReferral = Boolean(referral);
+  // ctwa_clid es un identificador de Click-to-WhatsApp generado por Meta. Si
+  // llega sin source_type, sigue siendo evidencia directa de un anuncio CTWA.
+  // source_id por sí solo NO alcanza porque también puede pertenecer a un post.
+  const inferredType = sourceType || (referral?.ctwaClid ? "ad" : null);
+  const marketplaceItem = inferredType ? null : extractFacebookMarketplaceItem(text);
+  const facebookContent =
+    inferredType || marketplaceItem ? null : extractFacebookContentSource(text);
+  const resolvedType =
+    inferredType ||
+    (marketplaceItem ? "marketplace" : null) ||
+    (facebookContent ? "facebook_content" : null);
+  const hasConfirmedOrigin = Boolean(resolvedType);
+  const messageErrorCodes = messageErrors
+    .map((error) => limitedString(error?.code, 120))
+    .filter(Boolean);
+
+  const base = {
+    type: resolvedType || "unknown",
+    status: hasConfirmedOrigin ? "confirmed" : "unattributed",
+    method: sourceType
+      ? "meta_referral"
+      : referral?.ctwaClid
+        ? "meta_referral_ctwa_clid"
+        : marketplaceItem
+          ? "facebook_marketplace_url"
+          : facebookContent
+            ? "facebook_content_url"
+        : "missing_meta_referral",
+    reason: sourceType
+      ? "meta_referral_source_type"
+      : referral?.ctwaClid
+        ? "meta_referral_ctwa_clid"
+        : marketplaceItem
+          ? "facebook_marketplace_item_url"
+          : facebookContent
+            ? "facebook_reel_or_shared_content_url"
+        : String(rawType || "").toLowerCase() === "unsupported"
+          ? "unsupported_without_meta_referral"
+          : messageErrorCodes.length
+            ? "message_error_without_meta_referral"
+            : hasReferral
+              ? "meta_referral_without_source_type"
+              : "meta_referral_not_received",
+    sourceId: referral?.sourceId || marketplaceItem?.sourceId || null,
+    sourceUrl:
+      referral?.sourceUrl ||
+      marketplaceItem?.sourceUrl ||
+      facebookContent?.sourceUrl ||
+      null,
+    headline: referral?.headline || null,
+    body: referral?.body || null,
+    mediaType: referral?.mediaType || null,
+    imageUrl: referral?.imageUrl || null,
+    videoUrl: referral?.videoUrl || null,
+    thumbnailUrl: referral?.thumbnailUrl || null,
+    ctwaClid: referral?.ctwaClid || null,
+    messageType: limitedString(rawType, 80) || "unknown",
+    messageErrorCodes,
+    signals: {
+      metaReferral: hasReferral,
+      metaReferralConversion: false,
+      sourceTypePresent: Boolean(sourceType),
+      sourceIdPresent: Boolean(referral?.sourceId),
+      ctwaClidPresent: Boolean(referral?.ctwaClid),
+      sourceUrlPresent: Boolean(referral?.sourceUrl),
+      headlinePresent: Boolean(referral?.headline),
+      messageCodeMatch: false,
+      messageTextMatch: false,
+      adFingerprintMatch: false,
+      marketplaceUrlMatch: Boolean(marketplaceItem),
+      facebookContentUrlMatch: Boolean(facebookContent),
+    },
+  };
+
+  return base;
+}
+
+function buildLegacyFirstAttribution(seedData) {
+  const existing = normalizeAttribution(seedData?.firstAttribution);
+  if (existing) return existing;
+
+  const referral = normalizeAttribution(seedData?.firstReferral);
+  const legacyType = limitedString(
+    referral?.sourceType || seedData?.leadSourceType,
+    80
+  )?.toLowerCase() || null;
+
+  if (!legacyType) return null;
+
+  return {
+    type: legacyType,
+    status: referral?.sourceType === legacyType ? "confirmed" : "legacy",
+    method: referral?.sourceType ? "meta_referral_legacy" : "legacy_lead_source",
+    reason: referral?.sourceType
+      ? "legacy_meta_referral"
+      : "legacy_classification_before_attribution_v2",
+    sourceId: referral?.sourceId || seedData?.leadSourceId || null,
+    sourceUrl: referral?.sourceUrl || null,
+    headline: referral?.headline || seedData?.leadSourceHeadline || null,
+    body: referral?.body || null,
+    mediaType: referral?.mediaType || null,
+    imageUrl: referral?.imageUrl || null,
+    videoUrl: referral?.videoUrl || null,
+    thumbnailUrl: referral?.thumbnailUrl || null,
+    ctwaClid: referral?.ctwaClid || null,
+    messageType: null,
+    messageErrorCodes: [],
+    signals: {
+      metaReferral: Boolean(referral),
+      metaReferralConversion: false,
+      sourceTypePresent: Boolean(legacyType),
+      sourceIdPresent: Boolean(referral?.sourceId || seedData?.leadSourceId),
+      ctwaClidPresent: Boolean(referral?.ctwaClid),
+      sourceUrlPresent: Boolean(referral?.sourceUrl),
+      headlinePresent: Boolean(referral?.headline || seedData?.leadSourceHeadline),
+      messageCodeMatch: false,
+      messageTextMatch: false,
+      adFingerprintMatch: false,
+      marketplaceUrlMatch: false,
+      facebookContentUrlMatch: false,
+    },
+  };
 }
 
 function buildLegacyConvId(customerWaId) {
@@ -240,8 +486,11 @@ function parseInboundMessage(value, msg) {
   const toPhoneNumberId = value?.metadata?.phone_number_id || null;
   const toDisplayPhoneNumber = value?.metadata?.display_phone_number || null;
   const contextWaMessageId = safeStr(msg?.context?.id) || null;
+  const context = jsonSafeObject(msg?.context);
   const occurredAt = toEventDate(msg?.timestamp);
   const referral = normalizeReferral(msg?.referral);
+  const messageErrors = normalizeMessageErrors(msg?.errors);
+  const unsupported = jsonSafeObject(msg?.unsupported);
 
   let text = "";
   let normalizedType = "text";
@@ -283,7 +532,10 @@ function parseInboundMessage(value, msg) {
     toPhoneNumberId,
     toDisplayPhoneNumber,
     contextWaMessageId,
+    context,
     referral,
+    messageErrors,
+    unsupported,
     rawType: msg.type || "unknown",
     normalizedType,
     media,
@@ -307,6 +559,30 @@ function parseStatusEvent(value, status) {
   const recipientWaId = normalizeWaId(status.recipient_id);
   const statusName = safeStr(status.status).toLowerCase() || "unknown";
   const phoneNumberId = value?.metadata?.phone_number_id || null;
+  const conversation =
+    status?.conversation && typeof status.conversation === "object"
+      ? status.conversation
+      : null;
+  const pricing =
+    status?.pricing && typeof status.pricing === "object"
+      ? status.pricing
+      : null;
+  const metaConversationId = safeStr(conversation?.id) || null;
+  // Meta ha documentado ambas variantes en payloads de status:
+  // conversation.origin.type y conversation.type.
+  const metaConversationOriginType =
+    safeStr(conversation?.origin?.type).toLowerCase() || null;
+  const metaConversationType = safeStr(conversation?.type).toLowerCase() || null;
+  const metaPricingCategory = safeStr(pricing?.category).toLowerCase() || null;
+  const metaPricingModel = safeStr(pricing?.pricing_model) || null;
+  const metaPricingBillable =
+    typeof pricing?.billable === "boolean" ? pricing.billable : null;
+  const isReferralConversion = [
+    metaConversationOriginType,
+    metaConversationType,
+    metaPricingCategory,
+  ].includes("referral_conversion");
+  const occurredAt = toEventDate(status?.timestamp);
 
   return {
     recipientWaId,
@@ -318,7 +594,69 @@ function parseStatusEvent(value, status) {
     waMessageId,
     statusName,
     phoneNumberId,
+    metaConversationId,
+    metaConversationOriginType,
+    metaConversationType,
+    metaPricingCategory,
+    metaPricingModel,
+    metaPricingBillable,
+    isReferralConversion,
+    occurredAt,
     raw: status,
+  };
+}
+
+function buildMetaEntryAttribution({ seedData, statusEvent }) {
+  const existingFirst = normalizeAttribution(seedData?.firstAttribution);
+  const messageErrorCodes = Array.isArray(existingFirst?.messageErrorCodes)
+    ? existingFirst.messageErrorCodes
+        .map((code) => limitedString(code, 120))
+        .filter(Boolean)
+    : [];
+
+  return {
+    type: "meta_entry",
+    status: "confirmed",
+    method: "meta_status_referral_conversion",
+    reason: "meta_referral_conversion_status",
+    sourceId: existingFirst?.sourceId || null,
+    sourceUrl: existingFirst?.sourceUrl || null,
+    headline: existingFirst?.headline || null,
+    body: existingFirst?.body || null,
+    mediaType: existingFirst?.mediaType || null,
+    imageUrl: existingFirst?.imageUrl || null,
+    videoUrl: existingFirst?.videoUrl || null,
+    thumbnailUrl: existingFirst?.thumbnailUrl || null,
+    ctwaClid: existingFirst?.ctwaClid || null,
+    messageType: existingFirst?.messageType || "unknown",
+    messageErrorCodes,
+    metaConversationId: statusEvent?.metaConversationId || null,
+    metaConversationOriginType:
+      statusEvent?.metaConversationOriginType || null,
+    metaConversationType: statusEvent?.metaConversationType || null,
+    metaPricingCategory: statusEvent?.metaPricingCategory || null,
+    detectedAt: admin.firestore.Timestamp.fromDate(
+      statusEvent?.occurredAt || new Date()
+    ),
+    signals: {
+      ...(existingFirst?.signals && typeof existingFirst.signals === "object"
+        ? existingFirst.signals
+        : {}),
+      metaReferral: Boolean(existingFirst?.signals?.metaReferral),
+      metaReferralConversion: true,
+      sourceTypePresent: Boolean(existingFirst?.signals?.sourceTypePresent),
+      sourceIdPresent: Boolean(existingFirst?.sourceId),
+      ctwaClidPresent: Boolean(existingFirst?.ctwaClid),
+      sourceUrlPresent: Boolean(existingFirst?.sourceUrl),
+      headlinePresent: Boolean(existingFirst?.headline),
+      messageCodeMatch: Boolean(existingFirst?.signals?.messageCodeMatch),
+      messageTextMatch: Boolean(existingFirst?.signals?.messageTextMatch),
+      adFingerprintMatch: Boolean(existingFirst?.signals?.adFingerprintMatch),
+      marketplaceUrlMatch: Boolean(existingFirst?.signals?.marketplaceUrlMatch),
+      facebookContentUrlMatch: Boolean(
+        existingFirst?.signals?.facebookContentUrlMatch
+      ),
+    },
   };
 }
 
@@ -429,6 +767,263 @@ function firestoreTimestampToDate(value) {
   if (typeof value?.toDate === "function") return value.toDate();
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function attributionConfidence(attribution) {
+  const normalized = normalizeAttribution(attribution);
+  if (!normalized) return 0;
+
+  const type = safeStr(normalized?.type).toLowerCase();
+  const status = safeStr(normalized?.status).toLowerCase();
+  const method = safeStr(normalized?.method).toLowerCase();
+
+  if (status === "confirmed" && type === "ad") return 50;
+  if (status === "confirmed" && type === "post") return 45;
+  if (status === "confirmed" && type === "meta_entry") return 40;
+  if (status === "confirmed" && type === "marketplace") return 35;
+  if (status === "confirmed" && type === "facebook_content") return 32;
+  if (status === "confirmed" && method.startsWith("meta_")) return 30;
+  if (status === "legacy") return 10;
+  return 0;
+}
+
+const EARLY_EXTERNAL_ORIGIN_WINDOW_MS = 10 * 60 * 1000;
+const MAX_INBOUND_MESSAGES_BEFORE_EXTERNAL_ORIGIN = 4;
+
+function shouldPromoteEarlyExternalOrigin({
+  seedData,
+  incomingAttribution,
+  occurredAt,
+}) {
+  const incoming = normalizeAttribution(incomingAttribution);
+  const incomingType = safeStr(incoming?.type).toLowerCase();
+  const incomingStatus = safeStr(incoming?.status).toLowerCase();
+
+  // Esta promoción sólo aplica a señales explícitas que el propio cliente
+  // comparte al iniciar la conversación. No se usa para anuncios: un referral
+  // de publicidad en un mensaje posterior podría ser un reingreso y no debe
+  // reescribir el origen histórico del contacto.
+  if (
+    incomingStatus !== "confirmed" ||
+    !["marketplace", "facebook_content"].includes(incomingType)
+  ) {
+    return false;
+  }
+
+  const existingFirst = buildLegacyFirstAttribution(seedData);
+  if (attributionConfidence(existingFirst) > 0) return false;
+
+  const firstInboundDate = firestoreTimestampToDate(seedData?.firstInboundAt);
+  const evidenceDate = occurredAt instanceof Date ? occurredAt : new Date(occurredAt);
+  if (!firstInboundDate || Number.isNaN(evidenceDate.getTime())) return false;
+
+  const elapsedMs = evidenceDate.getTime() - firstInboundDate.getTime();
+  if (elapsedMs < 0 || elapsedMs > EARLY_EXTERNAL_ORIGIN_WINDOW_MS) return false;
+
+  const priorInboundCount = Number(seedData?.inboundMessagesCount || 0);
+  if (
+    Number.isFinite(priorInboundCount) &&
+    priorInboundCount > MAX_INBOUND_MESSAGES_BEFORE_EXTERNAL_ORIGIN
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function datesAreSameEvent(a, b, toleranceMs = 1500) {
+  const da = firestoreTimestampToDate(a);
+  const db = firestoreTimestampToDate(b);
+  if (!da || !db) return false;
+  return Math.abs(da.getTime() - db.getTime()) <= toleranceMs;
+}
+
+function isSameStoredInboundAsConversationFirst(seedData, messageData, occurredAt) {
+  const firstInboundAt = seedData?.firstInboundAt || null;
+  const storedMessageAt = messageData?.timestamp || messageData?.ts || null;
+
+  if (firstInboundAt && storedMessageAt) {
+    return datesAreSameEvent(firstInboundAt, storedMessageAt);
+  }
+
+  return firstInboundAt && occurredAt
+    ? datesAreSameEvent(firstInboundAt, occurredAt)
+    : false;
+}
+
+function isSameStoredInboundAsConversationLast(seedData, messageData, occurredAt) {
+  const lastInboundAt = seedData?.lastInboundAt || null;
+  const storedMessageAt = messageData?.timestamp || messageData?.ts || null;
+
+  if (lastInboundAt && storedMessageAt) {
+    return datesAreSameEvent(lastInboundAt, storedMessageAt);
+  }
+
+  return lastInboundAt && occurredAt
+    ? datesAreSameEvent(lastInboundAt, occurredAt)
+    : false;
+}
+
+async function enrichDuplicateInboundMessage({
+  prov,
+  convId,
+  existingMsg,
+  inbound,
+}) {
+  const {
+    text,
+    waMessageId,
+    rawType,
+    normalizedType,
+    referral,
+    messageErrors,
+    occurredAt,
+  } = inbound;
+
+  const inboundTs = admin.firestore.Timestamp.fromDate(occurredAt || new Date());
+  const incomingAttribution = {
+    ...buildInboundAttribution({ referral, rawType, messageErrors, text }),
+    detectedAt: inboundTs,
+  };
+
+  const messageData = extractMessageData(existingMsg) || {};
+  const storedAttribution = normalizeAttribution(messageData?.attribution);
+  const incomingConfidence = attributionConfidence(incomingAttribution);
+  const storedConfidence = attributionConfidence(storedAttribution);
+  const attributionUpgraded = incomingConfidence > storedConfidence;
+
+  const storedRawType = safeStr(messageData?.rawType).toLowerCase();
+  const incomingRawType = safeStr(rawType).toLowerCase();
+  const contentUpgraded =
+    storedRawType === "unsupported" &&
+    incomingRawType &&
+    incomingRawType !== "unsupported";
+  const referralUpgraded = Boolean(referral) && !messageData?.referral;
+
+  if (!attributionUpgraded && !contentUpgraded && !referralUpgraded) {
+    return {
+      ok: true,
+      ignored: true,
+      duplicate: true,
+      enriched: false,
+      reason: "duplicate inbound waMessageId",
+      prov,
+      convId,
+      waMessageId,
+      attribution: incomingAttribution,
+    };
+  }
+
+  const convSnap = await getConversationSnap(prov, convId);
+  const seedData = convSnap.exists ? convSnap.data() || {} : {};
+
+  const messageUpdate = {
+    duplicateEnrichedAt: nowTs(),
+  };
+
+  if (attributionUpgraded) {
+    messageUpdate.attribution = incomingAttribution;
+  }
+  if (referralUpgraded) {
+    messageUpdate.referral = referral;
+  }
+  if (contentUpgraded) {
+    messageUpdate.rawType = rawType || messageData?.rawType || "text";
+    if (text) messageUpdate.text = text;
+
+    if (normalizedType === "location") {
+      messageUpdate.type = "location";
+    } else if (normalizedType === "audio") {
+      messageUpdate.type = "audio";
+    } else if (normalizedType === "media") {
+      messageUpdate.type = messageData?.type || "media";
+    } else {
+      messageUpdate.type = "text";
+    }
+  }
+
+  await updateMessageByRef(existingMsg.ref, messageUpdate);
+
+  const conversationUpdate = { updatedAt: nowTs() };
+  const isFirstInbound = isSameStoredInboundAsConversationFirst(
+    seedData,
+    messageData,
+    occurredAt
+  );
+  const isLastInbound = isSameStoredInboundAsConversationLast(
+    seedData,
+    messageData,
+    occurredAt
+  );
+
+  if (isLastInbound && attributionUpgraded) {
+    conversationUpdate.lastAttribution = incomingAttribution;
+  }
+  if (isLastInbound && referral) {
+    conversationUpdate.lastReferral = referral;
+  }
+  if (isLastInbound && contentUpgraded) {
+    conversationUpdate.lastInboundType = rawType || seedData?.lastInboundType || "text";
+    if (text) {
+      conversationUpdate.lastInboundPreview = text;
+      conversationUpdate.lastMessageText = text;
+    }
+  }
+
+  const existingFirstAttribution = buildLegacyFirstAttribution(seedData);
+  const firstAttributionConfidence = attributionConfidence(existingFirstAttribution);
+  const firstAttributionUpgraded =
+    isFirstInbound && incomingConfidence > firstAttributionConfidence;
+
+  if (firstAttributionUpgraded) {
+    conversationUpdate.leadSourceType = incomingAttribution.type || "unknown";
+    conversationUpdate.leadSourceId = incomingAttribution.sourceId || null;
+    conversationUpdate.leadSourceHeadline = incomingAttribution.headline || null;
+    conversationUpdate.leadSourceStatus = incomingAttribution.status || "unattributed";
+    conversationUpdate.leadSourceMethod =
+      incomingAttribution.method || "missing_meta_referral";
+    conversationUpdate.leadSourceReason =
+      incomingAttribution.reason || "meta_referral_not_received";
+    conversationUpdate.attributionVersion = 2;
+    conversationUpdate.firstAttribution = incomingAttribution;
+    if (referral) conversationUpdate.firstReferral = referral;
+  }
+
+  if (Object.keys(conversationUpdate).length > 1) {
+    await mergeConversation(prov, convId, conversationUpdate);
+  }
+
+  await addGestionEvent({
+    prov,
+    convId,
+    payload: {
+      type: "inbound_duplicate_enriched",
+      actorEmail: null,
+      source: "meta_duplicate_enrichment",
+      waMessageId: waMessageId || null,
+      attributionUpgraded,
+      firstAttributionUpgraded,
+      contentUpgraded,
+      sourceType: incomingAttribution?.type || null,
+      sourceId: incomingAttribution?.sourceId || null,
+      attributionMethod: incomingAttribution?.method || null,
+    },
+  });
+
+  return {
+    ok: true,
+    ignored: true,
+    duplicate: true,
+    enriched: true,
+    attributionUpgraded,
+    firstAttributionUpgraded,
+    contentUpgraded,
+    reason: "duplicate inbound waMessageId enriched",
+    prov,
+    convId,
+    waMessageId,
+    attribution: incomingAttribution,
+  };
 }
 
 function parseMessageEcho(value, echo) {
@@ -607,7 +1202,10 @@ async function processInboundMessage({ prov, inbound }) {
     location,
     media,
     contextWaMessageId,
+    context,
     referral,
+    messageErrors,
+    unsupported,
     occurredAt,
   } = inbound;
 
@@ -670,6 +1268,7 @@ async function processInboundMessage({ prov, inbound }) {
 
   if (waMessageId) {
     let existingMsg = await findMessageByWaMessageId(prov, convId, waMessageId);
+    let existingMsgConvId = convId;
 
     if (!existingMsg && legacyConvId && legacyConvId !== convId) {
       existingMsg = await findMessageByWaMessageId(
@@ -677,18 +1276,16 @@ async function processInboundMessage({ prov, inbound }) {
         legacyConvId,
         waMessageId
       );
+      if (existingMsg) existingMsgConvId = legacyConvId;
     }
 
     if (existingMsg) {
-      return {
-        ok: true,
-        ignored: true,
-        duplicate: true,
-        reason: "duplicate inbound waMessageId",
+      return enrichDuplicateInboundMessage({
         prov,
-        convId,
-        waMessageId,
-      };
+        convId: existingMsgConvId,
+        existingMsg,
+        inbound,
+      });
     }
   }
 
@@ -728,6 +1325,19 @@ async function processInboundMessage({ prov, inbound }) {
   const telefonoE164 = toDisplayE164(clientWaId);
   const tsNow = nowTs();
   const inboundTs = admin.firestore.Timestamp.fromDate(occurredAt || new Date());
+  const currentAttribution = {
+    ...buildInboundAttribution({ referral, rawType, messageErrors, text }),
+    detectedAt: inboundTs,
+  };
+  const existingFirstAttribution = buildLegacyFirstAttribution(seedData);
+  const promoteEarlyExternalOrigin = shouldPromoteEarlyExternalOrigin({
+    seedData,
+    incomingAttribution: currentAttribution,
+    occurredAt,
+  });
+  const firstAttribution = promoteEarlyExternalOrigin
+    ? currentAttribution
+    : existingFirstAttribution || currentAttribution;
   const isNewConversation = !seedSnap?.exists;
   const previousGestionEstado = safeStr(seedData?.gestionEstado || "nuevo");
   const startsNewPendingCycle =
@@ -773,10 +1383,36 @@ async function processInboundMessage({ prov, inbound }) {
     clienteWaId: clientWaId,
     scopedPhoneNumberId: phoneKey,
     legacyConvId: legacyConvId || null,
+    // Compatibilidad: se mantienen los campos legacy, pero un referral ausente
+    // ya NO se interpreta como orgánico. En datos nuevos queda "unknown" hasta
+    // disponer de una señal objetiva de origen.
     leadSourceType:
-      seedData?.leadSourceType || referral?.sourceType || (isNewConversation ? "organic" : null),
-    leadSourceId: seedData?.leadSourceId || referral?.sourceId || null,
-    leadSourceHeadline: seedData?.leadSourceHeadline || referral?.headline || null,
+      promoteEarlyExternalOrigin
+        ? currentAttribution?.type || "unknown"
+        : seedData?.leadSourceType || firstAttribution?.type || "unknown",
+    leadSourceId:
+      promoteEarlyExternalOrigin
+        ? currentAttribution?.sourceId || null
+        : seedData?.leadSourceId || firstAttribution?.sourceId || null,
+    leadSourceHeadline:
+      promoteEarlyExternalOrigin
+        ? currentAttribution?.headline || null
+        : seedData?.leadSourceHeadline || firstAttribution?.headline || null,
+    leadSourceStatus:
+      promoteEarlyExternalOrigin
+        ? currentAttribution?.status || "unattributed"
+        : seedData?.leadSourceStatus || firstAttribution?.status || "unattributed",
+    leadSourceMethod:
+      promoteEarlyExternalOrigin
+        ? currentAttribution?.method || "missing_meta_referral"
+        : seedData?.leadSourceMethod || firstAttribution?.method || "missing_meta_referral",
+    leadSourceReason:
+      promoteEarlyExternalOrigin
+        ? currentAttribution?.reason || "meta_referral_not_received"
+        : seedData?.leadSourceReason || firstAttribution?.reason || "meta_referral_not_received",
+    attributionVersion: 2,
+    firstAttribution,
+    lastAttribution: currentAttribution,
     firstReferral: seedData?.firstReferral || referral || null,
     lastReferral: referral || seedData?.lastReferral || null,
   };
@@ -808,7 +1444,11 @@ async function processInboundMessage({ prov, inbound }) {
     waPhoneNumberId: phoneKey,
     rawType: rawType || "text",
     clienteWaId: clientWaId,
+    attribution: currentAttribution,
     ...(referral ? { referral } : {}),
+    ...(context ? { context } : {}),
+    ...(messageErrors?.length ? { errors: messageErrors } : {}),
+    ...(unsupported ? { unsupported } : {}),
     ...(replyTo ? { replyTo } : {}),
   };
 
@@ -964,8 +1604,12 @@ async function processInboundMessage({ prov, inbound }) {
       type: isNewConversation ? "contact_received" : "inbound_received",
       actorEmail: null,
       waMessageId: waMessageId || null,
-      sourceType: referral?.sourceType || null,
-      sourceId: referral?.sourceId || null,
+      sourceType: currentAttribution?.type || null,
+      sourceId: currentAttribution?.sourceId || null,
+      attributionStatus: currentAttribution.status,
+      attributionMethod: currentAttribution.method,
+      attributionReason: currentAttribution.reason,
+      firstAttributionUpgraded: promoteEarlyExternalOrigin,
     },
   });
   // 1) Métrica por MENSAJE: cada inbound suma mensajes y, si corresponde,
@@ -986,8 +1630,10 @@ async function processInboundMessage({ prov, inbound }) {
       convId,
       waMessageId: waMessageId || null,
       source: "webhook",
-      sourceType: referral?.sourceType || null,
-      sourceId: referral?.sourceId || null,
+      sourceType: currentAttribution?.type || null,
+      sourceId: currentAttribution?.sourceId || null,
+      attributionStatus: currentAttribution.status,
+      attributionMethod: currentAttribution.method,
     },
   });
 
@@ -1030,6 +1676,7 @@ async function processInboundMessage({ prov, inbound }) {
     assignedToEmail,
     phoneNumberId: phoneKey,
     clientWaId,
+    attribution: currentAttribution,
   };
 }
 
@@ -1041,6 +1688,14 @@ async function processStatusEvent({ prov, statusEvent }) {
     waMessageId,
     statusName,
     phoneNumberId,
+    metaConversationId,
+    metaConversationOriginType,
+    metaConversationType,
+    metaPricingCategory,
+    metaPricingModel,
+    metaPricingBillable,
+    isReferralConversion,
+    occurredAt,
     raw,
   } = statusEvent;
 
@@ -1075,10 +1730,18 @@ async function processStatusEvent({ prov, statusEvent }) {
 
   let matchedConvId = null;
   let msgDoc = null;
+  let matchedConvData = null;
+  let fallbackConvId = null;
+  let fallbackConvData = null;
 
   for (const candidateConvId of candidateConvIds) {
     const snap = await getConversationSnap(prov, candidateConvId);
     if (!snap.exists) continue;
+
+    if (!fallbackConvId) {
+      fallbackConvId = candidateConvId;
+      fallbackConvData = snap.data() || {};
+    }
 
     const found = await findMessageByWaMessageId(
       prov,
@@ -1089,18 +1752,49 @@ async function processStatusEvent({ prov, statusEvent }) {
     if (found) {
       matchedConvId = candidateConvId;
       msgDoc = found;
+      matchedConvData = snap.data() || {};
       break;
     }
   }
 
   if (!matchedConvId || !msgDoc) {
-    return { ok: true, ignored: true, reason: "message not found" };
+    // Los webhooks de status y los echoes de Coexistence pueden llegar fuera de
+    // orden. Para referral_conversion no necesitamos esperar el mensaje saliente:
+    // recipient_id + phone_number_id ya identifican la conversación.
+    if (isReferralConversion && fallbackConvId) {
+      matchedConvId = fallbackConvId;
+      matchedConvData = fallbackConvData || {};
+    } else {
+      return { ok: true, ignored: true, reason: "message not found" };
+    }
   }
 
   const update = {
     status: statusName,
     statusUpdatedAt: nowTs(),
   };
+
+  if (metaConversationId) {
+    update.metaConversationId = metaConversationId;
+  }
+  if (metaConversationOriginType) {
+    update.metaConversationOriginType = metaConversationOriginType;
+  }
+  if (metaConversationType) {
+    update.metaConversationType = metaConversationType;
+  }
+  if (metaPricingCategory) {
+    update.metaPricingCategory = metaPricingCategory;
+  }
+  if (metaPricingModel) {
+    update.metaPricingModel = metaPricingModel;
+  }
+  if (metaPricingBillable !== null) {
+    update.metaPricingBillable = metaPricingBillable;
+  }
+  if (isReferralConversion) {
+    update.metaReferralConversion = true;
+  }
 
   if (phoneKey) {
     update.waPhoneNumberId = phoneKey;
@@ -1110,8 +1804,83 @@ async function processStatusEvent({ prov, statusEvent }) {
     update.errorData = raw?.errors || null;
   }
 
-  await updateMessageByRef(msgDoc.ref, update);
-  await mergeConversation(prov, matchedConvId, { updatedAt: nowTs() });
+  if (msgDoc?.ref) {
+    await updateMessageByRef(msgDoc.ref, update);
+  }
+
+  const conversationUpdate = { updatedAt: nowTs() };
+  const alreadyMetaEntryConfirmed = matchedConvData?.metaEntryConfirmed === true;
+
+  if (isReferralConversion) {
+    const detectedAt = admin.firestore.Timestamp.fromDate(
+      occurredAt || new Date()
+    );
+
+    conversationUpdate.metaEntryConfirmed = true;
+    conversationUpdate.metaEntryConfirmedAt =
+      matchedConvData?.metaEntryConfirmedAt || detectedAt;
+    conversationUpdate.metaEntryMethod = "meta_status_referral_conversion";
+    conversationUpdate.metaEntryReason = "meta_referral_conversion_status";
+    conversationUpdate.metaConversationId = metaConversationId || null;
+    conversationUpdate.metaConversationOriginType =
+      metaConversationOriginType || null;
+    conversationUpdate.metaConversationType = metaConversationType || null;
+    conversationUpdate.metaPricingCategory = metaPricingCategory || null;
+    conversationUpdate.metaPricingModel = metaPricingModel || null;
+    conversationUpdate.metaPricingBillable = metaPricingBillable;
+
+    const currentLeadType = safeStr(
+      matchedConvData?.leadSourceType || matchedConvData?.firstAttribution?.type
+    ).toLowerCase();
+    const currentLeadStatus = safeStr(
+      matchedConvData?.leadSourceStatus || matchedConvData?.firstAttribution?.status
+    ).toLowerCase();
+    const currentLeadMethod = safeStr(
+      matchedConvData?.leadSourceMethod || matchedConvData?.firstAttribution?.method
+    ).toLowerCase();
+
+    const canUpgradeOrigin =
+      !currentLeadType ||
+      currentLeadType === "unknown" ||
+      currentLeadType === "organic" ||
+      currentLeadStatus === "unattributed" ||
+      currentLeadMethod === "missing_meta_referral" ||
+      currentLeadMethod === "legacy_lead_source";
+
+    if (canUpgradeOrigin && currentLeadType !== "ad" && currentLeadType !== "post") {
+      const metaEntryAttribution = buildMetaEntryAttribution({
+        seedData: matchedConvData || {},
+        statusEvent,
+      });
+
+      conversationUpdate.leadSourceType = "meta_entry";
+      conversationUpdate.leadSourceStatus = "confirmed";
+      conversationUpdate.leadSourceMethod = "meta_status_referral_conversion";
+      conversationUpdate.leadSourceReason = "meta_referral_conversion_status";
+      conversationUpdate.attributionVersion = 2;
+      conversationUpdate.firstAttribution = metaEntryAttribution;
+      conversationUpdate.metaEntryAttribution = metaEntryAttribution;
+    }
+  }
+
+  await mergeConversation(prov, matchedConvId, conversationUpdate);
+
+  if (isReferralConversion && !alreadyMetaEntryConfirmed) {
+    await addGestionEvent({
+      prov,
+      convId: matchedConvId,
+      payload: {
+        type: "meta_entry_attribution_confirmed",
+        actorEmail: null,
+        source: "meta_status_webhook",
+        waMessageId,
+        metaConversationId: metaConversationId || null,
+        metaConversationOriginType: metaConversationOriginType || null,
+        metaConversationType: metaConversationType || null,
+        metaPricingCategory: metaPricingCategory || null,
+      },
+    });
+  }
 
   return {
     ok: true,
@@ -1119,6 +1888,18 @@ async function processStatusEvent({ prov, statusEvent }) {
     convId: matchedConvId,
     waMessageId,
     statusName,
+    metaReferralConversion: isReferralConversion === true,
+    metaConversationId: metaConversationId || null,
+    metaConversationOriginType: metaConversationOriginType || null,
+    metaConversationType: metaConversationType || null,
+    metaPricingCategory: metaPricingCategory || null,
+    attribution: isReferralConversion
+      ? {
+          type: "meta_entry",
+          status: "confirmed",
+          method: "meta_status_referral_conversion",
+        }
+      : null,
   };
 }
 

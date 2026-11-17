@@ -51,6 +51,12 @@ router.post(
 );
 
 router.post(
+  "/admin/daily-activity",
+  requireAuth,
+  controller.getAdminDailyActivity
+);
+
+router.post(
   "/connection/admin-statuses",
   requireAuth,
   controller.getAdminWhatsAppConnectionStatuses

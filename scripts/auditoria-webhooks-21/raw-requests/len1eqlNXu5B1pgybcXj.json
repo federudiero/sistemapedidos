@@ -1,0 +1,95 @@
+{
+  "requestId": "len1eqlNXu5B1pgybcXj",
+  "found": true,
+  "receivedAt": "2026-10-02T16:01:15.159Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 582,
+  "rawSha256": "fdcc8a36d53e55ed452fbe1ca47ee1e04f1013a7e9e239c4888aaacdd7939fe4",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEyNTExNjY1MRUCABIYIEFDMjRDNERGNEE0NTQ1RkNGRDFDNUM3RTdEODk5RDZGAA=="
+    ],
+    "senderWaIds": [
+      "5491125116651"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Javiii✌️"
+                  },
+                  "wa_id": "5491125116651",
+                  "user_id": "AR.2210258292873803"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491125116651",
+                  "from_user_id": "AR.2210258292873803",
+                  "id": "wamid.HBgNNTQ5MTEyNTExNjY1MRUCABIYIEFDMjRDNERGNEE0NTQ1RkNGRDFDNUM3RTdEODk5RDZGAA==",
+                  "timestamp": "1790956874",
+                  "text": {
+                    "body": "Y la premium?"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "requestId": "nW0Et2qxu3sLGmmRr1ba",
+  "found": true,
+  "receivedAt": "2026-10-02T11:25:28.430Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 674,
+  "rawSha256": "522846197b4ddca01768524e1871905d5f2923a5245d23a5a38366be1cb5cdfd",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTA1ODcxOTE5MzgzMjgwMhUUABEYIEE1RjA2NzUxQUY5QzQ0MzcyQjlFQkY1RkNCNzgwM0UyAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491165670078",
+                  "user_id": "AR.1058719193832802"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491124959496",
+                  "to": "5491165670078",
+                  "id": "wamid.HBgTQVIuMTA1ODcxOTE5MzgzMjgwMhUUABEYIEE1RjA2NzUxQUY5QzQ0MzcyQjlFQkY1RkNCNzgwM0UyAA==",
+                  "to_user_id": "AR.1058719193832802",
+                  "timestamp": "1790940327",
+                  "text": {
+                    "body": "Dale. Si te quedó alguna duda sobre la pintura o cuánto necesitás, decime y te asesoro."
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

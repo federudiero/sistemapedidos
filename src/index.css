@@ -341,3 +341,123 @@ html[data-theme="business"] .textarea {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+@keyframes crmFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes crmLoadingBar {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0.45;
+  }
+  45% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(320%);
+    opacity: 0.45;
+  }
+}
+
+.crm-fade-in {
+  animation: crmFadeIn 220ms ease-out both;
+}
+
+.crm-loading-bar {
+  animation: crmLoadingBar 1.45s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-fade-in,
+  .crm-loading-bar {
+    animation: none;
+  }
+}
+
+
+/* ============================================================
+   Modern SaaS / Admin + Finanzas (solo presentación)
+   Estilos aislados: NO modifican los tokens globales ni el CRM.
+   ============================================================ */
+:where(.paint-admin-redesign, .paint-finance-redesign) {
+  --paint-panel: #ffffff;
+  --paint-canvas: #f5f7fb;
+  --paint-border: #e2e8f0;
+  --paint-ink: #172338;
+  --paint-muted: #64748b;
+  --paint-shadow: 0 4px 18px rgba(21, 39, 66, .055);
+  background: var(--paint-canvas) !important;
+  color: var(--paint-ink);
+}
+:where(
+  html[data-theme="dim"] .paint-admin-redesign,
+  html[data-theme="business"] .paint-admin-redesign,
+  html[data-theme="dim"] .paint-finance-redesign,
+  html[data-theme="business"] .paint-finance-redesign
+) {
+  --paint-panel: #151f31;
+  --paint-canvas: #0e1728;
+  --paint-border: #2b3a51;
+  --paint-ink: #e7edf7;
+  --paint-muted: #a3b2c6;
+  --paint-shadow: 0 6px 24px rgba(0, 0, 0, .14);
+}
+.paint-admin-redesign main { max-width: 1440px; }
+.paint-admin-redesign main > div:first-child,
+.paint-finance-redesign > div.finance-enter { letter-spacing: -.012em; }
+.paint-admin-redesign main h1,
+.paint-finance-redesign h2 { letter-spacing: -.035em; color: var(--paint-ink); }
+.paint-admin-redesign main > section,
+.paint-finance-redesign > .grid { row-gap: 1.25rem; }
+.paint-admin-redesign main .card,
+.paint-finance-redesign .finance-card {
+  border: 1px solid var(--paint-border);
+  background: var(--paint-panel);
+  box-shadow: var(--paint-shadow);
+  border-radius: 1.15rem;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.paint-admin-redesign main .card:hover,
+.paint-finance-redesign .finance-card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--paint-border));
+  box-shadow: 0 12px 28px rgba(21, 39, 66, .1);
+}
+.paint-admin-redesign main .card:hover { transform: translateY(-2px); }
+.paint-admin-redesign main .card-title,
+.paint-finance-redesign .finance-card h3 { color: var(--paint-ink); letter-spacing: -.025em; }
+.paint-admin-redesign main .card .opacity-60,
+.paint-admin-redesign main .card .opacity-70 { color: var(--paint-muted); opacity: 1; }
+.paint-finance-redesign .finance-kpi { border-left: 3px solid color-mix(in srgb, currentColor 60%, transparent); }
+.paint-finance-redesign .finance-kpi::after { display: none; }
+.paint-finance-redesign .finance-kpi :is(.text-3xl, .text-2xl) { letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.paint-admin-redesign main :is(.input, .select),
+.paint-finance-redesign :is(.input, .select) {
+  border-radius: .8rem;
+  border-color: var(--paint-border);
+  background: var(--paint-panel);
+}
+.paint-admin-redesign main .btn,
+.paint-finance-redesign .btn { border-radius: .8rem; }
+.paint-admin-redesign main :is(.table, table),
+.paint-finance-redesign :is(.table, table) { font-variant-numeric: tabular-nums; }
+.paint-admin-redesign main table thead,
+.paint-finance-redesign table thead { color: var(--paint-muted); }
+.paint-admin-redesign main table tbody tr,
+.paint-finance-redesign table tbody tr { border-color: var(--paint-border); }
+.paint-admin-redesign main table tbody tr:hover,
+.paint-finance-redesign table tbody tr:hover { background-color: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+.paint-finance-redesign .finance-card .bg-base-100\/60,
+.paint-finance-redesign .finance-card .bg-base-100\/75 { border-radius: .9rem; }
+@media (prefers-reduced-motion: reduce) {
+  .paint-admin-redesign main .card,
+  .paint-finance-redesign .finance-card { transition: none; }
+  .paint-admin-redesign main .card:hover,
+  .paint-finance-redesign .finance-card:hover { transform: none; }
+}

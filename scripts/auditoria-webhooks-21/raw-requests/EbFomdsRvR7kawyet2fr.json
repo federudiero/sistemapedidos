@@ -1,0 +1,95 @@
+{
+  "requestId": "EbFomdsRvR7kawyet2fr",
+  "found": true,
+  "receivedAt": "2026-10-02T11:39:07.845Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 574,
+  "rawSha256": "355133aa8fdce16602d4c2984359f8bb6eebfe6ecaba58f4de295473df1e18b3",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzODI0NzM3NBUCABIYIEFDQkU5QkM3NTk5NjczNDAzN0MyQ0VCQjY1OEJGODhDAA=="
+    ],
+    "senderWaIds": [
+      "5491138247374"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "indumentaria"
+                  },
+                  "wa_id": "5491138247374",
+                  "user_id": "AR.1411508481090245"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491138247374",
+                  "from_user_id": "AR.1411508481090245",
+                  "id": "wamid.HBgNNTQ5MTEzODI0NzM3NBUCABIYIEFDQkU5QkM3NTk5NjczNDAzN0MyQ0VCQjY1OEJGODhDAA==",
+                  "timestamp": "1790941146",
+                  "text": {
+                    "body": "O ciudadela"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

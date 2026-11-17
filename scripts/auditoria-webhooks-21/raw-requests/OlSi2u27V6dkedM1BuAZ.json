@@ -1,0 +1,95 @@
+{
+  "requestId": "OlSi2u27V6dkedM1BuAZ",
+  "found": true,
+  "receivedAt": "2026-10-02T11:25:08.904Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 741,
+  "rawSha256": "040b8aca8c61628fd6a84c3a28856599aaf954a03b9ff4dccac57fca08ac213c",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2NTY3MDA3OBUCABIYIEFDNzZDQjVBMTYwQkI4MURERDM1NkQ2MDlBOTQ4QTRBAA=="
+    ],
+    "senderWaIds": [
+      "5491165670078"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Laura Wierna"
+                  },
+                  "wa_id": "5491165670078",
+                  "user_id": "AR.1058719193832802"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491165670078",
+                  "from_user_id": "AR.1058719193832802",
+                  "id": "wamid.HBgNNTQ5MTE2NTY3MDA3OBUCABIYIEFDNzZDQjVBMTYwQkI4MURERDM1NkQ2MDlBOTQ4QTRBAA==",
+                  "timestamp": "1790940307",
+                  "text": {
+                    "body": "Sólo quería saber sí llegaban a Florencio Varela,en estos momentos no, pero guardó tu número,se que talvez pierda la promo pero no importa, gracias igual"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

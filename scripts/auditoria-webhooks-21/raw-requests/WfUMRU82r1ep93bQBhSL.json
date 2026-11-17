@@ -1,0 +1,89 @@
+{
+  "requestId": "WfUMRU82r1ep93bQBhSL",
+  "found": true,
+  "receivedAt": "2026-10-02T16:55:23.691Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 576,
+  "rawSha256": "aed8fb9ff92598eb3e64952b2842d04c1d64c351cde92e449c120e8834083ac4",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMjIxMDI1ODI5Mjg3MzgwMxUUABEYIEE1RDdCM0ZDRUFCNzQxMUY3NEU1QzA5Mjc2RDUyREU0AA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491125116651",
+                  "user_id": "AR.2210258292873803"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491125116651",
+                  "id": "wamid.HBgTQVIuMjIxMDI1ODI5Mjg3MzgwMxUUABEYIEE1RDdCM0ZDRUFCNzQxMUY3NEU1QzA5Mjc2RDUyREU0AA==",
+                  "to_user_id": "AR.2210258292873803",
+                  "timestamp": "1790960122",
+                  "text": {
+                    "body": "Okey"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

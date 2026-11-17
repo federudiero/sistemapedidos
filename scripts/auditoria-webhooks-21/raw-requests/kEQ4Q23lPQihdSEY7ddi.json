@@ -1,0 +1,89 @@
+{
+  "requestId": "kEQ4Q23lPQihdSEY7ddi",
+  "found": true,
+  "receivedAt": "2026-10-02T14:17:14.055Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 617,
+  "rawSha256": "b94444b8996be91d2a1d4bfac03ea3be056525197b3111fa9cf8c5f9540ccdcb",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTA5NDQyNjg3NjI5Mzg2OBUUABEYIEE1NzczNzJCRkI5MDJBODIyOEJERThDQjVENjQyNTA1AA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5492215865894",
+                  "user_id": "AR.1094426876293868"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5492215865894",
+                  "id": "wamid.HBgTQVIuMTA5NDQyNjg3NjI5Mzg2OBUUABEYIEE1NzczNzJCRkI5MDJBODIyOEJERThDQjVENjQyNTA1AA==",
+                  "to_user_id": "AR.1094426876293868",
+                  "timestamp": "1790950632",
+                  "text": {
+                    "body": "Buen día , soy Aye en q te puedo ayudar?"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -24,6 +24,7 @@ import HistorialMovimientosStock from "./components/HistorialMovimientosStock";
 import ControlRemitosStock from "./components/ControlRemitosStock";
 import SeleccionarProvincia from "./views/SeleccionarProvincia";
 import AdminCRMPanel from "./views/AdminCRMPanel";
+import AdminChatbotCRM from "./views/chatbot/AdminChatbotCRM";
 import AdminControlCierres from "./views/AdminControlCierres";
 import AuditoriaProductos from "./views/AuditoriaProductos";
 import AdminPreCargaProductos from "./views/AdminPreCargaProductos";
@@ -32,6 +33,8 @@ import { ADMIN_SECTIONS } from "./constants/adminSections.js";
 import RequireAdminRoute from "./components/auth/RequireAdminRoute.jsx";
 import RequireAdminSection from "./components/auth/RequireAdminSection.jsx";
 import ThemeToggle from "./components/ThemeToggle.jsx";
+import FabricaGeneralOnly from "./modules/fabrica/FabricaGeneralOnly.jsx";
+import RequireFabricaAccess from "./modules/fabrica/RequireFabricaAccess.jsx";
 
 function App() {
   return (
@@ -52,6 +55,11 @@ function App() {
 
             {/* Login administrador */}
             <Route path="/admin" element={<AdminLogin />} />
+
+            {/* Módulo fábrica: independiente de los datos operativos */}
+            <Route path="/admin/fabrica" element={
+              <RequireFabricaAccess><FabricaGeneralOnly /></RequireFabricaAccess>
+            } />
 
             {/* Dashboard administrador */}
             <Route
@@ -146,6 +154,15 @@ function App() {
               element={
                 <RequireAdminSection section={ADMIN_SECTIONS.CRM_PANEL}>
                   <AdminCRMPanel />
+                </RequireAdminSection>
+              }
+            />
+
+            <Route
+              path="/admin/AdminCRMPanel/chatbot"
+              element={
+                <RequireAdminSection section={ADMIN_SECTIONS.CRM_PANEL}>
+                  <AdminChatbotCRM />
                 </RequireAdminSection>
               }
             />

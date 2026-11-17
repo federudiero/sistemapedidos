@@ -1,0 +1,98 @@
+{
+  "requestId": "9mmhE8CWUx2cLS78rtLo",
+  "found": true,
+  "receivedAt": "2026-10-02T14:19:32.864Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 839,
+  "rawSha256": "e7fbb809e0693db818980264cbecc6962e9758f0a9ae088060d819b3e00e94a6",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MjIxNTg2NTg5NBUCABIYIEFDODQ0NTcwMjIxRkI2MTg3Q0UxODI3MDkzNURGRUMzAA=="
+    ],
+    "senderWaIds": [
+      "5492215865894"
+    ],
+    "messageTypes": [
+      "image"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "arceangelica178"
+                  },
+                  "wa_id": "5492215865894",
+                  "user_id": "AR.1094426876293868"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5492215865894",
+                  "from_user_id": "AR.1094426876293868",
+                  "id": "wamid.HBgNNTQ5MjIxNTg2NTg5NBUCABIYIEFDODQ0NTcwMjIxRkI2MTg3Q0UxODI3MDkzNURGRUMzAA==",
+                  "timestamp": "1790950770",
+                  "type": "image",
+                  "image": {
+                    "mime_type": "image/jpeg",
+                    "sha256": "SfQOtBUN290DNVZJ5Ph6aVVO7F92gpfepJky83RbRoU=",
+                    "id": "4587329104887825",
+                    "url": "https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=4587329104887825&source=webhook&ext=1790951072&hash=ATzrboIzTCsRtgt7d-P3PwiqFDKsaTP-gNBwZgzWLrEXJA"
+                  }
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

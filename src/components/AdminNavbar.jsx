@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   Archive,
   BarChart3,
@@ -10,6 +10,7 @@ import {
   DatabaseBackup,
   FileSpreadsheet,
   FolderKanban,
+  Factory,
   Home,
   LayoutDashboard,
   LogOut,
@@ -31,6 +32,8 @@ import { auth } from "../firebase/firebase";
 import { useAdminPermissionsContext } from "../context/AdminPermissionsContext.jsx";
 import { ADMIN_NAV_ITEMS } from "../constants/adminNavigation.js";
 import { ADMIN_SECTIONS } from "../constants/adminSections.js";
+import { useProvincia } from "../hooks/useProvincia.js";
+import { FABRICA_OWNER } from "../modules/fabrica/useFabricaAccess.js";
 
 const SECTION_ICON_MAP = {
   dashboard: LayoutDashboard,
@@ -63,6 +66,7 @@ const SECTION_ICON_MAP = {
   auditoriaProductos: ShieldEllipsis,
   preCargaProductos: Package,
   crmPanel: FolderKanban,
+  gestionFabrica: Factory,
   usuarios: Users,
   permisos: ShieldCheck,
   configuracion: Settings,
@@ -124,6 +128,13 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: "fabrica",
+    label: "Fábrica",
+    description: "Gestión independiente",
+    icon: Factory,
+    sections: ["gestionFabrica"],
+  },
+  {
     id: "crm",
     label: "CRM",
     description: "Panel comercial y conversaciones",
@@ -154,16 +165,27 @@ const AdminNavbar = () => {
   const location = useLocation();
   const { loading, can, isAdminFull } = useAdminPermissionsContext();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { provinciaId } = useProvincia();
+  const [fabricaIdentidadAutorizada, setFabricaIdentidadAutorizada] = useState(false);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      setFabricaIdentidadAutorizada(Boolean(
+        user.email?.trim().toLowerCase() === FABRICA_OWNER
+      ));
+    }, () => setFabricaIdentidadAutorizada(false));
+  }, []);
 
   const visibleItems = useMemo(() => {
     if (loading) return [];
 
     return ADMIN_NAV_ITEMS.filter((item) => {
       if (item.hideFromNavbar) return false;
+      if (item.section === "gestionFabrica") return provinciaId === "BA" && fabricaIdentidadAutorizada;
       if (item.allowWithoutSectionPermission) return true;
       return isAdminFull || can(item.section);
     });
-  }, [loading, can, isAdminFull]);
+  }, [loading, can, isAdminFull, provinciaId, fabricaIdentidadAutorizada]);
 
   const activeItem = useMemo(() => {
     return visibleItems.find((item) => itemMatchesPath(item, location.pathname));

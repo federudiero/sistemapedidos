@@ -51,6 +51,7 @@ function AdminStock() {
   const [productos, setProductos] = useState([]);
   const [originales, setOriginales] = useState({});
   const [filtro, setFiltro] = useState("");
+  const [filtroVisibilidad, setFiltroVisibilidad] = useState("todos");
 
   const [nuevoProducto, setNuevoProducto] = useState({
     nombre: "",
@@ -98,6 +99,7 @@ function AdminStock() {
     stock: Number(obj.stock) || 0,
     stockMinimo: Number(obj.stockMinimo) || 0,
     esCombo,
+    ocultoParaVentas: obj.ocultoParaVentas === true,
     componentes: esCombo
       ? Array.isArray(obj.componentes)
         ? obj.componentes
@@ -120,6 +122,7 @@ function AdminStock() {
       Number(a.stock || 0) !== Number(b.stock || 0) ||
       Number(a.stockMinimo || 0) !== Number(b.stockMinimo || 0) ||
       Boolean(a.esCombo) !== Boolean(b.esCombo) ||
+      (a.ocultoParaVentas === true) !== (b.ocultoParaVentas === true) ||
       JSON.stringify(a.componentes || []) !== JSON.stringify(b.componentes || []) ||
       JSON.stringify(normalizePriceVersions(a.preciosVenta || [])) !==
         JSON.stringify(normalizePriceVersions(b.preciosVenta || []))
@@ -205,6 +208,7 @@ function AdminStock() {
   }, [productos]);
 
   const productosFiltrados = productos
+    .filter((p) => filtroVisibilidad === "todos" || (filtroVisibilidad === "ocultos" ? p.ocultoParaVentas === true : p.ocultoParaVentas !== true))
     .filter((p) =>
       (p.nombre || "").toLowerCase().includes((filtro || "").toLowerCase())
     )
@@ -326,6 +330,37 @@ function AdminStock() {
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se pudo agregar el producto", "error");
+    }
+  };
+
+  const cambiarVisibilidadProducto = async (producto) => {
+    const ocultar = producto.ocultoParaVentas !== true;
+    if (ocultar) {
+      const conf = await Swal.fire({
+        icon: "question",
+        title: "¿Ocultar de nuevas ventas?",
+        text: `"${producto.nombre}" dejará de ofrecerse en nuevos pedidos. Los combos e historiales conservarán sus referencias.`,
+        showCancelButton: true,
+        confirmButtonText: "Sí, ocultar",
+        cancelButtonText: "Cancelar",
+      });
+      if (!conf.isConfirmed) return;
+    }
+    setProductos((prev) => prev.map((p) => p.id === producto.id ? { ...p, _busy: true } : p));
+    try {
+      await updateDoc(doc(db, "provincias", provinciaId, "productos", producto.id), {
+        ocultoParaVentas: ocultar,
+      });
+      setProductos((prev) => prev.map((p) => p.id === producto.id ? { ...p, ocultoParaVentas: ocultar } : p));
+      setOriginales((prev) => ({
+        ...prev,
+        [producto.id]: { ...(prev[producto.id] || normalizarPayload(producto)), ocultoParaVentas: ocultar },
+      }));
+    } catch (error) {
+      console.error(error);
+      await Swal.fire("Error", "No se pudo cambiar la visibilidad del producto", "error");
+    } finally {
+      setProductos((prev) => prev.map((p) => p.id === producto.id ? { ...p, _busy: false } : p));
     }
   };
 
@@ -1327,12 +1362,7 @@ function AdminStock() {
             </div>
 
             <div className="flex flex-col gap-2 mt-4 md:flex-row md:items-center md:justify-between">
-              <div className="text-sm opacity-70">
-                Esto genera un registro en{" "}
-                <span className="font-mono">remitosStock</span> y suma stock con{" "}
-                <span className="font-mono">increment()</span>.
-              </div>
-
+              
               <button
                 className={`btn btn-success ${busyRemito ? "btn-disabled" : ""}`}
                 type="button"
@@ -1538,6 +1568,15 @@ function AdminStock() {
           onChange={(e) => setFiltro(e.target.value)}
         />
 
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <label htmlFor="filtro-visibilidad-stock" className="font-semibold">Mostrar:</label>
+          <select id="filtro-visibilidad-stock" className="select select-bordered select-sm" value={filtroVisibilidad} onChange={(e) => setFiltroVisibilidad(e.target.value)}>
+            <option value="todos">Todos</option>
+            <option value="visibles">Visibles para ventas</option>
+            <option value="ocultos">Ocultos para ventas</option>
+          </select>
+        </div>
+
         {/* Lista de productos */}
         <div className="grid gap-6">
           {productosFiltrados.map((prod) => {
@@ -1570,6 +1609,7 @@ function AdminStock() {
                       <span className="text-sm opacity-60">
                         ID: {prod.id.slice(0, 5)}...
                       </span>
+                      {prod.ocultoParaVentas === true && <span className="badge badge-warning badge-sm">Oculto para ventas</span>}
                       {prod._editing ? (
                         <span className="badge badge-warning badge-sm">Editando</span>
                       ) : (
@@ -1581,6 +1621,13 @@ function AdminStock() {
                   <div className="flex flex-wrap gap-2">
                     {!prod._editing ? (
                       <>
+                        <button
+                          className={`btn btn-sm ${prod.ocultoParaVentas === true ? "btn-success" : "btn-outline"}`}
+                          disabled={!!prod._busy}
+                          onClick={() => cambiarVisibilidadProducto(prod)}
+                        >
+                          {prod.ocultoParaVentas === true ? "👁 Mostrar" : "🙈 Ocultar"}
+                        </button>
                         <button
                           className="btn btn-info btn-sm"
                           onClick={() => iniciarEdicion(prod.id)}

@@ -1,0 +1,95 @@
+{
+  "requestId": "dTzdEeTWOLqBehB6bjMG",
+  "found": true,
+  "receivedAt": "2026-10-02T15:29:01.314Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 612,
+  "rawSha256": "3ebb07d82cc9eaa293773bb77638a2739a9046138545d29460abf7fa44c8e266",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzMzgxNTg1NxUCABIYIEFDMjZCNDEyMDAwNEFFMTJERTk5RDFDODM2N0Y2NUQ4AA=="
+    ],
+    "senderWaIds": [
+      "5491133815857"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "el pola"
+                  },
+                  "wa_id": "5491133815857",
+                  "user_id": "AR.1079280398315206"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491133815857",
+                  "from_user_id": "AR.1079280398315206",
+                  "id": "wamid.HBgNNTQ5MTEzMzgxNTg1NxUCABIYIEFDMjZCNDEyMDAwNEFFMTJERTk5RDFDODM2N0Y2NUQ4AA==",
+                  "timestamp": "1790954940",
+                  "text": {
+                    "body": "Si me interesa pero podriaser para la semana que biene"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "requestId": "UpnVLT0baOtnX3ld2DFQ",
+  "found": true,
+  "receivedAt": "2026-10-02T11:28:43.304Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 678,
+  "rawSha256": "4cfef5beabe115f0c6488cabceebb49bc21e3dbb2e7b5865a57ae3fb7c30d451",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE2NTY3MDA3OBUCABIYIEFDQ0Y4MDdFNkQzRkY1NTMyMTVDOURFNjA5RjA5M0ZCAA=="
+    ],
+    "senderWaIds": [
+      "5491165670078"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "Laura Wierna"
+                  },
+                  "wa_id": "5491165670078",
+                  "user_id": "AR.1058719193832802"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491165670078",
+                  "from_user_id": "AR.1058719193832802",
+                  "id": "wamid.HBgNNTQ5MTE2NTY3MDA3OBUCABIYIEFDQ0Y4MDdFNkQzRkY1NTMyMTVDOURFNjA5RjA5M0ZCAA==",
+                  "timestamp": "1790940521",
+                  "text": {
+                    "body": "Estoy viendo su catálogo y muy buenos precios, seguro estaremos en contacto, gracias que tengas buen día!"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

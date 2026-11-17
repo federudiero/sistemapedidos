@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { auth, db } from "../firebase/firebase";
 import ConnectWhatsAppBusinessButton from "../components/crm/ConnectWhatsAppBusinessButton";
 import SellerCrmDashboard from "../components/crm/SellerCrmDashboard";
+import ChatbotWorkspace from "../components/chatbot/ChatbotWorkspace";
+import ChatbotAccessGate from "../components/chatbot/ChatbotAccessGate";
 import { getWhatsAppConnectionStatus } from "../services/crmConnectionApi";
 import { useProvincia } from "../hooks/useProvincia";
 
@@ -14,7 +16,9 @@ function lo(value) {
 
 export default function VendedorCRM() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { provinciaId } = useProvincia();
+  const activeSection = searchParams.get("section") === "chatbot" ? "chatbot" : "dashboard";
 
   const [authReady, setAuthReady] = useState(false);
   const [emailLo, setEmail] = useState("");
@@ -244,8 +248,41 @@ export default function VendedorCRM() {
             </div>
           </div>
 
+          <div className="shrink-0 border-b border-[var(--crm-border)] bg-[var(--crm-surface)] px-3 py-2 md:px-4">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  activeSection === "dashboard"
+                    ? "border-sky-600 bg-sky-600 text-white"
+                    : "border-[var(--crm-border)] hover:bg-[var(--crm-hover)]"
+                }`}
+                onClick={() => setSearchParams({})}
+              >
+                Mi CRM
+              </button>
+              <button
+                type="button"
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  activeSection === "chatbot"
+                    ? "border-sky-600 bg-sky-600 text-white"
+                    : "border-[var(--crm-border)] hover:bg-[var(--crm-hover)]"
+                }`}
+                onClick={() => setSearchParams({ section: "chatbot" })}
+              >
+                Chatbot
+              </button>
+            </div>
+          </div>
+
           <main className="min-h-0 flex-1 overflow-hidden">
-            <SellerCrmDashboard provinciaId={provinciaId} sellerEmail={emailLo} />
+            {activeSection === "chatbot" ? (
+              <ChatbotAccessGate>
+                <ChatbotWorkspace provinciaId={provinciaId} />
+              </ChatbotAccessGate>
+            ) : (
+              <SellerCrmDashboard provinciaId={provinciaId} sellerEmail={emailLo} />
+            )}
           </main>
         </div>
       </div>

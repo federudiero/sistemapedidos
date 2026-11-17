@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import Swal from "sweetalert2";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebase/firebase";
+import { validarProductosParaVenta } from "../../utils/validarProductosParaVenta";
 
 // ✅ Datepicker
 import DatePicker, { registerLocale } from "react-datepicker";
@@ -284,8 +285,9 @@ export default function CreatePedidoFromCrmModal({
 
     const filteredProducts = useMemo(() => {
         const q = String(busqueda || "").toLowerCase().trim();
-        if (!q) return productosFirestore;
-        return productosFirestore.filter((p) => String(p.nombre || "").toLowerCase().includes(q));
+        const disponibles = productosFirestore.filter((p) => p.ocultoParaVentas !== true);
+        if (!q) return disponibles;
+        return disponibles.filter((p) => String(p.nombre || "").toLowerCase().includes(q));
     }, [productosFirestore, busqueda]);
 
     const toggleProduct = (prod, checked) => {
@@ -359,6 +361,21 @@ export default function CreatePedidoFromCrmModal({
                 "Completá Nombre, Teléfono, Dirección y al menos 1 producto.",
                 "info"
             );
+            return;
+        }
+
+        try {
+            const disponibilidad = await validarProductosParaVenta(provinciaId, productosSeleccionados);
+            if (!disponibilidad.disponible) {
+                await Swal.fire(
+                    "Producto no disponible",
+                    `El producto "${disponibilidad.nombre}" fue ocultado para nuevas ventas. Actualizá la página y seleccioná el producto vigente.`,
+                    "warning"
+                );
+                return;
+            }
+        } catch (error) {
+            await Swal.fire("No se pudo verificar el catálogo", error.message, "error");
             return;
         }
 

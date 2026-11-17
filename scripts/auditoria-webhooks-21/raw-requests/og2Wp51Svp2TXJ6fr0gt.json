@@ -1,0 +1,95 @@
+{
+  "requestId": "og2Wp51Svp2TXJ6fr0gt",
+  "found": true,
+  "receivedAt": "2026-10-02T10:48:16.610Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 809,
+  "rawSha256": "0d99d2d999f1025b6572831df8d04c74934f1808204a932f0ad2d647a20563af",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTQxMTUwODQ4MTA5MDI0NRUUABEYIEE1Qzk5OUM2QTZDMDBCMjJEQkI3MjA2N0FENENCNEMwAA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491138247374",
+                  "user_id": "AR.1411508481090245"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491124959496",
+                  "to": "5491138247374",
+                  "id": "wamid.HBgTQVIuMTQxMTUwODQ4MTA5MDI0NRUUABEYIEE1Qzk5OUM2QTZDMDBCMjJEQkI3MjA2N0FENENCNEMwAA==",
+                  "to_user_id": "AR.1411508481090245",
+                  "timestamp": "1790938095",
+                  "interactive": {
+                    "product": {
+                      "title": "COMBO 6: MEMBRANA LIQUIDA BLANCA",
+                      "description": "✔️ 20 LITROS MEMBRANA LIQUIDA \n✔️ RODILLO \n✔️ VENDA 10 CM X 25 MTS",
+                      "currency_code": "ARS",
+                      "price_amount": 46500000
+                    },
+                    "type": "product"
+                  },
+                  "type": "interactive"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}

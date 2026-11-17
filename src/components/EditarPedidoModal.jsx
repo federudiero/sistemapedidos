@@ -266,7 +266,7 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
                       onChange={(e) => handleProductoChange(i, "nombre", e.target.value)}
                     >
                       <option value="">Seleccionar producto</option>
-                      {catalogo.map((p) => (
+                      {catalogo.filter((p) => p.ocultoParaVentas !== true || form.productos.some((item) => item.productoId === p.id || item.nombre === p.nombre)).map((p) => (
                         <option key={p.id} value={p.nombre}>
                           {p.nombre}
                         </option>
@@ -295,7 +295,7 @@ const EditarPedidoModal = ({ show, onClose, pedido, onGuardar }) => {
                         ))}
                       </select>
                     ) : (
-                      <div className="col-span-7 md:col-span-3 text-sm text-right">
+                      <div className="col-span-7 text-sm text-right md:col-span-3">
                         {formatARS(prod.precio ?? 0)}
                       </div>
                     )}

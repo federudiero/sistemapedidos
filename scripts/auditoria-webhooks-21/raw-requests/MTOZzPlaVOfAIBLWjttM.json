@@ -1,0 +1,95 @@
+{
+  "requestId": "MTOZzPlaVOfAIBLWjttM",
+  "found": true,
+  "receivedAt": "2026-10-02T13:24:06.152Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 598,
+  "rawSha256": "ac1b3ce8d6e94b5a7a5ae783ea9d16ad672115c2851b3b9c7baf0ab2aba42862",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTE0MTYyMjEwNRUCABIYIEFDMEI0MTBBRkYxNUNBMDdGNUMzMzgyN0JFNDZCNkIyAA=="
+    ],
+    "senderWaIds": [
+      "5491141622105"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "kevin y ciro los amo 🥰"
+                  },
+                  "wa_id": "5491141622105",
+                  "user_id": "AR.1500020568631648"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491141622105",
+                  "from_user_id": "AR.1500020568631648",
+                  "id": "wamid.HBgNNTQ5MTE0MTYyMjEwNRUCABIYIEFDMEI0MTBBRkYxNUNBMDdGNUMzMzgyN0JFNDZCNkIyAA==",
+                  "timestamp": "1790947445",
+                  "text": {
+                    "body": "Libertad merlo"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

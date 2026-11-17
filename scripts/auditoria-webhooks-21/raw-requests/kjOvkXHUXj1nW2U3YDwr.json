@@ -1,0 +1,95 @@
+{
+  "requestId": "kjOvkXHUXj1nW2U3YDwr",
+  "found": true,
+  "receivedAt": "2026-10-02T10:56:21.706Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 646,
+  "rawSha256": "207cc2040bd5c31a8af554ca262224abe7ab1e862c2768068ab7869f4940d28d",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 1,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 0,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "326004433931947"
+    ],
+    "changeFields": [
+      "messages"
+    ],
+    "phoneNumberIds": [
+      "391883443998032"
+    ],
+    "displayPhoneNumbers": [
+      "5491124959496"
+    ],
+    "messageIds": [
+      "wamid.HBgNNTQ5MTEzMDc2ODE5NRUCABIYIEFDMTlCOUE0RjY4NkZBQzcwOTg3MjkzM0UzOTU3NzQyAA=="
+    ],
+    "senderWaIds": [
+      "5491130768195"
+    ],
+    "messageTypes": [
+      "text"
+    ],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "326004433931947",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491124959496",
+                "phone_number_id": "391883443998032"
+              },
+              "contacts": [
+                {
+                  "profile": {
+                    "name": "EL NEGRO MAURO N°12 💣🗡️🗡️💣"
+                  },
+                  "wa_id": "5491130768195",
+                  "user_id": "AR.1452968300301459"
+                }
+              ],
+              "messages": [
+                {
+                  "from": "5491130768195",
+                  "from_user_id": "AR.1452968300301459",
+                  "id": "wamid.HBgNNTQ5MTEzMDc2ODE5NRUCABIYIEFDMTlCOUE0RjY4NkZBQzcwOTg3MjkzM0UzOTU3NzQyAA==",
+                  "timestamp": "1790938580",
+                  "text": {
+                    "body": "Lanús"
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "messages"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "requestId": "XUwOrtxYJBvFbWSFNFjm",
+  "found": true,
+  "receivedAt": "2026-10-02T13:52:45.810Z",
+  "processingStatus": "processed",
+  "rawStorageMode": "inline",
+  "rawByteLength": 662,
+  "rawSha256": "a099c1ac1ecc0199b7d4765c37bebd85badd19b986f120b456a01811e3f419f9",
+  "summary": {
+    "object": "whatsapp_business_account",
+    "entryCount": 1,
+    "changeCount": 1,
+    "messageCount": 0,
+    "statusCount": 0,
+    "referralConversionStatusCount": 0,
+    "echoCount": 1,
+    "referralCount": 0,
+    "unsupportedMessageCount": 0,
+    "messageErrorCount": 0,
+    "entryIds": [
+      "892040703179327"
+    ],
+    "changeFields": [
+      "smb_message_echoes"
+    ],
+    "phoneNumberIds": [
+      "908622795675424"
+    ],
+    "displayPhoneNumbers": [
+      "5491169730249"
+    ],
+    "messageIds": [],
+    "senderWaIds": [],
+    "messageTypes": [],
+    "messageErrorCodes": [],
+    "statusMessageIds": [],
+    "statusNames": [],
+    "statusConversationIds": [],
+    "statusConversationOriginTypes": [],
+    "statusConversationTypes": [],
+    "statusPricingCategories": [],
+    "statusPricingModels": [],
+    "echoMessageIds": [
+      "wamid.HBgTQVIuMTgwMjM1MDI5NzQ0NDMwMxUUABEYIEE1QjJCQUNGNDUyMzc0QTI2NzhBNzY2QTdFREIyNjg3AA=="
+    ],
+    "referralSourceIds": [],
+    "referralSourceTypes": [],
+    "referralCtwaClids": []
+  },
+  "rawPayload": {
+    "object": "whatsapp_business_account",
+    "entry": [
+      {
+        "id": "892040703179327",
+        "changes": [
+          {
+            "value": {
+              "messaging_product": "whatsapp",
+              "metadata": {
+                "display_phone_number": "5491169730249",
+                "phone_number_id": "908622795675424"
+              },
+              "contacts": [
+                {
+                  "wa_id": "5491125475938",
+                  "user_id": "AR.1802350297444303"
+                }
+              ],
+              "message_echoes": [
+                {
+                  "from": "5491169730249",
+                  "to": "5491125475938",
+                  "id": "wamid.HBgTQVIuMTgwMjM1MDI5NzQ0NDMwMxUUABEYIEE1QjJCQUNGNDUyMzc0QTI2NzhBNzY2QTdFREIyNjg3AA==",
+                  "to_user_id": "AR.1802350297444303",
+                  "timestamp": "1790949164",
+                  "text": {
+                    "body": "Genial. Si llegamos! Vamos mañana o lunes por la zona! Envío te queda en $4.000."
+                  },
+                  "type": "text"
+                }
+              ]
+            },
+            "field": "smb_message_echoes"
+          }
+        ]
+      }
+    ]
+  }
+}
